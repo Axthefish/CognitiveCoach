@@ -31,6 +31,14 @@ export async function POST(request: NextRequest) {
   
   try {
     body = await request.json();
+    
+    if (!body) {
+      return NextResponse.json(
+        { status: 'error', error: 'Invalid request body' } as CoachResponse,
+        { status: 400 }
+      );
+    }
+    
     const { action, payload } = body;
 
     // 根据action调用对应的处理器
