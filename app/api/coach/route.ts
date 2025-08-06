@@ -27,8 +27,10 @@ interface CoachResponse {
 
 // 主处理函数
 export async function POST(request: NextRequest) {
+  let body: CoachRequest | undefined;
+  
   try {
-    const body: CoachRequest = await request.json();
+    body = await request.json();
     const { action, payload } = body;
 
     // 根据action调用对应的处理器
@@ -59,8 +61,25 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('API Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    // Log detailed error in production
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Production error details:', {
+        message: errorMessage,
+        stack: errorStack,
+        action: body?.action,
+        hasApiKey: !!process.env.GEMINI_API_KEY
+      });
+    }
+    
     return NextResponse.json(
-      { status: 'error', error: 'Internal server error' } as CoachResponse,
+      { 
+        status: 'error', 
+        error: errorMessage,
+        details: process.env.NODE_ENV !== 'production' ? errorStack : undefined
+      } as CoachResponse,
       { status: 500 }
     );
   }
