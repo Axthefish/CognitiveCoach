@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const hasGeminiKey = !!process.env.GEMINI_API_KEY;
   const hasGoogleKey = !!process.env.GOOGLE_AI_API_KEY;
   
