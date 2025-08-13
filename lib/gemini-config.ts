@@ -1,5 +1,6 @@
 // Gemini API 配置
 import { GoogleGenAI } from '@google/genai';
+import { logger, truncate } from '@/lib/logger';
 
 // 获取 API key 的辅助函数
 export function getApiKey(): string | undefined {
@@ -22,4 +23,98 @@ export function createGeminiClient(apiKey?: string): GoogleGenAI | null {
   }
   
   return new GoogleGenAI({ apiKey: key });
+}
+
+export function getModelName(): string {
+  return process.env.GEMINI_MODEL || 'gemini-2.5-pro';
+}
+
+type GenConfig = {
+  temperature?: number;
+  topK?: number;
+  topP?: number;
+  maxOutputTokens?: number;
+  responseMimeType?: string;
+};
+
+export async function withTimeout<T>(p: Promise<T>, ms = 30_000): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timeout')), ms)),
+  ]);
+}
+
+export async function generateJson<T>(
+  prompt: string,
+  overrides?: Partial<GenConfig>
+): Promise<{ ok: true; data: T } | { ok: false; error: string; raw?: string }> {
+  const client = createGeminiClient();
+  if (!client) return { ok: false, error: 'NO_API_KEY' };
+
+  const config: GenConfig = {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 2048,
+    responseMimeType: 'application/json',
+    ...overrides,
+  };
+
+  const run = async (temperature: number) => {
+    const res = await withTimeout(
+      client.models.generateContent({
+        model: getModelName(),
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { ...config, temperature },
+      })
+    );
+    const text = (res as unknown as { text?: string }).text;
+    if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
+    try {
+      const data = JSON.parse(text) as T;
+      return { ok: true as const, data };
+    } catch {
+      logger.warn('Gemini JSON parse failed, sample:', truncate(text));
+      return { ok: false as const, error: 'PARSE_ERROR', raw: truncate(text) };
+    }
+  };
+
+  // primary attempt
+  const first = await run(config.temperature ?? 0.7);
+  if (first.ok) return first;
+  // retry with lower temperature
+  return await run(0.4);
+}
+
+export async function generateText(
+  prompt: string,
+  overrides?: Partial<GenConfig>
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  const client = createGeminiClient();
+  if (!client) return { ok: false, error: 'NO_API_KEY' };
+
+  const config: GenConfig = {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 1024,
+    ...overrides,
+  };
+
+  const run = async (temperature: number) => {
+    const res = await withTimeout(
+      client.models.generateContent({
+        model: getModelName(),
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { ...config, temperature },
+      })
+    );
+    const text = (res as unknown as { text?: string }).text;
+    if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
+    return { ok: true as const, text };
+  };
+
+  const first = await run(config.temperature ?? 0.7);
+  if (first.ok) return first;
+  return await run(0.4);
 }

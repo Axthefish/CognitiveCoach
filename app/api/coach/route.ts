@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { CoachRequestSchema } from '@/lib/schemas';
+import { handleOptions, withCors } from '@/lib/cors';
+import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 import { KnowledgeFramework, ActionPlan } from '@/lib/types';
-import { createGeminiClient } from '@/lib/gemini-config';
+import { createGeminiClient, generateJson, generateText } from '@/lib/gemini-config';
+import {
+  S0RefineGoalSchema,
+  KnowledgeFrameworkSchema,
+  SystemDynamicsSchema,
+  ActionPlanResponseSchema,
+  AnalyzeProgressSchema,
+} from '@/lib/schemas';
+import { runQualityGates } from '@/lib/qa';
+import { createErrorResponse, createSuccessResponse, handleAPIError } from '@/lib/error-utils';
 
 // API请求的action类型
 type CoachAction = 
@@ -12,10 +25,18 @@ type CoachAction =
   | 'consult';
 
 // 请求体接口
+type RefineGoalPayload = { userInput: string; conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> };
+type GenerateFrameworkPayload = { userGoal: string; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number };
+type GenerateSystemDynamicsPayload = { framework: KnowledgeFramework; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number };
+type GenerateActionPlanPayload = { userGoal: string; framework: KnowledgeFramework; systemNodes?: Array<{ id: string; title?: string }>; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number };
+type AnalyzeProgressPayload = { progressData: { completedTasks?: string[]; confidenceScore?: number; hoursSpent?: number; challenges?: string; }; userContext: { userGoal: string; actionPlan: ActionPlan; kpis: string[]; strategySpec?: { metrics?: Array<{ metricId: string; confidence?: number; evidence?: unknown[] }> } } };
+type ConsultPayload = { question: string; userContext: { userGoal: string; knowledgeFramework: KnowledgeFramework; actionPlan: ActionPlan; systemDynamics?: { mermaidChart: string; metaphor: string } } };
+
+type CoachPayload = RefineGoalPayload | GenerateFrameworkPayload | GenerateSystemDynamicsPayload | GenerateActionPlanPayload | AnalyzeProgressPayload | ConsultPayload;
+
 interface CoachRequest {
   action: CoachAction;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any;
+  payload: CoachPayload;
 }
 
 // 响应体接口
@@ -27,70 +48,77 @@ interface CoachResponse {
 
 // 主处理函数
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
+  const rateKey = buildRateKey(ip, '/api/coach');
+  const rl = checkRateLimit(rateKey);
+  if (!rl.allowed) {
+    const res = NextResponse.json({ status: 'error', error: 'Too Many Requests' });
+    res.headers.set('Retry-After', String(rl.retryAfter ?? 60));
+    return withCors(res, origin);
+  }
   let body: CoachRequest | undefined;
   
   try {
-    body = await request.json();
-    
-    if (!body) {
-      return NextResponse.json(
-        { status: 'error', error: 'Invalid request body' } as CoachResponse,
-        { status: 400 }
-      );
+    const json = await request.json();
+    const parsed = CoachRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      const res = NextResponse.json({ status: 'error', error: 'Invalid request body', details: parsed.error.issues.map(i => i.message).join('; ') } as CoachResponse, { status: 400 });
+      return withCors(res, origin);
     }
+    body = parsed.data as unknown as CoachRequest;
     
     const { action, payload } = body;
 
     // 根据action调用对应的处理器
     switch (action) {
       case 'refineGoal':
-        return handleRefineGoal(payload);
+        return withCors(await handleRefineGoal(payload as RefineGoalPayload), origin);
       
       case 'generateFramework':
-        return handleGenerateFramework(payload);
+        return withCors(await handleGenerateFramework(payload as GenerateFrameworkPayload), origin);
       
       case 'generateSystemDynamics':
-        return handleGenerateSystemDynamics(payload);
+        return withCors(await handleGenerateSystemDynamics(payload as GenerateSystemDynamicsPayload), origin);
       
       case 'generateActionPlan':
-        return handleGenerateActionPlan(payload);
+        return withCors(await handleGenerateActionPlan(payload as GenerateActionPlanPayload), origin);
       
       case 'analyzeProgress':
-        return handleAnalyzeProgress(payload);
+        return withCors(await handleAnalyzeProgress(payload as AnalyzeProgressPayload), origin);
       
       case 'consult':
-        return handleConsult(payload);
+        return withCors(await handleConsult(payload as ConsultPayload), origin);
       
       default:
-        return NextResponse.json(
+        return withCors(NextResponse.json(
           { status: 'error', error: 'Unknown action' } as CoachResponse,
           { status: 400 }
-        );
+        ), origin);
     }
   } catch (error) {
-    console.error('API Error:', error);
+    logger.error('API Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     const errorStack = error instanceof Error ? error.stack : undefined;
     
     // Log detailed error in production
     if (process.env.NODE_ENV === 'production') {
-      console.error('Production error details:', {
-        message: errorMessage,
-        stack: errorStack,
-        action: body?.action,
-        hasApiKey: !!process.env.GEMINI_API_KEY
-      });
+      logger.error('Production error details:', { message: errorMessage, action: body?.action, hasApiKey: !!process.env.GEMINI_API_KEY });
     }
     
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { 
         status: 'error', 
         error: errorMessage,
         details: process.env.NODE_ENV !== 'production' ? errorStack : undefined
       } as CoachResponse,
       { status: 500 }
-    );
+    ), origin);
   }
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleOptions(request);
 }
 
 // Action处理器
@@ -157,47 +185,15 @@ Respond in JSON format:
 
     const prompt = `${systemPrompt}\n\nConversation:\n${conversationContent}\n\nAnalyze the user's goal and provide your response:`;
 
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 1024,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = result.text;
-    
-    if (!text) {
-      throw new Error('No response from AI model');
+    const g = await generateJson<{ status: string; ai_question?: string; goal?: string }>(prompt, { maxOutputTokens: 1024 });
+    if (!g.ok) return NextResponse.json({ status: 'error', error: g.error } as CoachResponse, { status: 400 });
+    const s0 = S0RefineGoalSchema.safeParse(g.data);
+    if (!s0.success) {
+      return NextResponse.json({ status: 'error', error: 'Schema validation failed for S0 output', data: g.data } as CoachResponse, { status: 400 });
     }
-    
-    try {
-      const refinementResult = JSON.parse(text);
-      
-      return NextResponse.json({
-        status: 'success',
-        data: refinementResult
-      } as CoachResponse);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Raw response:', text);
-      
-      // Fallback response
-      return NextResponse.json({
-        status: 'error',
-        error: 'Failed to parse AI response',
-        data: {
-          status: 'clarified',
-          goal: payload.userInput
-        }
-      } as CoachResponse);
-    }
+    return NextResponse.json({ status: 'success', data: g.data } as CoachResponse);
   } catch (error) {
-    console.error('Gemini API error:', error);
+    logger.error('Gemini API error:', error);
     return NextResponse.json(
       { status: 'error', error: 'Failed to refine goal' } as CoachResponse,
       { status: 500 }
@@ -249,7 +245,10 @@ async function handleGenerateFramework(payload: { userGoal: string }) {
         "title": "子项标题",
         "summary": "子项描述（20-40字）"
       }
-    ]
+    ],
+    "evidence": [],
+    "confidence": 0.6,
+    "applicability": ""
   }
 ]
 
@@ -259,62 +258,36 @@ async function handleGenerateFramework(payload: { userGoal: string }) {
 3. summary提供有价值的描述
 4. 内容与学习目标高度相关`;
 
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-      },
-    });
+    const g = await generateJson<KnowledgeFramework>(prompt, { maxOutputTokens: 2048 });
+    if (!g.ok) return createErrorResponse('AI响应解析失败', 400, { details: g.error, fixHints: ['请重试生成', '检查模型输出格式'], stage: 'S1' });
+    const framework = g.data;
+    const s1 = KnowledgeFrameworkSchema.safeParse(framework);
+    if (!s1.success) {
+      return handleAPIError(s1.error, 'S1');
+    }
 
-    const text = result.text;
-    
-    if (!text) {
-      throw new Error('No response from AI model');
-    }
-    
-    try {
-      const framework = JSON.parse(text) as KnowledgeFramework;
-      
-      return NextResponse.json({
-        status: 'success',
-        data: {
-          framework
+    // QA gate (v1 minimal)
+    const qa = runQualityGates('S1', framework);
+    if (!qa.passed) {
+      return createErrorResponse(
+        'Quality gates failed',
+        400,
+        {
+          fixHints: qa.issues.map(i => i.hint),
+          stage: 'S1',
+          details: JSON.stringify(qa.issues)
         }
-      } as CoachResponse);
-    } catch (parseError) {
-      console.error('JSON解析错误:', parseError);
-      console.error('原始响应:', text);
-      
-      // 如果解析失败，返回一个默认框架
-      return NextResponse.json({
-        status: 'error',
-        error: 'Failed to parse AI response',
-        data: {
-          framework: [{
-            id: 'error-fallback',
-            title: '知识框架生成失败',
-            summary: '请重试或检查输入',
-            children: []
-          }]
-        }
-      } as CoachResponse);
+      );
     }
+
+    return createSuccessResponse({ framework });
   } catch (error) {
-    console.error('Gemini API 错误:', error);
-    return NextResponse.json(
-      { status: 'error', error: 'Failed to generate knowledge framework' } as CoachResponse,
-      { status: 500 }
-    );
+    return handleAPIError(error, 'S1');
   }
 }
 
 // S2: 系统动力学生成
-async function handleGenerateSystemDynamics(payload: { framework: KnowledgeFramework }) {
+async function handleGenerateSystemDynamics(payload: { framework: KnowledgeFramework; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number; }) {
   const genAI = createGeminiClient();
   
   if (!genAI) {
@@ -357,63 +330,77 @@ ${frameworkDescription}
 
 请严格按照以下JSON格式返回（不要包含任何其他文字）：
 {
-  "mermaidChart": "graph TD开头的Mermaid图表代码",
-  "metaphor": "一个生动的比喻（50-100字）"
+  "mermaidChart": "以 graph TD 开头的 Mermaid 图，不要添加 <br/>",
+  "metaphor": "一个生动的比喻（50-100字）",
+  "nodes": [{ "id": "<与框架一致>", "title": "<中文>" }],
+  "evidence": [],
+  "confidence": 0.6,
+  "applicability": ""
 }
 
-Mermaid图表要求：
-- 使用graph TD（从上到下）
-- 节点使用中文标签
-- 展示学习路径和知识点之间的关系
-- 包含反馈循环或进阶路径
-- 每行都要以<br/>结尾，包括最后一行
+      Mermaid图表要求：
+      - 使用graph TD（从上到下）
+      - 节点使用中文标签
+      - 展示学习路径和知识点之间的关系
+      - 包含反馈循环或进阶路径
 
 比喻要求：
 - 使用日常生活中的事物
 - 能够形象地说明学习过程
 - 与知识框架内容相关`;
 
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.8,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = result.text;
-    
-    if (!text) {
-      throw new Error('No response from AI model');
-    }
-    
+    const g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
+      prompt,
+      { maxOutputTokens: 2048, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 }
+    );
+    if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to parse AI response' } as CoachResponse, { status: 400 });
     try {
-      const dynamics = JSON.parse(text) as { mermaidChart: string; metaphor: string };
-      
+      const dynamics = g.data;
+      const s2 = SystemDynamicsSchema.safeParse(dynamics);
+      if (!s2.success) {
+        return NextResponse.json({
+          status: 'error',
+          error: 'Schema validation failed for S2 output',
+          data: dynamics,
+        } as CoachResponse);
+      }
+
+      // Mermaid precheck and QA
+      if (typeof dynamics.mermaidChart !== 'string' || !dynamics.mermaidChart.trim().startsWith('graph TD')) {
+        return NextResponse.json({
+          status: 'error',
+          error: 'Invalid Mermaid chart: must start with "graph TD"',
+          data: dynamics,
+        } as CoachResponse);
+      }
+      const qa = runQualityGates('S2', dynamics, { framework: payload.framework });
+      if (!qa.passed) {
+        return NextResponse.json({
+          status: 'error',
+          error: 'Quality gates failed',
+          data: { dynamics, issues: qa.issues },
+        } as CoachResponse);
+      }
+
       return NextResponse.json({
         status: 'success',
         data: dynamics
       } as CoachResponse);
     } catch (parseError) {
-      console.error('JSON解析错误:', parseError);
-      console.error('原始响应:', text);
+      logger.error('JSON解析错误:', parseError);
       
       // 如果解析失败，返回默认数据
       return NextResponse.json({
         status: 'error',
         error: 'Failed to parse AI response',
         data: {
-          mermaidChart: `graph TD<br/>A[开始] --> B[学习]<br/>B --> C[应用]<br/>C --> D[精通]<br/>`,
+          mermaidChart: `graph TD\nA[开始] --> B[学习]\nB --> C[应用]\nC --> D[精通]`,
           metaphor: '学习过程出现了一些问题，请重试。'
         }
       } as CoachResponse);
     }
   } catch (error) {
-    console.error('Gemini API 错误:', error);
+    logger.error('Gemini API 错误:', error);
     return NextResponse.json(
       { status: 'error', error: 'Failed to generate system dynamics' } as CoachResponse,
       { status: 500 }
@@ -422,7 +409,7 @@ Mermaid图表要求：
 }
 
 // S3: 行动计划生成 - Enhanced with real AI generation
-async function handleGenerateActionPlan(payload: { userGoal: string; framework: KnowledgeFramework }) {
+async function handleGenerateActionPlan(payload: { userGoal: string; framework: KnowledgeFramework; systemNodes?: Array<{ id: string; title?: string }>; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number; }) {
   const genAI = createGeminiClient();
   
   if (!genAI) {
@@ -493,7 +480,33 @@ ${frameworkDescription}
   "kpis": [
     "KPI描述1",
     "KPI描述2"
-  ]
+  ],
+  "strategySpec": {
+    "metrics": [
+      {
+        "metricId": "<必须对齐 S2.nodes[].id>",
+        "what": "...",
+        "why": "...",
+        "triggers": [{ "metricId": "...", "comparator": ">=", "threshold": 3, "window": "P7D" }],
+        "diagnosis": [{ "id": "d1", "description": "..." }],
+        "options": [{ "id": "A", "steps": ["..."], "benefits": ["..."], "risks": [] }],
+        "recovery": { "window": "P14D", "reviewMetricIds": ["..."] },
+        "stopLoss": { "condition": "...", "action": "..." },
+        "evidence": [],
+        "confidence": 0.7,
+        "applicability": "..."
+      }
+    ],
+    "evidence": [],
+    "confidence": 0.6
+  },
+  "missingEvidenceTop3": [
+    { "metricId": "<相关指标>", "what": "需要采集的最小证据", "voi_reason": "为什么这条能改变决策" }
+  ],
+  "reviewWindow": "P14D",
+  "evidence": [],
+  "confidence": 0.6,
+  "applicability": ""
 }
 
 确保：
@@ -502,51 +515,67 @@ ${frameworkDescription}
 3. 所有isCompleted都设为false
 4. KPIs简洁明了（10-20字）`;
 
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.8,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = result.text;
-    
-    if (!text) {
-      throw new Error('No response from AI model');
+    // n-best generation (v1: 2 variants) and QA select best; simple sequential to keep resource usage minimal
+    const variants = [] as Array<{ text: string; qaScore: number; issues: unknown[] }>
+    const n = payload.runTier === 'Pro' ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const r = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 2048, temperature: i === 0 ? (payload.runTier === 'Lite' ? 0.5 : 0.8) : 0.6 });
+      const text = r.ok ? JSON.stringify(r.data) : '';
+      variants.push({ text, qaScore: 0, issues: [] });
     }
-    
-    try {
-      const planData = JSON.parse(text) as { actionPlan: ActionPlan; kpis: string[] };
-      
-      return NextResponse.json({
-        status: 'success',
-        data: planData
-      } as CoachResponse);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Raw response:', text);
-      
-      // Fallback to default data
-      return NextResponse.json({
-        status: 'error',
-        error: 'Failed to parse AI response',
-        data: {
-          actionPlan: [{
-            id: 'error-fallback',
-            text: '行动计划生成失败，请重试',
-            isCompleted: false
-          }],
-          kpis: ['生成失败']
+    // Evaluate variants via schema + QA; pick first passing with least issues
+    let best: unknown | null = null;
+    let bestIssuesCount = Number.POSITIVE_INFINITY;
+    for (const v of variants) {
+      try {
+        const planData = JSON.parse(v.text);
+        const s3 = ActionPlanResponseSchema.safeParse(planData);
+        if (!s3.success) {
+          v.issues = ['schema'];
+          continue;
         }
-      } as CoachResponse);
+        const qa = runQualityGates('S3', planData, { nodes: ((payload as GenerateActionPlanPayload).systemNodes || []).map(n => ({ id: n.id })) });
+        v.issues = qa.issues;
+        if (qa.passed) {
+          const issueCount = qa.issues.length;
+          if (issueCount < bestIssuesCount) {
+            best = planData;
+            bestIssuesCount = issueCount;
+          }
+        }
+      } catch {
+        v.issues = ['parse'];
+      }
+    }
+    if (best) {
+      // add POV tags and human review flag based on simple heuristics
+      const povTags = ['maximize_gain', 'minimize_risk'];
+      const requiresHumanReview = Array.isArray((best as { strategySpec?: { metrics?: Array<{ confidence?: number; evidence?: unknown[] }> } }).strategySpec?.metrics)
+        && ((((best as { strategySpec?: { metrics?: Array<{ confidence?: number; evidence?: unknown[] }> } }).strategySpec)?.metrics) || [])
+          .some((m) => ((m.confidence ?? 1) < 0.4) || !m.evidence || ((m.evidence as unknown[])?.length ?? 0) === 0);
+      const telemetry = { n_best_count: n };
+      return NextResponse.json({ status: 'success', data: { ...(best as object), povTags, requiresHumanReview, telemetry } } as CoachResponse);
+    }
+    // Final attempt: temperature lowered retry once
+    const retryR = await generateJson<Record<string, unknown>>(prompt, { temperature: 0.4, topK: 40, topP: 0.9, maxOutputTokens: 2048 });
+    const retryText = retryR.ok ? JSON.stringify(retryR.data) : '';
+    try {
+      const planData = JSON.parse(retryText);
+      const s3 = ActionPlanResponseSchema.safeParse(planData);
+      if (!s3.success) throw new Error('schema');
+      const qa = runQualityGates('S3', planData, { nodes: ((payload as GenerateActionPlanPayload).systemNodes || []).map(n => ({ id: n.id })) });
+      if (!qa.passed) throw new Error('qa');
+      const povTags = ['maximize_gain', 'minimize_risk'];
+      const requiresHumanReview = Array.isArray(planData.strategySpec?.metrics)
+        && ((planData.strategySpec?.metrics) || [])
+          .some((m: { confidence?: number; evidence?: unknown[] }) => ((m.confidence ?? 1) < 0.4) || !m.evidence || ((m.evidence as unknown[])?.length ?? 0) === 0);
+      const telemetry = { n_best_count: 1, retry: true };
+      return NextResponse.json({ status: 'success', data: { ...planData, povTags, requiresHumanReview, telemetry } } as CoachResponse);
+    } catch {
+      return NextResponse.json({ status: 'error', error: 'Failed to generate action plan', data: { issues: variants.map(v => v.issues) } } as CoachResponse, { status: 500 });
     }
   } catch (error) {
-    console.error('Gemini API error:', error);
+    logger.error('Gemini API error:', error);
     return NextResponse.json(
       { status: 'error', error: 'Failed to generate action plan' } as CoachResponse,
       { status: 500 }
@@ -566,6 +595,7 @@ async function handleAnalyzeProgress(payload: {
     userGoal: string;
     actionPlan: ActionPlan;
     kpis: string[];
+    strategySpec?: { metrics?: Array<{ metricId: string }> };
   }
 }) {
   const genAI = createGeminiClient();
@@ -590,7 +620,7 @@ async function handleAnalyzeProgress(payload: {
     const totalTasksCount = payload.userContext.actionPlan?.length || 0;
     const completionRate = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
     
-    const prompt = `作为一名专业的学习教练，基于以下学习进度数据，提供深入的分析和建议。
+    const prompt = `作为一名专业的学习教练，基于以下学习进度数据，提供深入的分析和建议。请尽量引用 S3 的策略指标（metrics.metricId）与复评指标（recovery.reviewMetricIds）进行参考。
 
 学习目标：${payload.userContext.userGoal}
 
@@ -622,37 +652,38 @@ ${payload.userContext.kpis?.join('\n') || '无'}
     "具体建议2",
     "具体建议3"
   ],
-  "encouragement": "鼓励性的结语（30-50字）"
+  "encouragement": "鼓励性的结语（30-50字）",
+  "referencedMetricIds": [],
+  "evidence": [],
+  "confidence": 0.6,
+  "applicability": ""
 }`;
 
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 1024,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = result.text;
-    
-    if (!text) {
-      throw new Error('No response from AI model');
-    }
-    
+    const g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 1024 });
+    if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to parse AI response' } as CoachResponse, { status: 400 });
     try {
-      const analysisData = JSON.parse(text);
-      
+      const analysisData = g.data;
+      const s4 = AnalyzeProgressSchema.safeParse(analysisData);
+      if (!s4.success) {
+        return NextResponse.json({
+          status: 'error',
+          error: 'Schema validation failed for S4 output',
+          data: analysisData,
+        } as CoachResponse);
+      }
+
+      // QA S3->S4 linkage
+      const s4qa = runQualityGates('S4', analysisData, { strategyMetrics: payload.userContext.strategySpec?.metrics || [] });
+      if (!s4qa.passed) {
+        return NextResponse.json({ status: 'error', error: 'Quality gates failed', data: { issues: s4qa.issues } } as CoachResponse);
+      }
+
       return NextResponse.json({
         status: 'success',
         data: analysisData
       } as CoachResponse);
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Raw response:', text);
+      logger.error('JSON parse error:', parseError);
       
       return NextResponse.json({
         status: 'error',
@@ -665,7 +696,7 @@ ${payload.userContext.kpis?.join('\n') || '无'}
       } as CoachResponse);
     }
   } catch (error) {
-    console.error('Gemini API error:', error);
+    logger.error('Gemini API error:', error);
     return NextResponse.json(
       { status: 'error', error: 'Failed to analyze progress' } as CoachResponse,
       { status: 500 }
@@ -736,29 +767,9 @@ async function handleConsult(payload: {
 
 请直接返回你的回答内容（纯文本，不需要JSON格式）。`;
 
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.8,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 1024,
-      },
-    });
-
-    const consultResponse = result.text;
-    
-    if (!consultResponse) {
-      throw new Error('No response from AI model');
-    }
-    
-    return NextResponse.json({
-      status: 'success',
-      data: {
-        response: consultResponse
-      }
-    } as CoachResponse);
+    const g = await generateText(prompt, { maxOutputTokens: 1024, temperature: 0.8 });
+    if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to get consultation response' } as CoachResponse, { status: 400 });
+    return NextResponse.json({ status: 'success', data: { response: g.text } } as CoachResponse);
   } catch (error) {
     console.error('Gemini API error:', error);
     return NextResponse.json(

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useCognitiveCoachStore } from "@/lib/store"
 
 interface S0IntentViewProps {
   onProceed: (userInput: string) => void
@@ -19,6 +20,7 @@ export default function S0IntentView({
   aiQuestion,
   isConversationMode = false 
 }: S0IntentViewProps) {
+  const { userContext, updateUserContext } = useCognitiveCoachStore()
   const [userInput, setUserInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
@@ -114,6 +116,61 @@ export default function S0IntentView({
                 </p>
               )}
             </div>
+
+            {!isConversationMode && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>决策类型</Label>
+                  <select
+                    className="w-full px-3 py-2 rounded-md border bg-background text-sm"
+                    value={userContext.decisionType}
+                    onChange={(e) => updateUserContext({ decisionType: e.target.value as 'explore'|'compare'|'troubleshoot'|'plan' })}
+                    disabled={isLoading}
+                  >
+                    <option value="explore">探索</option>
+                    <option value="compare">比较</option>
+                    <option value="troubleshoot">排障</option>
+                    <option value="plan">规划</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label>运行档位</Label>
+                  <select
+                    className="w-full px-3 py-2 rounded-md border bg-background text-sm"
+                    value={userContext.runTier}
+                    onChange={(e) => updateUserContext({ runTier: e.target.value as 'Lite'|'Pro'|'Review' })}
+                    disabled={isLoading}
+                  >
+                    <option value="Lite">Lite</option>
+                    <option value="Pro">Pro</option>
+                    <option value="Review">Review</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label>风险偏好</Label>
+                  <select
+                    className="w-full px-3 py-2 rounded-md border bg-background text-sm"
+                    value={userContext.riskPreference}
+                    onChange={(e) => updateUserContext({ riskPreference: e.target.value as 'low'|'medium'|'high' })}
+                    disabled={isLoading}
+                  >
+                    <option value="low">低</option>
+                    <option value="medium">中</option>
+                    <option value="high">高</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label>随机种子（可选）</Label>
+                  <Input
+                    type="number"
+                    placeholder="如 1234"
+                    value={userContext.seed ?? ''}
+                    onChange={(e) => updateUserContext({ seed: e.target.value ? parseInt(e.target.value) : undefined })}
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            )}
             
             <div className="flex justify-end pt-4">
               <Button 

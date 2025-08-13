@@ -1,24 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GripVertical, Gauge, TrendingUp, Target, BarChart3 } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
+import { Badge } from "@/components/ui/badge"
+import { normalizeId } from "@/lib/qa"
 
 interface S3ActionPlanViewProps {
   onProceed: () => void
 }
 
-export default function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
+function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   const { userContext, updateUserContext } = useCognitiveCoachStore()
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
   
   // Get action plan and KPIs from store
   const actionPlan = userContext.actionPlan || []
   const kpis = userContext.kpis || []
+  const nodes = userContext.systemDynamics?.nodes || []
+  const strategySpec = userContext.strategySpec
+  const povTags = userContext.povTags as string[] | undefined
+  const requiresHumanReview = userContext.requiresHumanReview as boolean | undefined
   
   const handleTaskToggle = (taskId: string) => {
     const newCompletedTasks = new Set(completedTasks)
@@ -49,8 +55,9 @@ export default function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
         这是从理论到实践的桥梁。以下是为你定制的行动序列和监控仪表板预览。
       </p>
       <Tabs defaultValue="action-plan" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="action-plan">行动计划</TabsTrigger>
+          <TabsTrigger value="strategy-spec">策略表</TabsTrigger>
           <TabsTrigger value="monitoring-dashboard">监控仪表板</TabsTrigger>
         </TabsList>
         <TabsContent value="action-plan">
@@ -104,6 +111,25 @@ export default function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                       style={{ width: `${completionRate}%` }}
                     />
                   </div>
+                </div>
+              )}
+              {/* VOI & Review Window */}
+              {(userContext.missingEvidenceTop3?.length || userContext.reviewWindow) && (
+                <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-amber-900 dark:text-amber-200">最小证据（VOI Top-3）与复评窗口</h4>
+                    {userContext.reviewWindow && (
+                      <Badge variant="secondary">复评窗口：{userContext.reviewWindow}</Badge>
+                    )}
+                  </div>
+                  <ul className="mt-3 space-y-2">
+                    {(userContext.missingEvidenceTop3 || []).map((e, idx) => (
+                      <li key={idx} className="text-sm text-amber-900 dark:text-amber-200">
+                        <span className="font-mono">{e.metricId}</span> — {e.what}
+                        <span className="ml-2 text-amber-700/80 dark:text-amber-300/90">(VOI: {e.voi_reason})</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </CardContent>
@@ -174,6 +200,69 @@ export default function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="strategy-spec">
+          <Card className="bg-white dark:bg-gray-950/50">
+            <CardHeader>
+              <CardTitle>策略表（覆盖映射）</CardTitle>
+              <CardDescription>将 S2 节点映射为可执行指标与策略。未覆盖的节点会标红。</CardDescription>
+              <div className="mt-2 flex items-center gap-2">
+                {povTags?.map((tag) => (
+                  <Badge key={tag} variant="secondary">POV: {tag}</Badge>
+                ))}
+                {requiresHumanReview && (
+                  <Badge variant="destructive">需人审</Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!strategySpec ? (
+                <div className="text-center py-8 text-gray-500">暂无策略表。</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b border-gray-200 dark:border-gray-800">
+                        <th className="py-2 pr-4">metricId</th>
+                        <th className="py-2 pr-4">what</th>
+                        <th className="py-2 pr-4">triggers</th>
+                        <th className="py-2 pr-4">diagnosis</th>
+                        <th className="py-2 pr-4">options A/B/C</th>
+                        <th className="py-2 pr-4">recovery</th>
+                        <th className="py-2 pr-4">stopLoss</th>
+                        <th className="py-2 pr-4">evidence</th>
+                        <th className="py-2 pr-4">confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {strategySpec.metrics.map((m) => (
+                        <tr key={m.metricId} className="border-b border-gray-100 dark:border-gray-900">
+                          <td className="py-2 pr-4 font-mono">{m.metricId}</td>
+                          <td className="py-2 pr-4">{m.what}</td>
+                          <td className="py-2 pr-4">{m.triggers?.map(t => `${t.comparator}${t.threshold}@${t.window}`).join(', ')}</td>
+                          <td className="py-2 pr-4">{m.diagnosis?.map(d => d.description).join(' / ')}</td>
+                          <td className="py-2 pr-4">{m.options?.map(o => o.id).join('/')}</td>
+                          <td className="py-2 pr-4">{m.recovery?.window}</td>
+                          <td className="py-2 pr-4">{m.stopLoss ? '✓' : '—'}</td>
+                          <td className="py-2 pr-4">{m.evidence?.length || 0}</td>
+                          <td className="py-2 pr-4">{typeof m.confidence === 'number' ? m.confidence.toFixed(2) : '—'}</td>
+                        </tr>
+                      ))}
+                      {/* 未覆盖节点显示 */}
+                      {nodes
+                        .filter(n => !strategySpec.metrics.some(m => normalizeId(m.metricId) === normalizeId(n.id)))
+                        .map(n => (
+                          <tr key={`missing-${n.id}`} className="bg-red-50 dark:bg-red-900/20">
+                            <td className="py-2 pr-4 font-mono text-red-700 dark:text-red-300">{n.id}</td>
+                            <td colSpan={6} className="py-2 pr-4 text-red-700 dark:text-red-300">未覆盖到策略表</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
       <div className="flex justify-end mt-8">
         <Button onClick={onProceed} disabled={actionPlan.length === 0}>
@@ -183,3 +272,5 @@ export default function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     </div>
   )
 }
+
+export default React.memo(S3ActionPlanView);

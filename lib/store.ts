@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { StrategySpecZod as StrategySpec } from './schemas';
 
 // FSM状态定义
 export type FSMState = 
@@ -8,12 +9,20 @@ export type FSMState =
   | 'S3_ACTION_PLAN'
   | 'S4_AUTONOMOUS_OPERATION';
 
-// 知识框架节点接口（根据ReconstructReport.md中的定义）
+// 知识框架节点接口（与 schemas.ts 保持一致）
 export interface FrameworkNode {
   id: string;
   title: string;
   summary: string;
   children?: FrameworkNode[];
+  evidence?: Array<{
+    source: string;
+    url?: string;
+    date?: string;
+    scope?: string;
+  }>;
+  confidence?: number; // 0-1
+  applicability?: string;
 }
 
 export type KnowledgeFramework = FrameworkNode[];
@@ -40,9 +49,22 @@ export interface UserContext {
   systemDynamics: {
     mermaidChart: string;
     metaphor: string;
+    nodes?: Array<{ id: string; title: string }>;
   } | null;
   actionPlan: ActionPlan | null;
   kpis: string[] | null;
+  strategySpec: StrategySpec | null;
+  missingEvidenceTop3?: Array<{ metricId: string; what: string; voi_reason: string }>;
+  reviewWindow?: string;
+  // Task spec / preferences
+  decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan';
+  runTier?: 'Lite' | 'Pro' | 'Review';
+  riskPreference?: 'low' | 'medium' | 'high';
+  seed?: number;
+  // Flags & telemetry
+  requiresHumanReview?: boolean;
+  povTags?: string[];
+  lastTelemetry?: unknown;
   goalConversationHistory: ConversationMessage[]; // Added for S0 conversation tracking
 }
 
@@ -51,12 +73,18 @@ interface CognitiveCoachStore {
   // 状态
   currentState: FSMState;
   userContext: UserContext;
+  versions: Array<{ id: string; timestamp: string; state: UserContext }>;
+  currentVersion: string | null;
+  qaIssues: Array<{ severity: 'blocker' | 'warn'; area: 'schema' | 'coverage' | 'consistency' | 'evidence' | 'actionability'; hint: string; targetPath: string }>; 
+  lastFailedStage: 'S1' | 'S2' | 'S3' | null;
   isLoading: boolean;
   error: string | null;
   
   // Actions
   setCurrentState: (state: FSMState) => void;
   updateUserContext: (updates: Partial<UserContext>) => void;
+  addVersionSnapshot: () => void;
+  setQaIssues: (stage: 'S1' | 'S2' | 'S3' | null, issues: CognitiveCoachStore['qaIssues']) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   resetStore: () => void;
@@ -69,14 +97,26 @@ const initialUserContext: UserContext = {
   systemDynamics: null,
   actionPlan: null,
   kpis: null,
+  strategySpec: null,
+  decisionType: 'plan',
+  runTier: 'Pro',
+  riskPreference: 'medium',
+  seed: undefined,
+  requiresHumanReview: undefined,
+  povTags: undefined,
+  lastTelemetry: undefined,
   goalConversationHistory: [],
 };
 
 // 创建Zustand store
-export const useCognitiveCoachStore = create<CognitiveCoachStore>((set) => ({
+export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => ({
   // 初始状态
   currentState: 'S0_INTENT_CALIBRATION',
   userContext: initialUserContext,
+  versions: [],
+  currentVersion: null,
+  qaIssues: [],
+  lastFailedStage: null,
   isLoading: false,
   error: null,
   
@@ -88,6 +128,25 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set) => ({
       userContext: { ...state.userContext, ...updates }
     })),
   
+  addVersionSnapshot: () => {
+    const userContext = get().userContext;
+    const timestamp = new Date().toISOString();
+    const id = `v-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
+    // Inline snapshot creation to avoid circular deps
+    const snapshot = { 
+      id, 
+      timestamp, 
+      state: JSON.parse(JSON.stringify(userContext)) // Deep clone
+    };
+    
+    set((state) => ({
+      versions: [...state.versions, snapshot],
+      currentVersion: snapshot.id,
+    }));
+  },
+
+  setQaIssues: (stage, issues) => set({ lastFailedStage: stage, qaIssues: issues }),
+  
   setLoading: (loading) => set({ isLoading: loading }),
   
   setError: (error) => set({ error }),
@@ -96,6 +155,10 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set) => ({
     set({
       currentState: 'S0_INTENT_CALIBRATION',
       userContext: initialUserContext,
+      versions: [],
+      currentVersion: null,
+      qaIssues: [],
+      lastFailedStage: null,
       isLoading: false,
       error: null
     }),

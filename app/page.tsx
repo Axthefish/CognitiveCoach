@@ -11,8 +11,16 @@ import FsmNavigator from '@/components/fsm-navigator';
 import { State } from '@/lib/types';
 
 export default function Home() {
-  // 从Zustand store获取状态和方法
-  const { currentState, setCurrentState, userContext, updateUserContext, isLoading, setLoading, error, setError } = useCognitiveCoachStore();
+  // 优化：分别获取状态，避免不必要的重渲染
+  const currentState = useCognitiveCoachStore(state => state.currentState);
+  const userContext = useCognitiveCoachStore(state => state.userContext);
+  const qaIssues = useCognitiveCoachStore(state => state.qaIssues);
+  const lastFailedStage = useCognitiveCoachStore(state => state.lastFailedStage);
+  const isLoading = useCognitiveCoachStore(state => state.isLoading);
+  const error = useCognitiveCoachStore(state => state.error);
+  
+  // 获取 actions（这些通常是稳定的，不会导致重渲染）
+  const { setCurrentState, updateUserContext, addVersionSnapshot, setQaIssues, setLoading, setError } = useCognitiveCoachStore();
   
   // Local state for S0 conversation
   const [s0ConversationMode, setS0ConversationMode] = React.useState(false);
@@ -27,18 +35,55 @@ export default function Home() {
     { id: 'S4', name: 'Autonomous Operation' }
   ];
 
-  // 获取当前状态ID（S0, S1等）
-  const currentStateId = currentState.split('_')[0] as State['id'];
+  // 获取当前状态ID（S0, S1等） - 使用 useMemo 优化
+  const currentStateId = React.useMemo(() => 
+    currentState.split('_')[0] as State['id'], 
+    [currentState]
+  );
 
-  // 获取已完成的状态列表
-  const getCompletedStates = (): State['id'][] => {
+  // 获取已完成的状态列表 - 使用 useMemo 优化
+  const completedStates = React.useMemo((): State['id'][] => {
     const stateOrder = ['S0', 'S1', 'S2', 'S3', 'S4'];
     const currentIndex = stateOrder.indexOf(currentStateId);
     return stateOrder.slice(0, currentIndex) as State['id'][];
-  };
+  }, [currentStateId]);
 
-  // S0状态的目标精炼处理
-  const handleGoalRefinement = async (userInput: string) => {
+  // 生成知识框架（useCallback，便于作为依赖传入其他 hooks）
+  const generateKnowledgeFramework = React.useCallback(async (userGoal: string) => {
+    setLoading(true);
+    
+    try {
+      const response = await fetch('/api/coach', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'generateFramework',
+          payload: { userGoal, decisionType: userContext.decisionType, runTier: userContext.runTier, riskPreference: userContext.riskPreference, seed: userContext.seed }
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        updateUserContext({ knowledgeFramework: result.data.framework });
+        addVersionSnapshot();
+        setQaIssues(null, []);
+      } else if (result.status === 'error') {
+        setError(result.error || '生成知识框架失败');
+        if (result.data?.issues) setQaIssues('S1', result.data.issues);
+      }
+    } catch (error) {
+      console.error('Error generating framework:', error);
+      setError('生成知识框架时发生错误');
+    } finally {
+      setLoading(false);
+    }
+  }, [setLoading, updateUserContext, addVersionSnapshot, setQaIssues, setError, userContext.decisionType, userContext.runTier, userContext.riskPreference, userContext.seed]);
+
+  // S0状态的目标精炼处理 - 使用 useCallback 优化
+  const handleGoalRefinement = React.useCallback(async (userInput: string) => {
     setLoading(true);
     setError(null);
     
@@ -112,41 +157,12 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userContext.goalConversationHistory, s0ConversationMode, setLoading, setError, updateUserContext, setCurrentState, setS0ConversationMode, setS0AiQuestion, generateKnowledgeFramework]);
 
-  // 生成知识框架
-  const generateKnowledgeFramework = async (userGoal: string) => {
-    setLoading(true);
-    
-    try {
-      const response = await fetch('/api/coach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'generateFramework',
-          payload: { userGoal }
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.status === 'success') {
-        updateUserContext({ knowledgeFramework: result.data.framework });
-      } else if (result.status === 'error') {
-        setError(result.error || '生成知识框架失败');
-      }
-    } catch (error) {
-      console.error('Error generating framework:', error);
-      setError('生成知识框架时发生错误');
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   // 生成系统动力学
-  const generateSystemDynamics = async () => {
+  const generateSystemDynamics = async (): Promise<boolean> => {
     setLoading(true);
     
     try {
@@ -158,7 +174,10 @@ export default function Home() {
         body: JSON.stringify({
           action: 'generateSystemDynamics',
           payload: { 
-            framework: userContext.knowledgeFramework 
+            framework: userContext.knowledgeFramework,
+            decisionType: userContext.decisionType,
+            runTier: userContext.runTier,
+            seed: userContext.seed
           }
         }),
       });
@@ -169,22 +188,29 @@ export default function Home() {
         updateUserContext({ 
           systemDynamics: {
             mermaidChart: result.data.mermaidChart,
-            metaphor: result.data.metaphor
+            metaphor: result.data.metaphor,
+            nodes: result.data.nodes
           }
         });
+        addVersionSnapshot();
+        return true;
       } else if (result.status === 'error') {
         setError(result.error || '生成系统动力学失败');
+        if (result.data?.issues) setQaIssues('S2', result.data.issues);
+        return false;
       }
     } catch (error) {
       console.error('Error generating system dynamics:', error);
       setError('生成系统动力学时发生错误');
+      return false;
     } finally {
       setLoading(false);
     }
+    return false;
   };
 
   // 生成行动计划
-  const generateActionPlan = async () => {
+  const generateActionPlan = async (): Promise<boolean> => {
     setLoading(true);
     
     try {
@@ -197,7 +223,11 @@ export default function Home() {
           action: 'generateActionPlan',
           payload: { 
             userGoal: userContext.userGoal,
-            framework: userContext.knowledgeFramework 
+            framework: userContext.knowledgeFramework,
+            systemNodes: userContext.systemDynamics?.nodes || [],
+            decisionType: userContext.decisionType,
+            runTier: userContext.runTier,
+            seed: userContext.seed
           }
         }),
       });
@@ -207,17 +237,30 @@ export default function Home() {
       if (result.status === 'success') {
         updateUserContext({ 
           actionPlan: result.data.actionPlan,
-          kpis: result.data.kpis
+          kpis: result.data.kpis,
+          strategySpec: result.data.strategySpec || null,
+          missingEvidenceTop3: result.data.missingEvidenceTop3,
+          reviewWindow: result.data.reviewWindow,
+          // telemetry & flags
+          ...(result.data.povTags ? { povTags: result.data.povTags } : {}),
+          ...(typeof result.data.requiresHumanReview === 'boolean' ? { requiresHumanReview: result.data.requiresHumanReview } : {}),
         });
+        addVersionSnapshot();
+        setQaIssues(null, []);
+        return true;
       } else if (result.status === 'error') {
         setError(result.error || '生成行动计划失败');
+        if (result.data?.issues) setQaIssues('S3', result.data.issues);
+        return false;
       }
     } catch (error) {
       console.error('Error generating action plan:', error);
       setError('生成行动计划时发生错误');
+      return false;
     } finally {
       setLoading(false);
     }
+    return false;
   };
 
   // 通用状态转换处理器
@@ -230,15 +273,17 @@ export default function Home() {
 
     const nextState = transitions[currentState];
     if (nextState) {
-      setCurrentState(nextState);
-      
-      // 在进入S2时生成系统动力学
+      // 先生成并校验，再流转
       if (nextState === 'S2_SYSTEM_DYNAMICS') {
-        await generateSystemDynamics();
-      }
-      // 在进入S3时生成行动计划
-      else if (nextState === 'S3_ACTION_PLAN') {
-        await generateActionPlan();
+        const ok = await generateSystemDynamics();
+        if (ok) setCurrentState(nextState);
+        else return; // QA failed, block transition
+      } else if (nextState === 'S3_ACTION_PLAN') {
+        const ok = await generateActionPlan();
+        if (ok) setCurrentState(nextState);
+        else return; // QA failed, block transition
+      } else {
+        setCurrentState(nextState);
       }
     }
   };
@@ -281,7 +326,7 @@ export default function Home() {
           <FsmNavigator 
             states={states} 
             currentState={currentStateId} 
-            completedStates={getCompletedStates()} 
+            completedStates={completedStates} 
           />
         </div>
       </div>
@@ -322,6 +367,20 @@ export default function Home() {
           </div>
         )}
         
+        {/* QA Issues banner */}
+        {qaIssues.length > 0 && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="font-semibold mb-2">质量校验未通过{lastFailedStage ? `（${lastFailedStage}）` : ''}：</div>
+            <ul className="list-disc pl-5 space-y-1 text-sm">
+              {qaIssues.map((i, idx) => (
+                <li key={idx} className={i.severity === 'blocker' ? 'text-red-700' : 'text-yellow-800'}>
+                  [{i.severity}] [{i.area}] {i.hint} <span className="text-gray-500">@{i.targetPath}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {renderCurrentStateView()}
       </main>
 
@@ -333,6 +392,9 @@ export default function Home() {
           <div>User Goal: {userContext.userGoal || 'Not set'}</div>
           <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
           <div>Error: {error || 'None'}</div>
+          <div>RunTier: {userContext.runTier}</div>
+          <div>DecisionType: {userContext.decisionType}</div>
+          <div>Seed: {userContext.seed ?? '-'}</div>
         </div>
       )}
     </div>

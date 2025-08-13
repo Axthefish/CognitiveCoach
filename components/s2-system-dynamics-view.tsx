@@ -48,6 +48,23 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                 </p>
               </CardContent>
             </Card>
+            {dynamics?.nodes && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>节点清单与覆盖状态</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {dynamics.nodes.map((n) => (
+                      <div key={n.id} className="flex items-center justify-between text-sm">
+                        <span className="font-mono text-gray-700 dark:text-gray-300">{n.id}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{n.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       ) : (

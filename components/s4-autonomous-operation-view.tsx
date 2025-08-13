@@ -56,7 +56,8 @@ export default function S4AutonomousOperationView() {
             userContext: {
               userGoal: userContext.userGoal,
               actionPlan: userContext.actionPlan,
-              kpis: userContext.kpis
+              kpis: userContext.kpis,
+              strategySpec: userContext.strategySpec
             }
           }
         }),
