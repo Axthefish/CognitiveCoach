@@ -188,7 +188,10 @@ Respond in JSON format:
 {
   "status": "clarification_needed" or "clarified",
   "ai_question": "Your clarifying question (only if status is clarification_needed)",
-  "goal": "The refined goal statement (only if status is clarified)"
+  "goal": "The refined goal statement (only if status is clarified)",
+  "evidence": [],
+  "confidence": 0.8,
+  "applicability": "general"
 }`;
 
     // Build the full conversation
