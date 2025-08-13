@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         errorDetails: parsed.error.issues.map(i => ({
           path: i.path,
           message: i.message,
-          received: i.received
+          code: i.code
         }))
       });
       
@@ -205,7 +205,7 @@ Respond in JSON format:
 
     const prompt = `${systemPrompt}\n\nConversation:\n${conversationContent}\n\nAnalyze the user's goal and provide your response:`;
 
-    const g = await generateJson<{ status: string; ai_question?: string; goal?: string }>(prompt, { maxOutputTokens: 1024 });
+    const g = await generateJson<{ status: string; ai_question?: string; goal?: string }>(prompt, { maxOutputTokens: 1024 }, 'Pro');
     if (!g.ok) return NextResponse.json({ status: 'error', error: g.error } as CoachResponse, { status: 400 });
     const s0 = S0RefineGoalSchema.safeParse(g.data);
     if (!s0.success) {
@@ -222,7 +222,7 @@ Respond in JSON format:
 }
 
 // S1: 知识框架生成
-async function handleGenerateFramework(payload: { userGoal: string }) {
+async function handleGenerateFramework(payload: GenerateFrameworkPayload) {
   const genAI = createGeminiClient();
   
   if (!genAI) {
@@ -278,7 +278,7 @@ async function handleGenerateFramework(payload: { userGoal: string }) {
 3. summary提供有价值的描述
 4. 内容与学习目标高度相关`;
 
-    const g = await generateJson<KnowledgeFramework>(prompt, { maxOutputTokens: 2048 });
+    const g = await generateJson<KnowledgeFramework>(prompt, { maxOutputTokens: 2048 }, payload.runTier);
     if (!g.ok) return createErrorResponse('AI响应解析失败', 400, { details: g.error, fixHints: ['请重试生成', '检查模型输出格式'], stage: 'S1' });
     const framework = g.data;
     const s1 = KnowledgeFrameworkSchema.safeParse(framework);
@@ -371,7 +371,8 @@ ${frameworkDescription}
 
     const g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
       prompt,
-      { maxOutputTokens: 2048, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 }
+      { maxOutputTokens: 2048, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 },
+      payload.runTier
     );
     if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to parse AI response' } as CoachResponse, { status: 400 });
     try {
@@ -539,7 +540,7 @@ ${frameworkDescription}
     const variants = [] as Array<{ text: string; qaScore: number; issues: unknown[] }>
     const n = payload.runTier === 'Pro' ? 2 : 1;
     for (let i = 0; i < n; i++) {
-      const r = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 2048, temperature: i === 0 ? (payload.runTier === 'Lite' ? 0.5 : 0.8) : 0.6 });
+      const r = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 2048, temperature: i === 0 ? (payload.runTier === 'Lite' ? 0.5 : 0.8) : 0.6 }, payload.runTier);
       const text = r.ok ? JSON.stringify(r.data) : '';
       variants.push({ text, qaScore: 0, issues: [] });
     }
@@ -577,7 +578,7 @@ ${frameworkDescription}
       return NextResponse.json({ status: 'success', data: { ...(best as object), povTags, requiresHumanReview, telemetry } } as CoachResponse);
     }
     // Final attempt: temperature lowered retry once
-    const retryR = await generateJson<Record<string, unknown>>(prompt, { temperature: 0.4, topK: 40, topP: 0.9, maxOutputTokens: 2048 });
+    const retryR = await generateJson<Record<string, unknown>>(prompt, { temperature: 0.4, topK: 40, topP: 0.9, maxOutputTokens: 2048 }, payload.runTier);
     const retryText = retryR.ok ? JSON.stringify(retryR.data) : '';
     try {
       const planData = JSON.parse(retryText);
@@ -679,7 +680,7 @@ ${payload.userContext.kpis?.join('\n') || '无'}
   "applicability": ""
 }`;
 
-    const g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 1024 });
+    const g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 1024 }, 'Pro');
     if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to parse AI response' } as CoachResponse, { status: 400 });
     try {
       const analysisData = g.data;
@@ -787,7 +788,7 @@ async function handleConsult(payload: {
 
 请直接返回你的回答内容（纯文本，不需要JSON格式）。`;
 
-    const g = await generateText(prompt, { maxOutputTokens: 1024, temperature: 0.8 });
+    const g = await generateText(prompt, { maxOutputTokens: 1024, temperature: 0.8 }, 'Pro');
     if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to get consultation response' } as CoachResponse, { status: 400 });
     return NextResponse.json({ status: 'success', data: { response: g.text } } as CoachResponse);
   } catch (error) {

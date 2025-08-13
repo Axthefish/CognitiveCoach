@@ -10,6 +10,12 @@ An AI-powered learning companion that guides you through a structured learning j
 - S3: Action Plan — Create actionable steps with KPIs and Strategy DSL
 - S4: Autonomous Operation — Monitor progress and get AI coaching
 
+### Run Tiers
+
+- **Lite**: Fast responses using `gemini-2.5-flash-lite`, single variant generation
+- **Pro**: Comprehensive analysis using `gemini-2.5-pro`, multi-variant generation with QA selection
+- **Review**: Same as Pro but triggers human review for low-confidence outputs
+
 ## Tech Stack
 
 - Next.js 15.2.4, React 19, TypeScript, Tailwind CSS
@@ -25,8 +31,10 @@ An AI-powered learning companion that guides you through a structured learning j
 GOOGLE_AI_API_KEY=your_key
 # or
 GEMINI_API_KEY=your_key
-# Optional model override
-GEMINI_MODEL=gemini-2.5-pro
+
+# Model configuration
+GEMINI_MODEL=gemini-2.5-pro          # Default model for Pro/Review tiers
+GEMINI_LITE_MODEL=gemini-2.5-flash-lite  # Faster model for Lite tier
 
 # API
 ALLOWED_ORIGINS=https://yourdomain.com,https://another.com

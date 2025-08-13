@@ -25,7 +25,12 @@ export function createGeminiClient(apiKey?: string): GoogleGenAI | null {
   return new GoogleGenAI({ apiKey: key });
 }
 
-export function getModelName(): string {
+export function getModelName(runTier?: 'Lite' | 'Pro' | 'Review'): string {
+  // Lite档位使用flash-lite模型以提高响应速度
+  if (runTier === 'Lite') {
+    return process.env.GEMINI_LITE_MODEL || 'gemini-2.5-flash-lite';
+  }
+  // Pro和Review档位使用标准模型
   return process.env.GEMINI_MODEL || 'gemini-2.5-pro';
 }
 
@@ -46,7 +51,8 @@ export async function withTimeout<T>(p: Promise<T>, ms = 30_000): Promise<T> {
 
 export async function generateJson<T>(
   prompt: string,
-  overrides?: Partial<GenConfig>
+  overrides?: Partial<GenConfig>,
+  runTier?: 'Lite' | 'Pro' | 'Review'
 ): Promise<{ ok: true; data: T } | { ok: false; error: string; raw?: string }> {
   const client = createGeminiClient();
   if (!client) return { ok: false, error: 'NO_API_KEY' };
@@ -63,7 +69,7 @@ export async function generateJson<T>(
   const run = async (temperature: number) => {
     const res = await withTimeout(
       client.models.generateContent({
-        model: getModelName(),
+        model: getModelName(runTier),
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { ...config, temperature },
       })
@@ -88,7 +94,8 @@ export async function generateJson<T>(
 
 export async function generateText(
   prompt: string,
-  overrides?: Partial<GenConfig>
+  overrides?: Partial<GenConfig>,
+  runTier?: 'Lite' | 'Pro' | 'Review'
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const client = createGeminiClient();
   if (!client) return { ok: false, error: 'NO_API_KEY' };
@@ -104,7 +111,7 @@ export async function generateText(
   const run = async (temperature: number) => {
     const res = await withTimeout(
       client.models.generateContent({
-        model: getModelName(),
+        model: getModelName(runTier),
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { ...config, temperature },
       })
