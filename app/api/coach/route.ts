@@ -61,9 +61,29 @@ export async function POST(request: NextRequest) {
   
   try {
     const json = await request.json();
+    
+    // 添加调试日志
+    console.log('🔍 Debug - Received request body:', JSON.stringify(json, null, 2));
+    
     const parsed = CoachRequestSchema.safeParse(json);
     if (!parsed.success) {
-      const res = NextResponse.json({ status: 'error', error: 'Invalid request body', details: parsed.error.issues.map(i => i.message).join('; ') } as CoachResponse, { status: 400 });
+      // 详细的错误日志
+      console.error('❌ Schema validation failed:', {
+        receivedData: json,
+        errors: parsed.error.issues,
+        errorDetails: parsed.error.issues.map(i => ({
+          path: i.path,
+          message: i.message,
+          received: i.received
+        }))
+      });
+      
+      const res = NextResponse.json({ 
+        status: 'error', 
+        error: 'Invalid request body', 
+        details: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; '),
+        receivedData: json // 帮助调试
+      } as CoachResponse, { status: 400 });
       return withCors(res, origin);
     }
     body = parsed.data as unknown as CoachRequest;

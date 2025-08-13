@@ -165,7 +165,12 @@ export default function S0IntentView({
                     type="number"
                     placeholder="如 1234"
                     value={userContext.seed ?? ''}
-                    onChange={(e) => updateUserContext({ seed: e.target.value ? parseInt(e.target.value) : undefined })}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const numValue = value ? parseInt(value, 10) : undefined;
+                      // 确保是有效数字或undefined
+                      updateUserContext({ seed: (numValue && !isNaN(numValue)) ? numValue : undefined });
+                    }}
                     disabled={isLoading}
                   />
                 </div>
