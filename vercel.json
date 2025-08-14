@@ -1,11 +1,4 @@
 {
-  "functions": {
-    "app/api/**/*.ts": {
-      "regions": ["iad1"]
-    }
-  },
-  "redirects": [],
-  "rewrites": [],
   "headers": [
     {
       "source": "/api/(.*)",
