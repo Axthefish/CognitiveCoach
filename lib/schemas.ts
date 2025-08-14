@@ -19,9 +19,10 @@ export const S0RefineGoalSchema = z.object({
   status: z.enum(['clarification_needed', 'clarified']),
   ai_question: z.string().optional(),
   goal: z.string().optional(),
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
-  applicability: ApplicabilitySchema,
+  // Make metadata fields optional to match AI output capabilities
+  evidence: EvidenceArraySchema.optional(),
+  confidence: ConfidenceSchema.optional(),
+  applicability: ApplicabilitySchema.optional(),
 }).strict();
 
 // S1 knowledge framework node
