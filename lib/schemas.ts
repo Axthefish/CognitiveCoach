@@ -173,24 +173,31 @@ export const RefineGoalPayloadSchema = z.object({
   conversationHistory: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional(),
 }).strict();
 
-export const GenerateFrameworkPayloadSchema = z.intersection(
-  z.object({ userGoal: z.string() }).strict(),
-  TaskSpecSchema
-);
+export const GenerateFrameworkPayloadSchema = z.object({
+  userGoal: z.string(),
+  decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
+  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  riskPreference: z.enum(['low', 'medium', 'high']).optional(),
+  seed: z.number().int().optional(),
+}).strict();
 
-export const GenerateSystemDynamicsPayloadSchema = z.intersection(
-  z.object({ framework: KnowledgeFrameworkSchema }).strict(),
-  TaskSpecSchema
-);
+export const GenerateSystemDynamicsPayloadSchema = z.object({
+  framework: KnowledgeFrameworkSchema,
+  decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
+  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  riskPreference: z.enum(['low', 'medium', 'high']).optional(),
+  seed: z.number().int().optional(),
+}).strict();
 
-export const GenerateActionPlanPayloadSchema = z.intersection(
-  z.object({
-    userGoal: z.string(),
-    framework: KnowledgeFrameworkSchema,
-    systemNodes: z.array(z.object({ id: z.string(), title: z.string().optional() })).optional(),
-  }).strict(),
-  TaskSpecSchema
-);
+export const GenerateActionPlanPayloadSchema = z.object({
+  userGoal: z.string(),
+  framework: KnowledgeFrameworkSchema,
+  systemNodes: z.array(z.object({ id: z.string(), title: z.string().optional() })).optional(),
+  decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
+  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  riskPreference: z.enum(['low', 'medium', 'high']).optional(),
+  seed: z.number().int().optional(),
+}).strict();
 
 export const AnalyzeProgressPayloadSchema = z.object({
   progressData: z.object({
