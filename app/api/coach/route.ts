@@ -210,8 +210,73 @@ IMPORTANT:
 
     const prompt = `${systemPrompt}\n\nConversation:\n${conversationContent}\n\nAnalyze the user's goal and provide your response:`;
 
+    // 添加调试日志 - 记录完整的prompt和对话历史
+    console.log('🔍 S0 Debug - Full Prompt:', {
+      isFirstInteraction,
+      conversationHistoryLength: conversationHistory.length,
+      userInput: payload.userInput,
+      conversationContent,
+      promptLength: prompt.length
+    });
+
     const g = await generateJson<{ status: string; ai_question?: string; goal?: string }>(prompt, { maxOutputTokens: 1024 }, 'Pro');
-    if (!g.ok) return NextResponse.json({ status: 'error', error: g.error } as CoachResponse, { status: 400 });
+    if (!g.ok) {
+      console.error('❌ S0 Gemini API failed:', {
+        error: g.error,
+        promptLength: prompt.length,
+        conversationHistory: conversationHistory,
+        userInput: payload.userInput
+      });
+      
+      // 特殊处理EMPTY_RESPONSE错误 - 提供智能fallback
+      if (g.error === 'EMPTY_RESPONSE') {
+        console.warn('🔄 Handling EMPTY_RESPONSE with intelligent fallback');
+        
+        // 基于对话历史和用户输入提供合理的响应
+        const hasMultipleInteractions = conversationHistory.length > 0;
+        
+        if (hasMultipleInteractions) {
+          // 如果有对话历史，尝试基于最后的交互确定目标
+          const lastUserInput = payload.userInput.toLowerCase().trim();
+          
+          // 检查用户是否给出了否定回答或表示完成
+          if (lastUserInput.includes('没有') || lastUserInput.includes('完成') || lastUserInput.includes('够了') || lastUserInput.includes('好的')) {
+            // 从对话历史中提取初始目标
+            const firstUserInput = conversationHistory.find(msg => msg.role === 'user')?.content || '';
+            const fallbackGoal = `学习并掌握${firstUserInput}的相关技能和知识，能够熟练应用所学内容`;
+            
+            return NextResponse.json({
+              status: 'success',
+              data: {
+                status: 'clarified',
+                goal: fallbackGoal
+              }
+            } as CoachResponse);
+          } else {
+            // 继续询问以获得更多信息
+            return NextResponse.json({
+              status: 'success',
+              data: {
+                status: 'clarification_needed',
+                ai_question: '我想确保完全理解您的学习目标。您能再详细描述一下您希望达到的具体成果吗？'
+              }
+            } as CoachResponse);
+          }
+        } else {
+          // 首次交互的fallback
+          const refinedGoal = `掌握${payload.userInput}的核心概念和实践技能，能够独立完成相关项目`;
+          return NextResponse.json({
+            status: 'success',
+            data: {
+              status: 'clarified',
+              goal: refinedGoal
+            }
+          } as CoachResponse);
+        }
+      }
+      
+      return NextResponse.json({ status: 'error', error: g.error } as CoachResponse, { status: 400 });
+    }
     
     // 添加详细的调试日志
     console.log('🔍 S0 Debug - AI Raw Response:', JSON.stringify(g.data, null, 2));
