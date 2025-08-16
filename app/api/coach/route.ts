@@ -224,8 +224,7 @@ IMPORTANT:
         errorDetails: s0.error.issues.map(i => ({
           path: i.path,
           message: i.message,
-          code: i.code,
-          received: i.received
+          code: i.code
         }))
       });
       
