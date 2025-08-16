@@ -187,9 +187,14 @@ IMPORTANT GUIDELINES:
 Respond in JSON format:
 {
   "status": "clarification_needed" or "clarified",
-  "ai_question": "Your clarifying question (only if status is clarification_needed)",
-  "goal": "The refined goal statement (only if status is clarified)"
-}`;
+  "ai_question": "Your clarifying question (only if status is clarification_needed, omit field if not needed)",
+  "goal": "The refined goal statement (only if status is clarified, omit field if not needed)"
+}
+
+IMPORTANT: 
+- Only include "ai_question" when status is "clarification_needed"
+- Only include "goal" when status is "clarified"  
+- Do not include fields with null values - simply omit them from the response`;
 
     // Build the full conversation
     let conversationContent = '';
@@ -207,10 +212,32 @@ Respond in JSON format:
 
     const g = await generateJson<{ status: string; ai_question?: string; goal?: string }>(prompt, { maxOutputTokens: 1024 }, 'Pro');
     if (!g.ok) return NextResponse.json({ status: 'error', error: g.error } as CoachResponse, { status: 400 });
+    
+    // 添加详细的调试日志
+    console.log('🔍 S0 Debug - AI Raw Response:', JSON.stringify(g.data, null, 2));
+    
     const s0 = S0RefineGoalSchema.safeParse(g.data);
     if (!s0.success) {
-      return NextResponse.json({ status: 'error', error: 'Schema validation failed for S0 output', data: g.data } as CoachResponse, { status: 400 });
+      console.error('❌ S0 Schema validation failed:', {
+        receivedData: g.data,
+        errors: s0.error.issues,
+        errorDetails: s0.error.issues.map(i => ({
+          path: i.path,
+          message: i.message,
+          code: i.code,
+          received: i.received
+        }))
+      });
+      
+      return NextResponse.json({ 
+        status: 'error', 
+        error: 'Schema validation failed for S0 output', 
+        data: g.data,
+        validationErrors: s0.error.issues.map(i => `${i.path.join('.')}: ${i.message}`)
+      } as CoachResponse, { status: 400 });
     }
+    
+    console.log('✅ S0 Schema validation passed:', JSON.stringify(s0.data, null, 2));
     return NextResponse.json({ status: 'success', data: g.data } as CoachResponse);
   } catch (error) {
     logger.error('Gemini API error:', error);
