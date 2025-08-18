@@ -130,7 +130,7 @@ export class CacheService<T> {
 
 // AI 响应缓存
 export class AIResponseCache {
-  private caches: Map<string, CacheService<any>> = new Map();
+  private caches: Map<string, CacheService<unknown>> = new Map();
   
   constructor() {
     // 为每个阶段创建独立的缓存
@@ -219,10 +219,10 @@ export const aiResponseCache = new AIResponseCache();
 
 // 缓存装饰器
 export function cached(stage: string, ttl?: number) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
     
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (...args: unknown[]) {
       // 生成缓存键
       const key = CacheKeyGenerator.generate(`${stage}:${propertyKey}`, args);
       
@@ -242,13 +242,13 @@ export function cached(stage: string, ttl?: number) {
 // 条件缓存装饰器 - 只在特定条件下使用缓存
 export function cachedIf(
   stage: string,
-  condition: (...args: any[]) => boolean,
+  condition: (...args: unknown[]) => boolean,
   ttl?: number
 ) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
     
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (...args: unknown[]) {
       // 检查是否应该使用缓存
       if (!condition(...args)) {
         return originalMethod.apply(this, args);

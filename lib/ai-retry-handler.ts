@@ -126,7 +126,6 @@ export function adjustPromptBasedOnError(
   attemptNumber: number = 1,
   stage?: string
 ): string {
-  const errorContext = analyzeErrorContext(originalPrompt, errorDetails, attemptNumber);
   const missingFields = extractMissingFields(errorDetails);
   
   const adjustments: Record<ErrorType, (prompt: string, attempt: number) => string> = {

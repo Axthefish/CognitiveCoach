@@ -746,7 +746,7 @@ export class PromptSanitizer {
     if (!input || typeof input !== 'string') return '';
 
     // 基本清理
-    let cleaned = input
+    const cleaned = input
       .trim()
       .replace(/[<>]/g, '') // 移除潜在的HTML标签
       .slice(0, 2000); // 限制长度
