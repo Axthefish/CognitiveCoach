@@ -56,7 +56,7 @@ export class CacheKeyGenerator {
 }
 
 // 通用缓存服务
-export class CacheService<T> {
+export class CacheService<T extends object> {
   private cache: LRUCache<string, T>;
   private stats: CacheStats = {
     hits: 0,
