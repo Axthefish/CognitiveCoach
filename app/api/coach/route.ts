@@ -6,7 +6,6 @@ import { logger } from '@/lib/logger';
 import { KnowledgeFramework, ActionPlan } from '@/lib/types';
 import { createGeminiClient, generateJson, generateText } from '@/lib/gemini-config';
 import {
-  S0RefineGoalSchema,
   KnowledgeFrameworkSchema,
   SystemDynamicsSchema,
   ActionPlanResponseSchema,
