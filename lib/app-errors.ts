@@ -215,6 +215,36 @@ export function generateRecoveryHints(code: ErrorCode, context?: Record<string, 
       '用更清晰的语言描述您的需求'
     ],
     
+    [ErrorCodes.AI_TIMEOUT]: () => [
+      '请稍后重试',
+      '尝试简化您的请求',
+      '检查网络连接是否稳定'
+    ],
+    
+    [ErrorCodes.AI_EMPTY_RESPONSE]: () => [
+      '重新描述您的需求',
+      '尝试提供更多细节',
+      '使用更具体的语言'
+    ],
+    
+    [ErrorCodes.AI_RATE_LIMIT]: () => [
+      '请稍后再试',
+      '系统正在处理大量请求',
+      '建议等待几分钟后重试'
+    ],
+    
+    [ErrorCodes.VALIDATION_ERROR]: () => [
+      '检查输入数据的格式',
+      '确保所有必填字段都已填写',
+      '参考输入示例进行调整'
+    ],
+    
+    [ErrorCodes.SCHEMA_VALIDATION_ERROR]: () => [
+      '检查数据格式是否正确',
+      '确保使用正确的数据类型',
+      '移除无效的字段'
+    ],
+    
     [ErrorCodes.GOAL_REFINEMENT_FAILED]: (ctx) => {
       const attempts = ctx?.attempts as number || 0;
       if (attempts > 2) {
@@ -227,13 +257,63 @@ export function generateRecoveryHints(code: ErrorCode, context?: Record<string, 
       return ['请用不同的方式描述您的学习目标', '尽量具体说明您想达到的成果'];
     },
     
+    [ErrorCodes.FRAMEWORK_GENERATION_FAILED]: () => [
+      '尝试简化学习目标',
+      '确保目标描述清晰明确',
+      '重新生成知识框架'
+    ],
+    
+    [ErrorCodes.SYSTEM_DYNAMICS_FAILED]: () => [
+      '检查知识框架是否完整',
+      '尝试重新生成动力学图',
+      '简化系统要素'
+    ],
+    
+    [ErrorCodes.ACTION_PLAN_FAILED]: () => [
+      '简化行动计划要求',
+      '减少 KPI 数量',
+      '确保时间安排合理'
+    ],
+    
+    [ErrorCodes.PROGRESS_ANALYSIS_FAILED]: () => [
+      '检查进度数据是否完整',
+      '确保所有字段都已填写',
+      '重新提交进度报告'
+    ],
+    
+    [ErrorCodes.INTERNAL_ERROR]: () => [
+      '请刷新页面重试',
+      '如果问题持续，请联系技术支持'
+    ],
+    
+    [ErrorCodes.RATE_LIMIT_EXCEEDED]: () => [
+      '请求过于频繁，请稍后再试',
+      '建议等待一段时间',
+      '避免快速连续请求'
+    ],
+    
+    [ErrorCodes.UNAUTHORIZED]: () => [
+      '请检查您的访问权限',
+      '尝试重新登录',
+      '联系管理员获取帮助'
+    ],
+    
+    [ErrorCodes.NOT_FOUND]: () => [
+      '请检查请求的资源是否存在',
+      '尝试刷新页面',
+      '确认 URL 地址正确'
+    ],
+    
     [ErrorCodes.QA_VALIDATION_FAILED]: (ctx) => {
       const issues = ctx?.issues as Array<{ hint: string }> || [];
       return issues.map(i => i.hint).slice(0, 3);
     },
     
-    // 默认恢复提示
-    [ErrorCodes.INTERNAL_ERROR]: () => ['请刷新页面重试', '如果问题持续，请联系技术支持'],
+    [ErrorCodes.CONSISTENCY_CHECK_FAILED]: () => [
+      '检查数据一致性',
+      '确保相关信息匹配',
+      '重新验证输入数据'
+    ],
   };
   
   const generator = hints[code] || (() => ['请稍后重试']);
