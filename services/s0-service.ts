@@ -37,9 +37,17 @@ export class S0Service {
   }
   
   async refineGoal(payload: RefineGoalPayload): Promise<NextResponse> {
+    console.log('🚀 S0Service.refineGoal called');
+    
     try {
       const conversationHistory = payload.conversationHistory || [];
       const isFirstInteraction = conversationHistory.length === 0;
+      
+      console.log('📊 S0 context:', {
+        userInput: payload.userInput,
+        isFirstInteraction,
+        historyLength: conversationHistory.length
+      });
       
       // 构建动态 prompt
       const promptBuilder = new DynamicPromptBuilder(S0_TEMPLATES.refineGoal);
@@ -68,6 +76,8 @@ export class S0Service {
       
       const prompt = promptBuilder.build(context);
       
+      console.log('📤 Calling AI with prompt length:', prompt.length);
+      
       // 使用智能重试机制调用 AI
       const result = await generateJsonWithRetry<RefineGoalResponse>(
         prompt,
@@ -83,6 +93,11 @@ export class S0Service {
       );
       
       if (!result.ok) {
+        console.error('❌ AI call failed:', {
+          error: result.error,
+          attempts: result.attempts
+        });
+        
         // 智能 fallback 处理
         if (result.error.includes('EMPTY_RESPONSE') && conversationHistory.length > 0) {
           return this.handleEmptyResponseFallback(payload, conversationHistory);
@@ -94,6 +109,8 @@ export class S0Service {
           userInput: payload.userInput
         });
       }
+      
+      console.log('✅ AI call successful, validating response...');
       
       // 验证响应
       const validationResult = S0RefineGoalSchema.safeParse(result.data);
@@ -111,12 +128,15 @@ export class S0Service {
         hasRecommendations: !!result.data.recommendations
       });
       
+      console.log('✅ S0 refinement completed successfully');
+      
       return NextResponse.json({
         status: 'success',
         data: result.data
       });
       
     } catch (error) {
+      console.error('💥 S0Service.refineGoal error:', error);
       return handleError(error, 'S0');
     }
   }

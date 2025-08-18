@@ -1,28 +1,31 @@
 // Gemini API 配置
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { logger, truncate } from '@/lib/logger';
 
 // 获取 API key 的辅助函数
 export function getApiKey(): string | undefined {
-  // 优先从环境变量读取
-  const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
+  // 支持多种环境变量名称格式
+  const apiKey = process.env.GOOGLE_AI_API_KEY || 
+                process.env.GEMINI_API_KEY || 
+                process.env.Gemini_API_KEY ||
+                process.env.GOOGLE_GEMINI_API_KEY;
   
   if (!apiKey) {
-    console.warn('⚠️ Gemini API key 未配置。请在 .env.local 文件中设置 GOOGLE_AI_API_KEY 或 GEMINI_API_KEY');
+    console.warn('⚠️ Gemini API key 未配置。请在 .env.local 文件中设置以下任一变量：GOOGLE_AI_API_KEY、GEMINI_API_KEY、Gemini_API_KEY、GOOGLE_GEMINI_API_KEY');
   }
   
   return apiKey;
 }
 
 // 创建 Gemini 客户端实例
-export function createGeminiClient(apiKey?: string): GoogleGenAI | null {
+export function createGeminiClient(apiKey?: string): GoogleGenerativeAI | null {
   const key = apiKey || getApiKey();
   
   if (!key) {
     return null;
   }
   
-  return new GoogleGenAI({ apiKey: key });
+  return new GoogleGenerativeAI(key);
 }
 
 export function getModelName(runTier?: 'Lite' | 'Pro' | 'Review'): string {
@@ -67,14 +70,14 @@ export async function generateJson<T>(
   };
 
   const run = async (temperature: number) => {
+    const model = client.getGenerativeModel({ model: getModelName(runTier) });
     const res = await withTimeout(
-      client.models.generateContent({
-        model: getModelName(runTier),
+      model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { ...config, temperature },
+        generationConfig: { ...config, temperature },
       })
     );
-    const text = (res as unknown as { text?: string }).text;
+    const text = res.response.text();
     if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
     try {
       const data = JSON.parse(text) as T;
@@ -109,14 +112,14 @@ export async function generateText(
   };
 
   const run = async (temperature: number) => {
+    const model = client.getGenerativeModel({ model: getModelName(runTier) });
     const res = await withTimeout(
-      client.models.generateContent({
-        model: getModelName(runTier),
+      model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { ...config, temperature },
+        generationConfig: { ...config, temperature },
       })
     );
-    const text = (res as unknown as { text?: string }).text;
+    const text = res.response.text();
     if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
     return { ok: true as const, text };
   };

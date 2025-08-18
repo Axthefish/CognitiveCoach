@@ -150,8 +150,20 @@ async function handleRefineGoal(payload: {
   userInput: string; 
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> 
 }) {
-  const s0Service = S0Service.getInstance();
-  return s0Service.refineGoal(payload);
+  console.log('🚀 handleRefineGoal called with:', { 
+    userInput: payload.userInput, 
+    historyLength: payload.conversationHistory?.length 籼 0 
+  });
+  
+  try {
+    const s0Service = S0Service.getInstance();
+    const result = await s0Service.refineGoal(payload);
+    console.log('✅ handleRefineGoal completed successfully');
+    return result;
+  } catch (error) {
+    console.error('❌ handleRefineGoal failed:', error);
+    throw error;
+  }
 }
 
 
