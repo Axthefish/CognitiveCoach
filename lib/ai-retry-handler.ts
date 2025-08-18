@@ -71,18 +71,20 @@ export function analyzeErrorContext(
 
 // 获取特定错误的示例格式
 export function getExampleFormatForError(errorType: ErrorType, stage?: string): string {
-  const examples = {
-    [ErrorType.PARSE_ERROR]: {
-      s0: '{"status": "clarification_needed", "ai_question": "Your question here"}',
-      s1: '[{"id": "example-id", "title": "Example Title", "summary": "Brief summary"}]',
-      s2: '{"mermaidChart": "graph TD\\n  A --> B", "metaphor": "Learning is like..."}',
-      s3: '{"actionPlan": [{"id": "step-1", "text": "Action text", "isCompleted": false}], "kpis": ["KPI 1"]}',
-      s4: '{"analysis": "Analysis text", "suggestions": ["Suggestion 1"], "encouragement": "Encouragement text"}'
-    }
+  // 只有 PARSE_ERROR 需要具体的格式示例
+  if (errorType !== ErrorType.PARSE_ERROR || !stage) {
+    return '{"field": "value"}';
+  }
+  
+  const stageExamples: Record<string, string> = {
+    s0: '{"status": "clarification_needed", "ai_question": "Your question here"}',
+    s1: '[{"id": "example-id", "title": "Example Title", "summary": "Brief summary"}]',
+    s2: '{"mermaidChart": "graph TD\\n  A --> B", "metaphor": "Learning is like..."}',
+    s3: '{"actionPlan": [{"id": "step-1", "text": "Action text", "isCompleted": false}], "kpis": ["KPI 1"]}',
+    s4: '{"analysis": "Analysis text", "suggestions": ["Suggestion 1"], "encouragement": "Encouragement text"}'
   };
   
-  const stageExample = stage && examples[errorType] ? examples[errorType][stage as keyof typeof examples[ErrorType.PARSE_ERROR]] : null;
-  return stageExample || '{"field": "value"}';
+  return stageExamples[stage] || '{"field": "value"}';
 }
 
 // 提取缺失字段信息
