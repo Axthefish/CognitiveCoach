@@ -66,6 +66,11 @@ export interface UserContext {
   povTags?: string[];
   lastTelemetry?: unknown;
   goalConversationHistory: ConversationMessage[]; // Added for S0 conversation tracking
+  goalRecommendations?: Array<{
+    category: string;
+    examples: string[];
+    description: string;
+  }>; // Added for S0 recommendations
 }
 
 // Store接口
@@ -106,6 +111,7 @@ const initialUserContext: UserContext = {
   povTags: undefined,
   lastTelemetry: undefined,
   goalConversationHistory: [],
+  goalRecommendations: undefined,
 };
 
 // 创建Zustand store

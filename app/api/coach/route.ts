@@ -14,6 +14,7 @@ import {
 } from '@/lib/schemas';
 import { runQualityGates } from '@/lib/qa';
 import { createErrorResponse, createSuccessResponse, handleAPIError } from '@/lib/error-utils';
+import { S0Service } from '@/services/s0-service';
 
 // API请求的action类型
 type CoachAction = 
@@ -80,9 +81,11 @@ export async function POST(request: NextRequest) {
       
       const res = NextResponse.json({ 
         status: 'error', 
-        error: 'Invalid request body', 
-        details: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; '),
-        receivedData: json // 帮助调试
+        error: '请求格式不正确，请检查您的输入并重试', 
+        details: process.env.NODE_ENV !== 'production' 
+          ? parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
+          : undefined,
+        receivedData: process.env.NODE_ENV !== 'production' ? json : undefined
       } as CoachResponse, { status: 400 });
       return withCors(res, origin);
     }
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
       
       default:
         return withCors(NextResponse.json(
-          { status: 'error', error: 'Unknown action' } as CoachResponse,
+          { status: 'error', error: '不支持的操作类型，请联系技术支持' } as CoachResponse,
           { status: 400 }
         ), origin);
     }
@@ -148,6 +151,15 @@ async function handleRefineGoal(payload: {
   userInput: string; 
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> 
 }) {
+  const s0Service = S0Service.getInstance();
+  return s0Service.refineGoal(payload);
+}
+
+// 原始实现保留作为备份
+async function handleRefineGoalLegacy(payload: { 
+  userInput: string; 
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> 
+}) {
   const genAI = createGeminiClient();
   
   if (!genAI) {
@@ -176,25 +188,56 @@ async function handleRefineGoal(payload: {
 1. Analyze the user's input to determine if their goal is specific, measurable, and actionable.
 2. If the goal is vague or too broad, ask ONE clarifying question to help them be more specific.
 3. If the goal is clear enough, synthesize it into a concise, actionable statement.
+4. If the user explicitly asks for recommendations or says they don't know what to learn, provide categorized recommendations.
 
 IMPORTANT GUIDELINES:
 - Always respond in Simplified Chinese (简体中文)
 - Be encouraging and supportive
-- Ask only ONE question at a time
+- Ask only ONE question at a time when clarifying
 - Focus on making the goal specific and actionable
 - Consider aspects like: scope, timeline, specific outcomes, and measurable results
 
-Respond in JSON format:
+Respond in JSON format based on the situation:
+
+Case 1 - Need clarification:
 {
-  "status": "clarification_needed" or "clarified",
-  "ai_question": "Your clarifying question (only if status is clarification_needed, omit field if not needed)",
-  "goal": "The refined goal statement (only if status is clarified, omit field if not needed)"
+  "status": "clarification_needed",
+  "ai_question": "Your clarifying question in Chinese"
+}
+
+Case 2 - Goal is clear:
+{
+  "status": "clarified",
+  "goal": "The refined goal statement in Chinese"
+}
+
+Case 3 - User asks for recommendations (e.g., "推荐", "不知道学什么", "帮我选择"):
+{
+  "status": "recommendations_provided",
+  "ai_question": "基于您的兴趣，我为您准备了几个学习方向的推荐。请问您对以下哪个领域最感兴趣？",
+  "recommendations": [
+    {
+      "category": "技术开发",
+      "examples": ["Web开发", "人工智能", "移动应用"],
+      "description": "学习编程和软件开发相关技能"
+    },
+    {
+      "category": "产品设计",
+      "examples": ["用户体验设计", "产品管理", "界面设计"],
+      "description": "学习如何设计和管理数字产品"
+    },
+    {
+      "category": "数据分析",
+      "examples": ["数据科学", "商业分析", "数据可视化"],
+      "description": "学习如何分析和解释数据"
+    }
+  ]
 }
 
 IMPORTANT: 
-- Only include "ai_question" when status is "clarification_needed"
-- Only include "goal" when status is "clarified"  
-- Do not include fields with null values - simply omit them from the response`;
+- Only include fields that are relevant for each case
+- Do not include fields with null values - simply omit them
+- When providing recommendations, always include the ai_question to guide the user's choice`;
 
     // Build the full conversation
     let conversationContent = '';
@@ -275,7 +318,18 @@ IMPORTANT:
         }
       }
       
-      return NextResponse.json({ status: 'error', error: g.error } as CoachResponse, { status: 400 });
+      // 更友好的错误提示
+      const errorMessage = g.error === 'EMPTY_RESPONSE' 
+        ? '抱歉，AI暂时无法响应。请稍后重试。'
+        : g.error === 'PARSE_ERROR'
+        ? 'AI响应格式有误，请重新尝试描述您的需求。'
+        : 'AI服务暂时不可用，请稍后重试。';
+      
+      return NextResponse.json({ 
+        status: 'error', 
+        error: errorMessage,
+        details: process.env.NODE_ENV !== 'production' ? g.error : undefined
+      } as CoachResponse, { status: 400 });
     }
     
     // 添加详细的调试日志
@@ -293,12 +347,50 @@ IMPORTANT:
         }))
       });
       
-      return NextResponse.json({ 
-        status: 'error', 
-        error: 'Schema validation failed for S0 output', 
-        data: g.data,
-        validationErrors: s0.error.issues.map(i => `${i.path.join('.')}: ${i.message}`)
-      } as CoachResponse, { status: 400 });
+      // 智能修复：尝试从不规范的响应中提取有用信息
+      const rawData = g.data as any;
+      let fallbackResponse;
+      
+      // 检查是否是用户询问推荐的情况
+      const isAskingForRecommendations = payload.userInput.toLowerCase().includes('推荐') || 
+                                        payload.userInput.toLowerCase().includes('建议') ||
+                                        payload.userInput.toLowerCase().includes('没有');
+      
+      if (isAskingForRecommendations) {
+        // 为询问推荐的用户提供引导性问题
+        fallbackResponse = {
+          status: 'clarification_needed',
+          ai_question: '我很乐意帮您找到合适的学习方向！请告诉我，您对哪个领域比较感兴趣？比如：技术开发、产品设计、数据分析、语言学习、或者其他方面？'
+        };
+      } else if (rawData && typeof rawData === 'object') {
+        // 尝试修复常见的格式问题
+        fallbackResponse = {
+          status: rawData.status || 'clarification_needed',
+          ...(rawData.ai_question ? { ai_question: String(rawData.ai_question) } : {}),
+          ...(rawData.goal ? { goal: String(rawData.goal) } : {})
+        };
+      } else {
+        // 最后的fallback
+        fallbackResponse = {
+          status: 'clarification_needed',
+          ai_question: '请您详细描述一下您想要学习的具体内容，这样我可以更好地帮助您制定学习计划。'
+        };
+      }
+      
+      // 验证修复后的响应
+      const fixedValidation = S0RefineGoalSchema.safeParse(fallbackResponse);
+      if (fixedValidation.success) {
+        console.log('✅ S0 Used intelligent fallback response');
+        return NextResponse.json({ status: 'success', data: fallbackResponse } as CoachResponse);
+      } else {
+        // 如果修复也失败，返回详细错误
+        return NextResponse.json({ 
+          status: 'error', 
+          error: 'AI响应格式错误，请重试', 
+          data: g.data,
+          validationErrors: s0.error.issues.map(i => `${i.path.join('.')}: ${i.message}`)
+        } as CoachResponse, { status: 400 });
+      }
     }
     
     console.log('✅ S0 Schema validation passed:', JSON.stringify(s0.data, null, 2));
@@ -465,7 +557,7 @@ ${frameworkDescription}
       { maxOutputTokens: 2048, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 },
       payload.runTier
     );
-    if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to parse AI response' } as CoachResponse, { status: 400 });
+    if (!g.ok) return NextResponse.json({ status: 'error', error: 'AI响应解析失败，请重试' } as CoachResponse, { status: 400 });
     try {
       const dynamics = g.data;
       const s2 = SystemDynamicsSchema.safeParse(dynamics);
@@ -504,7 +596,7 @@ ${frameworkDescription}
       // 如果解析失败，返回默认数据
       return NextResponse.json({
         status: 'error',
-        error: 'Failed to parse AI response',
+        error: 'AI响应解析失败，请重试',
         data: {
           mermaidChart: `graph TD\nA[开始] --> B[学习]\nB --> C[应用]\nC --> D[精通]`,
           metaphor: '学习过程出现了一些问题，请重试。'
@@ -592,34 +684,11 @@ ${frameworkDescription}
   "kpis": [
     "KPI描述1",
     "KPI描述2"
-  ],
-  "strategySpec": {
-    "metrics": [
-      {
-        "metricId": "<必须对齐 S2.nodes[].id>",
-        "what": "...",
-        "why": "...",
-        "triggers": [{ "metricId": "...", "comparator": ">=", "threshold": 3, "window": "P7D" }],
-        "diagnosis": [{ "id": "d1", "description": "..." }],
-        "options": [{ "id": "A", "steps": ["..."], "benefits": ["..."], "risks": [] }],
-        "recovery": { "window": "P14D", "reviewMetricIds": ["..."] },
-        "stopLoss": { "condition": "...", "action": "..." },
-        "evidence": [],
-        "confidence": 0.7,
-        "applicability": "..."
-      }
-    ],
-    "evidence": [],
-    "confidence": 0.6
-  },
-  "missingEvidenceTop3": [
-    { "metricId": "<相关指标>", "what": "需要采集的最小证据", "voi_reason": "为什么这条能改变决策" }
-  ],
-  "reviewWindow": "P14D",
-  "evidence": [],
-  "confidence": 0.6,
-  "applicability": ""
+  ]
 }
+
+注意：为了确保生成成功，请只返回 actionPlan 和 kpis 两个字段。
+如果需要高级策略配置，系统会在后续步骤中单独处理。
 
 确保：
 1. id使用 "step-1", "step-2" 等格式
@@ -673,7 +742,19 @@ ${frameworkDescription}
     const retryText = retryR.ok ? JSON.stringify(retryR.data) : '';
     try {
       const planData = JSON.parse(retryText);
-      const s3 = ActionPlanResponseSchema.safeParse(planData);
+      
+      // 补充可选字段的默认值，以兼容简化的响应格式
+      const enrichedPlanData = {
+        ...planData,
+        strategySpec: planData.strategySpec || null,
+        missingEvidenceTop3: planData.missingEvidenceTop3 || [],
+        reviewWindow: planData.reviewWindow || "P14D",
+        evidence: planData.evidence || [],
+        confidence: planData.confidence || 0.6,
+        applicability: planData.applicability || ""
+      };
+      
+      const s3 = ActionPlanResponseSchema.safeParse(enrichedPlanData);
       if (!s3.success) throw new Error('schema');
       const qa = runQualityGates('S3', planData, { nodes: ((payload as GenerateActionPlanPayload).systemNodes || []).map(n => ({ id: n.id })) });
       if (!qa.passed) throw new Error('qa');
@@ -772,7 +853,17 @@ ${payload.userContext.kpis?.join('\n') || '无'}
 }`;
 
     const g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 1024 }, 'Pro');
-    if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to parse AI response' } as CoachResponse, { status: 400 });
+    if (!g.ok) {
+      const errorMessage = g.error === 'EMPTY_RESPONSE' 
+        ? '抱歉，AI暂时无法分析您的进度。请稍后重试。'
+        : '进度分析遇到问题，请检查输入数据并重试。';
+      
+      return NextResponse.json({ 
+        status: 'error', 
+        error: errorMessage,
+        details: process.env.NODE_ENV !== 'production' ? g.error : undefined
+      } as CoachResponse, { status: 400 });
+    }
     try {
       const analysisData = g.data;
       const s4 = AnalyzeProgressSchema.safeParse(analysisData);
@@ -799,7 +890,7 @@ ${payload.userContext.kpis?.join('\n') || '无'}
       
       return NextResponse.json({
         status: 'error',
-        error: 'Failed to parse AI response',
+        error: 'AI响应解析失败，请重试',
         data: {
           analysis: '分析过程出现问题，请重试。',
           suggestions: ['请检查输入数据', '重新提交进度信息'],

@@ -16,9 +16,14 @@ export const ApplicabilitySchema = z.string().optional();
 
 // S0 refineGoal output
 export const S0RefineGoalSchema = z.object({
-  status: z.enum(['clarification_needed', 'clarified']),
+  status: z.enum(['clarification_needed', 'clarified', 'recommendations_provided']),
   ai_question: z.string().nullable().optional(),
   goal: z.string().nullable().optional(),
+  recommendations: z.array(z.object({
+    category: z.string(),
+    examples: z.array(z.string()),
+    description: z.string()
+  })).optional(),
   // Make metadata fields optional to match AI output capabilities
   evidence: EvidenceArraySchema.optional(),
   confidence: ConfidenceSchema.optional(),

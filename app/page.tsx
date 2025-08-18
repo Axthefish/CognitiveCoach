@@ -109,10 +109,15 @@ export default function Home() {
       const result = await response.json();
 
       if (result.status === 'success') {
-        if (result.data.status === 'clarification_needed') {
-          // AI needs more information
+        if (result.data.status === 'clarification_needed' || result.data.status === 'recommendations_provided') {
+          // AI needs more information or provided recommendations
           setS0ConversationMode(true);
           setS0AiQuestion(result.data.ai_question);
+          
+          // Store recommendations if provided
+          if (result.data.status === 'recommendations_provided' && result.data.recommendations) {
+            updateUserContext({ goalRecommendations: result.data.recommendations });
+          }
           
           // Update conversation history
           const updatedHistory = [
@@ -298,6 +303,7 @@ export default function Home() {
             conversationHistory={userContext.goalConversationHistory}
             aiQuestion={s0AiQuestion}
             isConversationMode={s0ConversationMode}
+            recommendations={userContext.goalRecommendations}
           />
         );
       

@@ -6,23 +6,32 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useCognitiveCoachStore } from "@/lib/store"
+import GoalTemplates from "@/components/goal-templates"
+import { Lightbulb } from "lucide-react"
 
 interface S0IntentViewProps {
   onProceed: (userInput: string) => void
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
   aiQuestion?: string
   isConversationMode?: boolean
+  recommendations?: Array<{
+    category: string
+    examples: string[]
+    description: string
+  }>
 }
 
 export default function S0IntentView({ 
   onProceed, 
   conversationHistory = [], 
   aiQuestion,
-  isConversationMode = false 
+  isConversationMode = false,
+  recommendations 
 }: S0IntentViewProps) {
   const { userContext, updateUserContext } = useCognitiveCoachStore()
   const [userInput, setUserInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   // Reset loading state when component receives new props
   useEffect(() => {
@@ -94,6 +103,39 @@ export default function S0IntentView({
               <p className="text-gray-700 dark:text-gray-300">
                 欢迎！我是你的认知教练。首先，请告诉我你想要实现的主要目标或想要掌握的主题。
               </p>
+            )}
+            
+            {/* 显示推荐选项 */}
+            {recommendations && recommendations.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">推荐的学习方向：</p>
+                <div className="grid gap-3">
+                  {recommendations.map((rec, index) => (
+                    <div 
+                      key={index}
+                      className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                      onClick={() => setUserInput(rec.category)}
+                    >
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                        {rec.category}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        {rec.description}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {rec.examples.map((example, idx) => (
+                          <span 
+                            key={idx}
+                            className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded-md text-gray-700 dark:text-gray-300"
+                          >
+                            {example}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             
             <div className="space-y-2">
@@ -174,6 +216,31 @@ export default function S0IntentView({
                     disabled={isLoading}
                   />
                 </div>
+              </div>
+            )}
+            
+            {!isConversationMode && (
+              <div className="flex items-center justify-center pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                >
+                  <Lightbulb className="w-4 h-4 mr-2" />
+                  {showTemplates ? '隐藏模板' : '需要灵感？查看学习目标模板'}
+                </Button>
+              </div>
+            )}
+            
+            {showTemplates && !isConversationMode && (
+              <div className="border-t mt-4 pt-4">
+                <GoalTemplates 
+                  onSelectGoal={(goal) => {
+                    setUserInput(goal)
+                    setShowTemplates(false)
+                  }}
+                />
               </div>
             )}
             
