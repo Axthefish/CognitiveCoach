@@ -152,7 +152,7 @@ async function handleRefineGoal(payload: {
 }) {
   console.log('🚀 handleRefineGoal called with:', { 
     userInput: payload.userInput, 
-    historyLength: payload.conversationHistory?.length 籼 0 
+    historyLength: payload.conversationHistory?.length || 0 
   });
   
   try {
