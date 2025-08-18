@@ -130,7 +130,7 @@ export class CacheService<T extends object> {
 
 // AI 响应缓存
 export class AIResponseCache {
-  private caches: Map<string, CacheService<unknown>> = new Map();
+  private caches: Map<string, CacheService<object>> = new Map();
   
   constructor() {
     // 为每个阶段创建独立的缓存
