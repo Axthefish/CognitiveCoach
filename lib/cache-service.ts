@@ -160,18 +160,18 @@ export class AIResponseCache {
     }));
   }
   
-  get<T>(stage: string, key: string): T | undefined {
+  get<T extends object>(stage: string, key: string): T | undefined {
     const cache = this.caches.get(stage.toLowerCase());
-    return cache?.get(key);
+    return cache?.get(key) as T | undefined;
   }
   
-  set<T>(stage: string, key: string, value: T, ttl?: number): void {
+  set<T extends object>(stage: string, key: string, value: T, ttl?: number): void {
     const cache = this.caches.get(stage.toLowerCase());
     cache?.set(key, value, ttl);
   }
   
   // 获取或生成缓存值
-  async getOrGenerate<T>(
+  async getOrGenerate<T extends object>(
     stage: string,
     key: string,
     generator: () => Promise<T>,
