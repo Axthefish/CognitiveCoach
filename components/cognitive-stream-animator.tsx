@@ -45,7 +45,7 @@ export function CognitiveStreamAnimator({
   const [error, setError] = useState<string | null>(null);
   const [finalData, setFinalData] = useState<StreamResponseData | null>(null);
 
-  const { updateUserContext, setLoading } = useCognitiveCoachStore();
+  const { setLoading } = useCognitiveCoachStore();
 
   // 用于跟踪组件是否已卸载
   const isMountedRef = useRef(true);

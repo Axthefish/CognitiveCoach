@@ -279,7 +279,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     })),
 
   resetStreamingState: () => 
-    set((state) => ({
+    set(() => ({
       streaming: initialStreamingState,
     })),
 }));

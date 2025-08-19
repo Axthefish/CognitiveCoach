@@ -20,7 +20,7 @@ export default function Home() {
   const error = useCognitiveCoachStore(state => state.error);
   
   // 获取 actions（这些通常是稳定的，不会导致重渲染）
-  const { setCurrentState, updateUserContext, addVersionSnapshot, setQaIssues, setLoading, setError } = useCognitiveCoachStore();
+  const { setCurrentState, updateUserContext, setLoading, setError } = useCognitiveCoachStore();
   
   // Local state for S0 conversation
   const [s0ConversationMode, setS0ConversationMode] = React.useState(false);
@@ -51,7 +51,7 @@ export default function Home() {
   // 启动流式知识框架生成（使用新的store actions）
   const { startStreaming } = useCognitiveCoachStore();
   
-  const generateKnowledgeFramework = React.useCallback(async (userGoal: string) => {
+  const generateKnowledgeFramework = React.useCallback(async (_userGoal: string) => {
     startStreaming('S1');
     // 实际的流式处理将由 CognitiveStreamAnimator 组件处理
   }, [startStreaming]);

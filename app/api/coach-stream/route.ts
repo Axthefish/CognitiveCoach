@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { CoachRequestSchema, StreamResponseData, Telemetry } from '@/lib/schemas';
+import { CoachRequestSchema, StreamResponseData } from '@/lib/schemas';
 import { handleOptions } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';

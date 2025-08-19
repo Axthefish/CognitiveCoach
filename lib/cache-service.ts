@@ -122,7 +122,6 @@ export class CacheService<T extends object> {
   };
   
   constructor(private name: string, options?: CacheOptions) {
-    const env = getEnv();
     const maxSize = options?.max || 100;
     this.maxMemoryBytes = this.calculateMaxMemory(maxSize);
     
@@ -512,12 +511,12 @@ export class AIResponseCache {
   cleanupLowValueItems(): void {
     const stats = this.getAllStats();
     
-    for (const [name, cache] of this.caches) {
-      const cacheStats = stats[name];
+    for (const [cacheName, cache] of this.caches) {
+      const cacheStats = stats[cacheName];
       
       // 如果命中率很低，清理该缓存
       if (cacheStats.hitRate < 0.2 && cacheStats.size > 10) {
-        logger.info(`Cleaning up low-value cache ${name} (hit rate: ${cacheStats.hitRate.toFixed(2)})`);
+        logger.info(`Cleaning up low-value cache ${cacheName} (hit rate: ${cacheStats.hitRate.toFixed(2)})`);
         cache.clear();
       }
     }
