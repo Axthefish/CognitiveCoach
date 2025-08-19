@@ -29,15 +29,15 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
-    if (data.actionPlan) {
+    if ('actionPlan' in data && data.actionPlan) {
       updateUserContext({ 
         actionPlan: data.actionPlan,
-        kpis: data.kpis,
-        strategySpec: data.strategySpec || null,
-        missingEvidenceTop3: data.missingEvidenceTop3,
-        reviewWindow: data.reviewWindow,
-        povTags: data.povTags,
-        requiresHumanReview: data.requiresHumanReview,
+        kpis: 'kpis' in data ? data.kpis : [],
+        strategySpec: ('strategySpec' in data ? data.strategySpec : null) || null,
+        missingEvidenceTop3: 'missingEvidenceTop3' in data ? data.missingEvidenceTop3 : [],
+        reviewWindow: 'reviewWindow' in data ? data.reviewWindow : "P14D",
+        povTags: 'povTags' in data ? data.povTags : [],
+        requiresHumanReview: 'requiresHumanReview' in data ? data.requiresHumanReview : false,
       });
       addVersionSnapshot();
       setQaIssues(null, []);
@@ -294,7 +294,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {strategySpec.metrics.map((m) => (
+                      {strategySpec.metrics?.map((m) => (
                         <tr key={m.metricId} className="border-b border-gray-100 dark:border-gray-900">
                           <td className="py-2 pr-4 font-mono">{m.metricId}</td>
                           <td className="py-2 pr-4">{m.what}</td>
@@ -309,7 +309,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                       ))}
                       {/* 未覆盖节点显示 */}
                       {nodes
-                        .filter(n => !strategySpec.metrics.some(m => normalizeId(m.metricId) === normalizeId(n.id)))
+                        .filter(n => !strategySpec.metrics?.some(m => normalizeId(m.metricId) === normalizeId(n.id)))
                         .map(n => (
                           <tr key={`missing-${n.id}`} className="bg-red-50 dark:bg-red-900/20">
                             <td className="py-2 pr-4 font-mono text-red-700 dark:text-red-300">{n.id}</td>

@@ -51,7 +51,7 @@ export default function Home() {
   // 启动流式知识框架生成（使用新的store actions）
   const { startStreaming } = useCognitiveCoachStore();
   
-  const generateKnowledgeFramework = React.useCallback(async (_userGoal: string) => {
+  const generateKnowledgeFramework = React.useCallback(async () => {
     startStreaming('S1');
     // 实际的流式处理将由 CognitiveStreamAnimator 组件处理
   }, [startStreaming]);
@@ -125,7 +125,7 @@ export default function Home() {
           setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
           
           // 触发S1的知识框架生成
-          await generateKnowledgeFramework(result.data.goal);
+          await generateKnowledgeFramework();
         }
       } else if (result.status === 'error') {
         setError(result.error || '目标精炼失败，请重试');

@@ -8,11 +8,11 @@ import { TypewriterContent } from './ui/typewriter-content';
 import { useCognitiveCoachStore } from '@/lib/store';
 
 // 流式消息类型定义
-import { StreamResponseData } from '@/lib/schemas';
+import { StreamResponseData, StreamPayload } from '@/lib/schemas';
 
 interface StreamMessage {
   type: 'cognitive_step' | 'content_chunk' | 'data_structure' | 'error' | 'done';
-  payload: StreamResponseData | string | { step: string; progress: number } | null;
+  payload: StreamPayload;
 }
 
 // 认知步骤状态
@@ -214,22 +214,9 @@ export function CognitiveStreamAnimator({
     }
   }, [stage, requestPayload, processStreamMessage, onError, setLoading]);
 
-  // 组件挂载时启动流式请求，卸载时清理
+  // 组件挂载时启动流式请求
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
-    
-    const initializeStreaming = async () => {
-      cleanup = await startStreaming();
-    };
-    
-    initializeStreaming();
-    
-    // 清理函数
-    return () => {
-      if (cleanup) {
-        cleanup();
-      }
-    };
+    startStreaming();
   }, [startStreaming]);
 
   // 如果出现错误，显示错误状态

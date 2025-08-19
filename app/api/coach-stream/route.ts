@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { CoachRequestSchema, StreamResponseData } from '@/lib/schemas';
+import { CoachRequestSchema, StreamPayload } from '@/lib/schemas';
 import { handleOptions } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -17,7 +17,7 @@ import { S0Service } from '@/services/s0-service';
 // 流式消息类型定义
 interface StreamMessage {
   type: 'cognitive_step' | 'content_chunk' | 'data_structure' | 'error' | 'done';
-  payload: StreamResponseData | string | { step: string; progress: number } | null;
+  payload: StreamPayload;
 }
 
 // 认知步骤状态
@@ -106,6 +106,11 @@ const getCognitiveSteps = (action: CoachAction): CognitiveStep[] => {
 // 微学习提示
 const getMicroLearningTips = (action: CoachAction): string[] => {
   const tips = {
+    refineGoal: [
+      "清晰的目标是成功的一半：SMART原则帮你把模糊想法变成具体方向。",
+      "问对问题比找答案更重要：深入思考'为什么'能让目标更有意义。",
+      "目标应该激发你的热情，而不是让你感到压力。"
+    ],
     generateFramework: [
       "知识框架就像是学习的地图，它能帮助你看清全貌，避免迷失方向。",
       "分层学习法：先掌握核心概念，再深入细节，最后连接成网络。",
@@ -125,6 +130,11 @@ const getMicroLearningTips = (action: CoachAction): string[] => {
       "反思是学习的加速器：定期思考什么有效、什么需要改进。",
       "庆祝小胜利：认可进步能维持学习动力，无论进步多么微小。",
       "遗忘曲线告诉我们：及时复习比延后复习效率高得多。"
+    ],
+    consult: [
+      "提问是学习的催化剂：好的问题能开启新的思维路径。",
+      "苏格拉底式对话：通过问答深入探索，比直接给答案更有价值。",
+      "联系实际：将理论知识与个人经验连接，理解更深刻。"
     ]
   };
   
@@ -210,9 +220,11 @@ export async function POST(request: NextRequest) {
           }
           
           // 发送完成消息
-          controller.enqueue(encoder.encode(createStreamMessage('done', {})));
+          controller.enqueue(encoder.encode(createStreamMessage('done', null)));
         } catch (error) {
-          logger.error('Streaming API Error:', error);
+          logger.error('Streaming API Error:', { 
+            error: error instanceof Error ? error.message : String(error) 
+          });
           const errorMessage = error instanceof Error ? error.message : 'Internal server error';
           controller.enqueue(encoder.encode(createStreamMessage('error', errorMessage)));
         } finally {
@@ -232,7 +244,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('API Error:', error);
+    logger.error('API Error:', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
     const encoder = new TextEncoder();
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     const errorStream = createStreamMessage('error', errorMessage);
@@ -706,7 +720,7 @@ ${frameworkDescription}
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
     // n-best generation
-    const variants = [];
+    const variants = [] as Array<{ text: string; qaScore: number; issues: string[] }>;
     const n = payload.runTier === 'Pro' ? 2 : 1;
     for (let i = 0; i < n; i++) {
       const r = await generateJson<Record<string, unknown>>(prompt, { 
@@ -734,7 +748,7 @@ ${frameworkDescription}
           continue;
         }
         const qa = runQualityGates('S3', planData, { nodes: (payload.systemNodes || []).map(n => ({ id: n.id })) });
-        v.issues = qa.issues;
+        v.issues = qa.issues.map(issue => issue.hint || 'Quality issue');
         if (qa.passed) {
           const issueCount = qa.issues.length;
           if (issueCount < bestIssuesCount) {

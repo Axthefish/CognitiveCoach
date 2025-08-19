@@ -19,7 +19,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
-    if (data.framework) {
+    if ('framework' in data && data.framework) {
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
       setQaIssues(null, []);

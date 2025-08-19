@@ -4,7 +4,7 @@
 import { LRUCache } from 'lru-cache';
 import crypto from 'crypto';
 import { logger } from './logger';
-import { getEnv } from './env-validator';
+// import { getEnv } from './env-validator'; // 暂时注释，将来可能需要
 
 export interface CacheOptions {
   ttl?: number; // Time to live in milliseconds
@@ -500,7 +500,7 @@ export class AIResponseCache {
   performGlobalCleanup(): void {
     logger.info('Starting global cache cleanup...');
     
-    for (const [name, cache] of this.caches) {
+    for (const [, cache] of this.caches) {
       cache.forceCleanup();
     }
     

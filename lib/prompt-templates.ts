@@ -1,5 +1,7 @@
 // Prompt 模板系统 - 用于构建动态、可复用的 AI prompts
 
+import { logger } from './logger';
+
 export interface Example {
   input: string;
   output: string;

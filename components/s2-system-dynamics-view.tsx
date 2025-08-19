@@ -18,12 +18,12 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
-    if (data.mermaidChart && data.metaphor) {
+    if ('mermaidChart' in data && 'metaphor' in data && data.mermaidChart && data.metaphor) {
       updateUserContext({ 
         systemDynamics: {
           mermaidChart: data.mermaidChart,
           metaphor: data.metaphor,
-          nodes: data.nodes
+          nodes: ('nodes' in data ? data.nodes : undefined) as Array<{ id: string; title: string }> | undefined
         }
       });
       addVersionSnapshot();

@@ -47,70 +47,62 @@ function truncate(text: string, max = 300): string {
   return text.slice(0, max) + '...<truncated>';
 }
 
-// 结构化日志格式化
-function formatStructuredLog(level: string, message: string, meta?: Record<string, unknown>) {
-  const timestamp = new Date().toISOString();
-  const logEntry = {
-    timestamp,
-    level: level.toUpperCase(),
-    message,
-    ...(meta && Object.keys(meta).length > 0 && { meta }),
-  };
-  
-  try {
-    const env = getEnv();
-    return env.NODE_ENV === 'production' 
-      ? JSON.stringify(logEntry)
-      : `[${timestamp}] ${level.toUpperCase()}: ${message}${meta ? ` ${JSON.stringify(meta)}` : ''}`;
-  } catch {
-    return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-  }
-}
+// 结构化日志格式化（暂时未使用，保留以备将来扩展）
+// function formatStructuredLog(level: string, message: string, meta?: Record<string, unknown>) {
+//   const timestamp = new Date().toISOString();
+//   const logEntry = {
+//     timestamp,
+//     level: level.toUpperCase(),
+//     message,
+//     ...(meta && Object.keys(meta).length > 0 && { meta }),
+//   };
+//   
+//   try {
+//     const env = getEnv();
+//     return env.NODE_ENV === 'production' 
+//       ? JSON.stringify(logEntry)
+//       : `[${timestamp}] ${level.toUpperCase()}: ${message}${meta ? ` ${JSON.stringify(meta)}` : ''}`;
+//   } catch {
+//     return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+//   }
+// }
 
 const currentLogLevel = getCurrentLogLevel();
 
 export const logger = {
-  debug: (message: string, meta?: Record<string, unknown>) => {
+  debug: (...args: unknown[]) => {
     if (currentLogLevel <= LogLevel.DEBUG) {
-      const sanitizedMeta = meta ? JSON.parse(maskSecrets(meta)) : undefined;
-      const formatted = formatStructuredLog('debug', message, sanitizedMeta);
-      console.debug(formatted);
+      console.debug(...args.map(maskSecrets));
     }
   },
   
-  info: (message: string, meta?: Record<string, unknown>) => {
+  info: (...args: unknown[]) => {
     if (currentLogLevel <= LogLevel.INFO) {
-      const sanitizedMeta = meta ? JSON.parse(maskSecrets(meta)) : undefined;
-      const formatted = formatStructuredLog('info', message, sanitizedMeta);
-      console.info(formatted);
+      console.info(...args.map(maskSecrets));
     }
   },
   
-  warn: (message: string, meta?: Record<string, unknown>) => {
+  warn: (...args: unknown[]) => {
     if (currentLogLevel <= LogLevel.WARN) {
-      const sanitizedMeta = meta ? JSON.parse(maskSecrets(meta)) : undefined;
-      const formatted = formatStructuredLog('warn', message, sanitizedMeta);
-      console.warn(formatted);
+      console.warn(...args.map(maskSecrets));
     }
   },
   
-  error: (message: string, meta?: Record<string, unknown>) => {
+  error: (...args: unknown[]) => {
     if (currentLogLevel <= LogLevel.ERROR) {
-      const sanitizedMeta = meta ? JSON.parse(maskSecrets(meta)) : undefined;
-      const formatted = formatStructuredLog('error', message, sanitizedMeta);
-      console.error(formatted);
+      const mapped = args.map(a => {
+        if (a instanceof Error) return a;
+        const s = String(a);
+        return truncate(maskSecrets(s));
+      });
+      console.error(...mapped);
     }
   },
   
-  // 兼容性方法 - 支持旧的多参数调用方式
+  // 兼容性方法
   log: (...args: unknown[]) => {
-    const mapped = args.map(a => {
-      if (a instanceof Error) return a;
-      const s = String(a);
-      return truncate(maskSecrets(s));
-    });
     if (currentLogLevel <= LogLevel.INFO) {
-      console.log(...mapped);
+      console.log(...args.map(maskSecrets));
     }
   },
 };

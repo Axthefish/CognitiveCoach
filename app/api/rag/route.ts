@@ -44,8 +44,8 @@ export async function GET(request: Request) {
 }
 
 export async function OPTIONS(request: Request) {
-  // Use a more specific type cast instead of any
-  return handleOptions({ headers: request.headers } as { headers: Headers });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return handleOptions(request as any);
 }
 
 

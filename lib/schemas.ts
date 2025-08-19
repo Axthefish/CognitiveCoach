@@ -192,6 +192,19 @@ export type StreamResponseData =
   | AnalyzeProgress
   | { response: string };
 
+// Additional streaming payload types for cognitive steps
+export type StreamPayload = StreamResponseData | string | { 
+  step: string; 
+  progress: number; 
+} | { 
+  steps: Array<{ id: string; message: string; status: string }>; 
+  tip?: string;
+} | {
+  status: 'success' | 'error';
+  data?: unknown;
+  error?: string;
+} | null;
+
 // Request schemas for /api/coach
 export const RefineGoalPayloadSchema = z.object({
   userInput: z.string(),
