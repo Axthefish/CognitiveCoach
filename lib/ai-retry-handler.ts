@@ -255,7 +255,7 @@ export async function generateJsonWithRetry<T>(
       
       const result = await generateJson<unknown>(
         currentPrompt,
-        { temperature, maxOutputTokens: 2048 },
+        { temperature, maxOutputTokens: 65536 },
         runTier
       );
       
@@ -318,7 +318,7 @@ export async function generateTextWithRetry(
       
       const result = await generateText(
         currentPrompt,
-        { temperature, maxOutputTokens: 1024 },
+        { temperature, maxOutputTokens: 65536 },
         runTier
       );
       

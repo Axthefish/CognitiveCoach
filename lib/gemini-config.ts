@@ -64,7 +64,7 @@ export async function generateJson<T>(
     temperature: 0.7,
     topK: 40,
     topP: 0.95,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 65536,
     responseMimeType: 'application/json',
     ...overrides,
   };
@@ -107,7 +107,7 @@ export async function generateText(
     temperature: 0.7,
     topK: 40,
     topP: 0.95,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 65536,
     ...overrides,
   };
 
