@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { logger } from './logger';
+import { isProduction } from './env-validator';
 
 // 错误代码枚举
 export const ErrorCodes = {
@@ -91,14 +92,42 @@ export class AppError extends Error {
     return messages[code] || '操作失败，请重试';
   }
   
+  /**
+   * 安全的序列化方法 - 确保生产环境不泄露敏感信息
+   */
   toJSON() {
     return {
       code: this.code,
       message: this.userMessage,
-      details: process.env.NODE_ENV !== 'production' ? this.details : undefined,
+      details: this.getSecureDetails(),
       fixHints: this.fixHints,
       stage: this.stage,
     };
+  }
+
+  /**
+   * 获取安全的错误详情 - 绝不在生产环境暴露内部实现细节
+   */
+  private getSecureDetails(): unknown {
+    if (isProduction()) {
+      return undefined;
+    }
+
+    // 开发环境也要过滤掉敏感信息
+    if (this.details && typeof this.details === 'object') {
+      const sanitized = { ...this.details } as Record<string, unknown>;
+      // 移除可能包含敏感信息的字段
+      delete sanitized.stack;
+      delete sanitized.env;
+      delete sanitized.apiKey;
+      delete sanitized.token;
+      delete sanitized.password;
+      delete sanitized.credentials;
+      
+      return sanitized;
+    }
+
+    return this.details;
   }
 }
 
@@ -127,7 +156,7 @@ export function handleError(error: unknown, stage?: string): NextResponse<ErrorR
         status: 'error',
         code: error.code,
         message: error.userMessage,
-        details: process.env.NODE_ENV !== 'production' ? error.details : undefined,
+        details: serializeErrorDetailsSecurely(error.details),
         fixHints: error.fixHints,
         stage: error.stage || stage,
         timestamp,
@@ -148,7 +177,7 @@ export function handleError(error: unknown, stage?: string): NextResponse<ErrorR
         status: 'error',
         code: ErrorCodes.SCHEMA_VALIDATION_ERROR,
         message: '输入数据格式不正确',
-        details: process.env.NODE_ENV !== 'production' ? issues : undefined,
+        details: serializeErrorDetailsSecurely(issues),
         fixHints: ['请检查输入数据格式', '确保所有必填字段都已提供'],
         stage,
         timestamp,
@@ -179,7 +208,7 @@ export function handleError(error: unknown, stage?: string): NextResponse<ErrorR
         status: 'error',
         code,
         message: getErrorMessage(code),
-        details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+        details: serializeErrorDetailsSecurely(error.stack, true), // 强制隐藏堆栈信息
         stage,
         timestamp,
       },
@@ -204,6 +233,72 @@ export function handleError(error: unknown, stage?: string): NextResponse<ErrorR
 function getErrorMessage(code: ErrorCode): string {
   const error = new AppError({ code, message: '' });
   return error.userMessage;
+}
+
+/**
+ * 安全的错误详情序列化 - 绝不在生产环境泄露敏感信息
+ * @param details 错误详情
+ * @param forceHide 强制隐藏（用于特别敏感的信息）
+ */
+export function serializeErrorDetailsSecurely(details: unknown, forceHide = false): unknown {
+  if (forceHide || isProduction()) {
+    return undefined;
+  }
+
+  if (!details) {
+    return undefined;
+  }
+
+  // 对于字符串类型的详情（如错误堆栈），在开发环境也要谨慎处理
+  if (typeof details === 'string') {
+    // 如果包含敏感关键词，则隐藏
+    const sensitivePatterns = [
+      /api[_-]?key/i,
+      /token/i,
+      /password/i,
+      /secret/i,
+      /credential/i,
+      /auth/i,
+      /bearer/i,
+      /jwt/i
+    ];
+    
+    const containsSensitive = sensitivePatterns.some(pattern => pattern.test(details));
+    if (containsSensitive) {
+      return '[REDACTED: potentially sensitive information]';
+    }
+    
+    return details;
+  }
+
+  // 对于对象类型的详情
+  if (typeof details === 'object' && details !== null) {
+    const sanitized = Array.isArray(details) ? [...details] : { ...details };
+    const obj = sanitized as Record<string, unknown>;
+    
+    // 移除可能包含敏感信息的字段
+    const sensitiveFields = [
+      'stack', 'env', 'apiKey', 'token', 'password', 'credentials',
+      'authorization', 'bearer', 'jwt', 'secret', 'key', 'auth'
+    ];
+    
+    sensitiveFields.forEach(field => {
+      if (field in obj) {
+        delete obj[field];
+      }
+    });
+    
+    // 递归处理嵌套对象
+    Object.keys(obj).forEach(key => {
+      if (obj[key] && typeof obj[key] === 'object') {
+        obj[key] = serializeErrorDetailsSecurely(obj[key], false);
+      }
+    });
+    
+    return obj;
+  }
+
+  return details;
 }
 
 // 错误恢复建议生成器

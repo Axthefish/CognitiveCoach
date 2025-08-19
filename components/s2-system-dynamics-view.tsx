@@ -5,14 +5,60 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb } from "lucide-react"
 import Mermaid from "@/components/mermaid"
 import { useCognitiveCoachStore } from "@/lib/store"
+import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
+import { StreamResponseData } from "@/lib/schemas"
 
 interface S2SystemDynamicsViewProps {
   onProceed: () => void
 }
 
 export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsViewProps) {
-  const { userContext } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues } = useCognitiveCoachStore();
   const dynamics = userContext.systemDynamics;
+
+  // 处理流式生成完成
+  const handleStreamComplete = (data: StreamResponseData) => {
+    if (data.mermaidChart && data.metaphor) {
+      updateUserContext({ 
+        systemDynamics: {
+          mermaidChart: data.mermaidChart,
+          metaphor: data.metaphor,
+          nodes: data.nodes
+        }
+      });
+      addVersionSnapshot();
+      setQaIssues(null, []);
+    }
+  };
+
+  // 处理流式生成错误
+  const handleStreamError = (error: string) => {
+    console.error('S2 streaming error:', error);
+  };
+  // 如果正在加载且当前阶段是 S2，显示流式动画器
+  if (isLoading && streaming.currentStage === 'S2') {
+    return (
+      <div className="animate-fade-in">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2: System Dynamics & Metaphor</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          AI 正在分析知识点之间的关系，并创建生动的学习比喻...
+        </p>
+        
+        <CognitiveStreamAnimator 
+          stage="S2"
+          onComplete={handleStreamComplete}
+          onError={handleStreamError}
+          requestPayload={{ 
+            framework: userContext.knowledgeFramework,
+            decisionType: userContext.decisionType,
+            runTier: userContext.runTier,
+            seed: userContext.seed
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2: System Dynamics & Metaphor</h2>

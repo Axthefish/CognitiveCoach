@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { handleOptions, withCors } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
-import { isHealthProtected } from '@/lib/env';
+import { isHealthProtected, getEnv } from '@/lib/env-validator';
 
 export async function GET(request: Request) {
   const reqHeaders = new Headers(request.headers);
@@ -16,14 +16,16 @@ export async function GET(request: Request) {
 
   const minimal = NextResponse.json({ status: 'ok' });
   if (isHealthProtected()) {
+    const env = getEnv();
     const token = reqHeaders.get('x-health-token');
-    if (token !== process.env.HEALTH_TOKEN) {
+    if (token !== env.HEALTH_TOKEN) {
       return withCors(minimal, origin);
     }
   }
 
-  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
-  const hasGoogleKey = !!process.env.GOOGLE_AI_API_KEY;
+  const env = getEnv();
+  const hasGeminiKey = !!env.GEMINI_API_KEY;
+  const hasGoogleKey = !!env.GOOGLE_AI_API_KEY;
 
   const res = NextResponse.json({
     status: 'ok',
@@ -40,7 +42,6 @@ export async function GET(request: Request) {
 
 export async function OPTIONS(request: Request) {
   // CORS preflight
-  // Narrow Request to NextRequest-like for our helper (we only need headers)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return handleOptions(request as unknown as any);
+  // Use a more specific type cast instead of any
+  return handleOptions({ headers: request.headers } as { headers: Headers });
 }

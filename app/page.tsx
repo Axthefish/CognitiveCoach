@@ -48,39 +48,13 @@ export default function Home() {
     return stateOrder.slice(0, currentIndex) as State['id'][];
   }, [currentStateId]);
 
-  // 生成知识框架（useCallback，便于作为依赖传入其他 hooks）
+  // 启动流式知识框架生成（使用新的store actions）
+  const { startStreaming } = useCognitiveCoachStore();
+  
   const generateKnowledgeFramework = React.useCallback(async (userGoal: string) => {
-    setLoading(true);
-    
-    try {
-      const response = await fetch('/api/coach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'generateFramework',
-          payload: { userGoal, decisionType: userContext.decisionType, runTier: userContext.runTier, riskPreference: userContext.riskPreference, seed: userContext.seed }
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.status === 'success') {
-        updateUserContext({ knowledgeFramework: result.data.framework });
-        addVersionSnapshot();
-        setQaIssues(null, []);
-      } else if (result.status === 'error') {
-        setError(result.error || '生成知识框架失败');
-        if (result.data?.issues) setQaIssues('S1', result.data.issues);
-      }
-    } catch (error) {
-      console.error('Error generating framework:', error);
-      setError('生成知识框架时发生错误');
-    } finally {
-      setLoading(false);
-    }
-  }, [setLoading, updateUserContext, addVersionSnapshot, setQaIssues, setError, userContext.decisionType, userContext.runTier, userContext.riskPreference, userContext.seed]);
+    startStreaming('S1');
+    // 实际的流式处理将由 CognitiveStreamAnimator 组件处理
+  }, [startStreaming]);
 
   // S0状态的目标精炼处理 - 使用 useCallback 优化
   const handleGoalRefinement = React.useCallback(async (userInput: string) => {
@@ -166,106 +140,16 @@ export default function Home() {
 
   
 
-  // 生成系统动力学
+  // 生成系统动力学（流式版本）
   const generateSystemDynamics = async (): Promise<boolean> => {
-    setLoading(true);
-    
-    try {
-      const response = await fetch('/api/coach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'generateSystemDynamics',
-          payload: { 
-            framework: userContext.knowledgeFramework,
-            decisionType: userContext.decisionType,
-            runTier: userContext.runTier,
-            seed: userContext.seed
-          }
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.status === 'success') {
-        updateUserContext({ 
-          systemDynamics: {
-            mermaidChart: result.data.mermaidChart,
-            metaphor: result.data.metaphor,
-            nodes: result.data.nodes
-          }
-        });
-        addVersionSnapshot();
-        return true;
-      } else if (result.status === 'error') {
-        setError(result.error || '生成系统动力学失败');
-        if (result.data?.issues) setQaIssues('S2', result.data.issues);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error generating system dynamics:', error);
-      setError('生成系统动力学时发生错误');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-    return false;
+    startStreaming('S2');
+    return true; // 流式处理不需要返回false来阻止状态转换
   };
 
-  // 生成行动计划
+  // 生成行动计划（流式版本）
   const generateActionPlan = async (): Promise<boolean> => {
-    setLoading(true);
-    
-    try {
-      const response = await fetch('/api/coach', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'generateActionPlan',
-          payload: { 
-            userGoal: userContext.userGoal,
-            framework: userContext.knowledgeFramework,
-            systemNodes: userContext.systemDynamics?.nodes || [],
-            decisionType: userContext.decisionType,
-            runTier: userContext.runTier,
-            seed: userContext.seed
-          }
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.status === 'success') {
-        updateUserContext({ 
-          actionPlan: result.data.actionPlan,
-          kpis: result.data.kpis,
-          strategySpec: result.data.strategySpec || null,
-          missingEvidenceTop3: result.data.missingEvidenceTop3,
-          reviewWindow: result.data.reviewWindow,
-          // telemetry & flags
-          ...(result.data.povTags ? { povTags: result.data.povTags } : {}),
-          ...(typeof result.data.requiresHumanReview === 'boolean' ? { requiresHumanReview: result.data.requiresHumanReview } : {}),
-        });
-        addVersionSnapshot();
-        setQaIssues(null, []);
-        return true;
-      } else if (result.status === 'error') {
-        setError(result.error || '生成行动计划失败');
-        if (result.data?.issues) setQaIssues('S3', result.data.issues);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error generating action plan:', error);
-      setError('生成行动计划时发生错误');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-    return false;
+    startStreaming('S3');
+    return true; // 流式处理不需要返回false来阻止状态转换
   };
 
   // 通用状态转换处理器

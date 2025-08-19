@@ -6,14 +6,30 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Check } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { FrameworkNode } from "@/lib/types"
+import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
+import { StreamResponseData } from "@/lib/schemas"
 
 interface S1KnowledgeFrameworkViewProps {
   onProceed: () => void
 }
 
 export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrameworkViewProps) {
-  const { userContext } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues } = useCognitiveCoachStore();
   const framework = userContext.knowledgeFramework;
+
+  // 处理流式生成完成
+  const handleStreamComplete = (data: StreamResponseData) => {
+    if (data.framework) {
+      updateUserContext({ knowledgeFramework: data.framework });
+      addVersionSnapshot();
+      setQaIssues(null, []);
+    }
+  };
+
+  // 处理流式生成错误
+  const handleStreamError = (error: string) => {
+    console.error('S1 streaming error:', error);
+  };
 
   // 递归渲染框架节点
   const renderFrameworkNode = (node: FrameworkNode, parentId: string = ''): React.ReactElement => {
@@ -33,6 +49,30 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       </AccordionItem>
     );
   };
+
+  // 如果正在加载且当前阶段是 S1，显示流式动画器
+  if (isLoading && streaming.currentStage === 'S1') {
+    return (
+      <div className="animate-fade-in">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          AI 正在为您构建结构化的知识框架，这将成为后续学习的基础...
+        </p>
+        
+        <CognitiveStreamAnimator 
+          stage="S1"
+          onComplete={handleStreamComplete}
+          onError={handleStreamError}
+          requestPayload={{ 
+            userGoal: userContext.userGoal,
+            decisionType: userContext.decisionType,
+            runTier: userContext.runTier,
+            seed: userContext.seed
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">

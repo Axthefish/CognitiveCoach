@@ -73,6 +73,21 @@ export interface UserContext {
   }>; // Added for S0 recommendations
 }
 
+// 流式状态接口
+interface StreamingState {
+  isStreaming: boolean;
+  currentStage: 'S0' | 'S1' | 'S2' | 'S3' | 'S4' | null;
+  cognitiveSteps: Array<{
+    id: string;
+    message: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'error';
+    timestamp?: number;
+  }>;
+  streamContent: string;
+  microLearningTip: string | null;
+  streamError: string | null;
+}
+
 // Store接口
 interface CognitiveCoachStore {
   // 状态
@@ -85,6 +100,9 @@ interface CognitiveCoachStore {
   isLoading: boolean;
   error: string | null;
   
+  // 流式状态
+  streaming: StreamingState;
+  
   // Actions
   setCurrentState: (state: FSMState) => void;
   updateUserContext: (updates: Partial<UserContext>) => void;
@@ -93,6 +111,16 @@ interface CognitiveCoachStore {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   resetStore: () => void;
+  
+  // 流式相关 Actions
+  startStreaming: (stage: 'S0' | 'S1' | 'S2' | 'S3' | 'S4') => void;
+  stopStreaming: () => void;
+  updateCognitiveSteps: (steps: StreamingState['cognitiveSteps']) => void;
+  appendStreamContent: (content: string) => void;
+  setStreamContent: (content: string) => void;
+  setMicroLearningTip: (tip: string | null) => void;
+  setStreamError: (error: string | null) => void;
+  resetStreamingState: () => void;
 }
 
 // 初始状态
@@ -114,6 +142,15 @@ const initialUserContext: UserContext = {
   goalRecommendations: undefined,
 };
 
+const initialStreamingState: StreamingState = {
+  isStreaming: false,
+  currentStage: null,
+  cognitiveSteps: [],
+  streamContent: '',
+  microLearningTip: null,
+  streamError: null,
+};
+
 // 创建Zustand store
 export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => ({
   // 初始状态
@@ -125,6 +162,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   lastFailedStage: null,
   isLoading: false,
   error: null,
+  streaming: initialStreamingState,
   
   // Actions
   setCurrentState: (state) => set({ currentState: state }),
@@ -135,6 +173,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     })),
   
   addVersionSnapshot: () => {
+    const MAX_VERSIONS = 10; // 限制保存的版本数量
     const userContext = get().userContext;
     const timestamp = new Date().toISOString();
     const id = `v-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
@@ -146,7 +185,8 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     };
     
     set((state) => ({
-      versions: [...state.versions, snapshot],
+      // 保持版本数量在限制内，移除最旧的版本
+      versions: [...state.versions.slice(-MAX_VERSIONS + 1), snapshot],
       currentVersion: snapshot.id,
     }));
   },
@@ -166,6 +206,80 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       qaIssues: [],
       lastFailedStage: null,
       isLoading: false,
-      error: null
+      error: null,
+      streaming: initialStreamingState,
     }),
+
+  // 流式相关 Actions
+  startStreaming: (stage) => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        isStreaming: true,
+        currentStage: stage,
+        cognitiveSteps: [],
+        streamContent: '',
+        microLearningTip: null,
+        streamError: null,
+      },
+      isLoading: true,
+      error: null,
+    })),
+
+  stopStreaming: () => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        isStreaming: false,
+      },
+      isLoading: false,
+    })),
+
+  updateCognitiveSteps: (steps) => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        cognitiveSteps: steps,
+      },
+    })),
+
+  appendStreamContent: (content) => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        streamContent: state.streaming.streamContent + content,
+      },
+    })),
+
+  setStreamContent: (content) => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        streamContent: content,
+      },
+    })),
+
+  setMicroLearningTip: (tip) => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        microLearningTip: tip,
+      },
+    })),
+
+  setStreamError: (error) => 
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        streamError: error,
+        isStreaming: false,
+      },
+      error,
+      isLoading: false,
+    })),
+
+  resetStreamingState: () => 
+    set((state) => ({
+      streaming: initialStreamingState,
+    })),
 }));

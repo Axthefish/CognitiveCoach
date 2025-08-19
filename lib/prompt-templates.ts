@@ -790,7 +790,11 @@ export class PromptSanitizer {
       if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
         JSON.parse(content);
       }
-    } catch {
+    } catch (jsonError) {
+      logger.debug('JSON validation failed:', {
+        error: jsonError instanceof Error ? jsonError.message : 'Unknown JSON error',
+        content: content.substring(0, 100) + '...'
+      });
       return false;
     }
 

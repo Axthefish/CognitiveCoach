@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { serializeErrorDetailsSecurely } from './app-errors';
 
 export interface APIError {
   status: 'error';
@@ -86,7 +87,7 @@ export function handleAPIError(error: unknown, stage?: string): NextResponse<API
   
   if (error instanceof Error) {
     return createErrorResponse(error.message, 500, { 
-      details: error.stack, 
+      details: serializeErrorDetailsSecurely(error.stack, true), // 安全处理堆栈信息
       stage 
     });
   }

@@ -9,14 +9,45 @@ import { GripVertical, Gauge, TrendingUp, Target, BarChart3 } from "lucide-react
 import { useCognitiveCoachStore } from "@/lib/store"
 import { Badge } from "@/components/ui/badge"
 import { normalizeId } from "@/lib/qa"
+import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
+import { StreamResponseData } from "@/lib/schemas"
 
 interface S3ActionPlanViewProps {
   onProceed: () => void
 }
 
 function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
-  const { userContext, updateUserContext } = useCognitiveCoachStore()
+  const { 
+    userContext, 
+    updateUserContext, 
+    streaming, 
+    isLoading, 
+    addVersionSnapshot, 
+    setQaIssues 
+  } = useCognitiveCoachStore()
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
+
+  // 处理流式生成完成
+  const handleStreamComplete = (data: StreamResponseData) => {
+    if (data.actionPlan) {
+      updateUserContext({ 
+        actionPlan: data.actionPlan,
+        kpis: data.kpis,
+        strategySpec: data.strategySpec || null,
+        missingEvidenceTop3: data.missingEvidenceTop3,
+        reviewWindow: data.reviewWindow,
+        povTags: data.povTags,
+        requiresHumanReview: data.requiresHumanReview,
+      });
+      addVersionSnapshot();
+      setQaIssues(null, []);
+    }
+  };
+
+  // 处理流式生成错误
+  const handleStreamError = (error: string) => {
+    console.error('S3 streaming error:', error);
+  };
   
   // Get action plan and KPIs from store
   const actionPlan = userContext.actionPlan || []
@@ -46,6 +77,35 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   const completionRate = actionPlan.length > 0 
     ? Math.round((completedTasks.size / actionPlan.length) * 100)
     : 0
+
+  // 如果正在加载且当前阶段是 S3，显示流式动画器
+  if (isLoading && streaming.currentStage === 'S3') {
+    return (
+      <div className="animate-fade-in">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          S3: 个性化行动与监控计划
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          AI 正在为您制定个性化的行动计划和关键绩效指标...
+        </p>
+        
+        <CognitiveStreamAnimator 
+          stage="S3"
+          onComplete={handleStreamComplete}
+          onError={handleStreamError}
+          requestPayload={{ 
+            userGoal: userContext.userGoal,
+            framework: userContext.knowledgeFramework,
+            systemNodes: userContext.systemDynamics?.nodes || [],
+            decisionType: userContext.decisionType,
+            runTier: userContext.runTier,
+            seed: userContext.seed
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">

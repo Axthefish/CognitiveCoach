@@ -1,20 +1,11 @@
 // Gemini API 配置
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { logger, truncate } from '@/lib/logger';
+import { getAIApiKey } from '@/lib/env-validator';
 
 // 获取 API key 的辅助函数
 export function getApiKey(): string | undefined {
-  // 支持多种环境变量名称格式
-  const apiKey = process.env.GOOGLE_AI_API_KEY || 
-                process.env.GEMINI_API_KEY || 
-                process.env.Gemini_API_KEY ||
-                process.env.GOOGLE_GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    console.warn('⚠️ Gemini API key 未配置。请在 .env.local 文件中设置以下任一变量：GOOGLE_AI_API_KEY、GEMINI_API_KEY、Gemini_API_KEY、GOOGLE_GEMINI_API_KEY');
-  }
-  
-  return apiKey;
+  return getAIApiKey() || undefined;
 }
 
 // 创建 Gemini 客户端实例
@@ -82,8 +73,11 @@ export async function generateJson<T>(
     try {
       const data = JSON.parse(text) as T;
       return { ok: true as const, data };
-    } catch {
-      logger.warn('Gemini JSON parse failed, sample:', truncate(text));
+    } catch (parseError) {
+      logger.warn('Gemini JSON parse failed:', {
+        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        sample: truncate(text)
+      });
       return { ok: false as const, error: 'PARSE_ERROR', raw: truncate(text) };
     }
   };

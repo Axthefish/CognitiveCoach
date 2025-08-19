@@ -14,6 +14,17 @@ export const EvidenceArraySchema = z.array(EvidenceSchema).optional();
 export const ConfidenceSchema = z.number().min(0).max(1).optional();
 export const ApplicabilitySchema = z.string().optional();
 
+// Telemetry schema for tracking generation process
+export const TelemetrySchema = z.object({
+  n_best_count: z.number().int().min(1).optional(),
+  retry: z.boolean().optional(),
+  generation_time_ms: z.number().min(0).optional(),
+  token_count: z.number().int().min(0).optional(),
+  model_used: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  quality_score: z.number().min(0).max(1).optional(),
+}).strict().optional();
+
 // S0 refineGoal output
 export const S0RefineGoalSchema = z.object({
   status: z.enum(['clarification_needed', 'clarified', 'recommendations_provided']),
@@ -45,9 +56,9 @@ export const FrameworkNodeSchema: z.ZodType<FrameworkNode> = z.object({
   title: z.string(),
   summary: z.string(),
   children: z.array(z.lazy(() => FrameworkNodeSchema)).optional(),
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
-  applicability: ApplicabilitySchema,
+  evidence: EvidenceArraySchema.optional().default([]),
+  confidence: ConfidenceSchema.optional().default(0.6),
+  applicability: ApplicabilitySchema.optional().default(""),
 }).strict();
 
 export const KnowledgeFrameworkSchema = z.array(FrameworkNodeSchema);
@@ -62,9 +73,9 @@ export const SystemDynamicsSchema = z.object({
   mermaidChart: z.string(),
   metaphor: z.string(),
   nodes: z.array(SystemNodeSchema).optional(),
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
-  applicability: ApplicabilitySchema,
+  evidence: EvidenceArraySchema.optional().default([]),
+  confidence: ConfidenceSchema.optional().default(0.6),
+  applicability: ApplicabilitySchema.optional().default(""),
 }).strict();
 
 // Strategy DSL (zod) — validate S3.strategySpec
@@ -103,20 +114,20 @@ export const MetricSpecSchema = z.object({
   metricId: z.string(),
   what: z.string(),
   why: z.string(),
-  triggers: z.array(TriggerSchema).min(1),
-  diagnosis: z.array(DiagnosisStepSchema).min(1),
-  options: z.array(StrategyOptionSchema).min(1),
-  recovery: RecoveryWindowSchema,
-  stopLoss: StopLossSchema, // required in v1
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
-  applicability: ApplicabilitySchema,
+  triggers: z.array(TriggerSchema).min(1).optional(),
+  diagnosis: z.array(DiagnosisStepSchema).min(1).optional(),
+  options: z.array(StrategyOptionSchema).min(1).optional(),
+  recovery: RecoveryWindowSchema.optional(),
+  stopLoss: StopLossSchema.optional(), // optional to support simpler responses
+  evidence: EvidenceArraySchema.optional().default([]),
+  confidence: ConfidenceSchema.optional().default(0.6),
+  applicability: ApplicabilitySchema.optional().default(""),
 }).strict();
 
 export const StrategySpecSchema = z.object({
-  metrics: z.array(MetricSpecSchema).min(1),
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
+  metrics: z.array(MetricSpecSchema).min(1).optional(),
+  evidence: EvidenceArraySchema.optional().default([]),
+  confidence: ConfidenceSchema.optional().default(0.6),
 }).strict();
 
 // S3 action plan primitive
@@ -134,16 +145,16 @@ export const ActionPlanResponseSchema = z.object({
   strategySpec: StrategySpecSchema.optional(),
   povTags: z.array(z.string()).optional(),
   requiresHumanReview: z.boolean().optional(),
-  telemetry: z.any().optional(),
+  telemetry: TelemetrySchema,
   missingEvidenceTop3: z.array(z.object({
     metricId: z.string(),
     what: z.string(),
     voi_reason: z.string(),
-  })).optional(),
-  reviewWindow: z.string().optional(),
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
-  applicability: ApplicabilitySchema,
+  })).optional().default([]),
+  reviewWindow: z.string().optional().default("P14D"),
+  evidence: EvidenceArraySchema.optional().default([]),
+  confidence: ConfidenceSchema.optional().default(0.6),
+  applicability: ApplicabilitySchema.optional().default(""),
 }).strict();
 
 // S4 analyze progress output
@@ -151,10 +162,10 @@ export const AnalyzeProgressSchema = z.object({
   analysis: z.string(),
   suggestions: z.array(z.string()),
   encouragement: z.string().optional(),
-  referencedMetricIds: z.array(z.string()).optional(),
-  evidence: EvidenceArraySchema,
-  confidence: ConfidenceSchema,
-  applicability: ApplicabilitySchema,
+  referencedMetricIds: z.array(z.string()).optional().default([]),
+  evidence: EvidenceArraySchema.optional().default([]),
+  confidence: ConfidenceSchema.optional().default(0.6),
+  applicability: ApplicabilitySchema.optional().default(""),
 }).strict();
 
 // Input schemas
@@ -171,6 +182,15 @@ export type SystemDynamics = z.infer<typeof SystemDynamicsSchema>;
 export type ActionPlanResponse = z.infer<typeof ActionPlanResponseSchema>;
 export type AnalyzeProgress = z.infer<typeof AnalyzeProgressSchema>;
 export type StrategySpecZod = z.infer<typeof StrategySpecSchema>;
+export type Telemetry = z.infer<typeof TelemetrySchema>;
+
+// Streaming response data types
+export type StreamResponseData = 
+  | { framework: KnowledgeFramework }
+  | { mermaidChart: string; metaphor: string }
+  | ActionPlanResponse
+  | AnalyzeProgress
+  | { response: string };
 
 // Request schemas for /api/coach
 export const RefineGoalPayloadSchema = z.object({

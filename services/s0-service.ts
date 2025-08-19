@@ -37,14 +37,14 @@ export class S0Service {
   }
   
   async refineGoal(payload: RefineGoalPayload): Promise<NextResponse> {
-    console.log('🚀 S0Service.refineGoal called');
+    logger.debug('S0Service.refineGoal called');
     
     try {
       const conversationHistory = payload.conversationHistory || [];
       const isFirstInteraction = conversationHistory.length === 0;
       
-      console.log('📊 S0 context:', {
-        userInput: payload.userInput,
+      logger.debug('S0 context:', {
+        inputLength: payload.userInput?.length || 0,
         isFirstInteraction,
         historyLength: conversationHistory.length
       });
@@ -76,7 +76,7 @@ export class S0Service {
       
       const prompt = promptBuilder.build(context);
       
-      console.log('📤 Calling AI with prompt length:', prompt.length);
+      logger.debug('Calling AI with prompt length:', prompt.length);
       
       // 使用智能重试机制调用 AI
       const result = await generateJsonWithRetry<RefineGoalResponse>(
@@ -93,7 +93,7 @@ export class S0Service {
       );
       
       if (!result.ok) {
-        console.error('❌ AI call failed:', {
+        logger.error('AI call failed:', {
           error: result.error,
           attempts: result.attempts
         });
@@ -110,7 +110,7 @@ export class S0Service {
         });
       }
       
-      console.log('✅ AI call successful, validating response...');
+      logger.debug('AI call successful, validating response');
       
       // 验证响应
       const validationResult = S0RefineGoalSchema.safeParse(result.data);
@@ -128,7 +128,7 @@ export class S0Service {
         hasRecommendations: !!result.data.recommendations
       });
       
-      console.log('✅ S0 refinement completed successfully');
+      logger.debug('S0 refinement completed successfully');
       
       return NextResponse.json({
         status: 'success',
@@ -136,7 +136,7 @@ export class S0Service {
       });
       
     } catch (error) {
-      console.error('💥 S0Service.refineGoal error:', error);
+      logger.error('S0Service.refineGoal error:', error);
       return handleError(error, 'S0');
     }
   }

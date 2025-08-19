@@ -14,6 +14,7 @@ import {
 import { runQualityGates } from '@/lib/qa';
 import { createErrorResponse, createSuccessResponse, handleAPIError } from '@/lib/error-utils';
 import { S0Service } from '@/services/s0-service';
+import { serializeErrorDetailsSecurely } from '@/lib/app-errors';
 
 // API请求的action类型
 type CoachAction = 
@@ -62,29 +63,24 @@ export async function POST(request: NextRequest) {
   try {
     const json = await request.json();
     
-    // 添加调试日志
-    console.log('🔍 Debug - Received request body:', JSON.stringify(json, null, 2));
+    // 记录请求（生产环境不包含敏感数据）
+    logger.debug('Received request body:', { action: json?.action });
     
     const parsed = CoachRequestSchema.safeParse(json);
     if (!parsed.success) {
-      // 详细的错误日志
-      console.error('❌ Schema validation failed:', {
-        receivedData: json,
-        errors: parsed.error.issues,
-        errorDetails: parsed.error.issues.map(i => ({
-          path: i.path,
-          message: i.message,
-          code: i.code
-        }))
+      // 记录验证失败
+      logger.error('Schema validation failed:', {
+        action: json?.action,
+        errorCount: parsed.error.issues.length,
+        firstError: parsed.error.issues[0]?.message
       });
       
+      const validationDetails = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
       const res = NextResponse.json({ 
         status: 'error', 
         error: '请求格式不正确，请检查您的输入并重试', 
-        details: process.env.NODE_ENV !== 'production' 
-          ? parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
-          : undefined,
-        receivedData: process.env.NODE_ENV !== 'production' ? json : undefined
+        details: serializeErrorDetailsSecurely(validationDetails),
+        receivedData: serializeErrorDetailsSecurely(json) // 安全处理接收到的数据
       } as CoachResponse, { status: 400 });
       return withCors(res, origin);
     }
@@ -132,7 +128,7 @@ export async function POST(request: NextRequest) {
       { 
         status: 'error', 
         error: errorMessage,
-        details: process.env.NODE_ENV !== 'production' ? errorStack : undefined
+        details: serializeErrorDetailsSecurely(errorStack, true) // 强制隐藏堆栈信息
       } as CoachResponse,
       { status: 500 }
     ), origin);
@@ -150,18 +146,18 @@ async function handleRefineGoal(payload: {
   userInput: string; 
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> 
 }) {
-  console.log('🚀 handleRefineGoal called with:', { 
-    userInput: payload.userInput, 
+  logger.debug('handleRefineGoal called', { 
+    inputLength: payload.userInput?.length || 0, 
     historyLength: payload.conversationHistory?.length || 0 
   });
   
   try {
     const s0Service = S0Service.getInstance();
     const result = await s0Service.refineGoal(payload);
-    console.log('✅ handleRefineGoal completed successfully');
+    logger.debug('handleRefineGoal completed successfully');
     return result;
   } catch (error) {
-    console.error('❌ handleRefineGoal failed:', error);
+    logger.error('handleRefineGoal failed:', error);
     throw error;
   }
 }
@@ -174,7 +170,7 @@ async function handleGenerateFramework(payload: GenerateFrameworkPayload) {
   
   if (!genAI) {
     // 如果没有配置 API key，返回模拟数据
-    console.warn('使用模拟数据：Gemini API key 未配置');
+    logger.warn('Using mock data: Gemini API key not configured');
     const mockFramework: KnowledgeFramework = [
       {
         id: 'core-concepts',
@@ -263,7 +259,7 @@ async function handleGenerateSystemDynamics(payload: { framework: KnowledgeFrame
   
   if (!genAI) {
     // 如果没有配置 API key，返回模拟数据
-    console.warn('使用模拟数据：Gemini API key 未配置');
+    logger.warn('Using mock data: Gemini API key not configured');
     const mockMermaidChart = `graph TD
     A[开始学习] --> B[理解概念]
     B --> C[实践应用]
@@ -386,7 +382,7 @@ async function handleGenerateActionPlan(payload: { userGoal: string; framework: 
   
   if (!genAI) {
     // Fallback to mock data if no API key
-    console.warn('Using mock data: Gemini API key not configured');
+    logger.warn('Using mock data: Gemini API key not configured');
     const mockActionPlan: ActionPlan = [
       {
         id: 'action-1',
@@ -492,7 +488,8 @@ ${frameworkDescription}
             bestIssuesCount = issueCount;
           }
         }
-      } catch {
+      } catch (parseError) {
+        logger.error('JSON parsing failed during action plan generation:', parseError);
         v.issues = ['parse'];
       }
     }
@@ -532,8 +529,16 @@ ${frameworkDescription}
           .some((m: { confidence?: number; evidence?: unknown[] }) => ((m.confidence ?? 1) < 0.4) || !m.evidence || ((m.evidence as unknown[])?.length ?? 0) === 0);
       const telemetry = { n_best_count: 1, retry: true };
       return NextResponse.json({ status: 'success', data: { ...planData, povTags, requiresHumanReview, telemetry } } as CoachResponse);
-    } catch {
-      return NextResponse.json({ status: 'error', error: 'Failed to generate action plan', data: { issues: variants.map(v => v.issues) } } as CoachResponse, { status: 500 });
+    } catch (retryError) {
+      logger.error('Retry attempt failed during action plan generation:', retryError);
+      return NextResponse.json({ 
+        status: 'error', 
+        error: 'Failed to generate action plan', 
+        data: { 
+          issues: variants.map(v => v.issues),
+          retryError: retryError instanceof Error ? retryError.message : 'Unknown retry error'
+        } 
+      } as CoachResponse, { status: 500 });
     }
   } catch (error) {
     logger.error('Gemini API error:', error);
@@ -563,7 +568,7 @@ async function handleAnalyzeProgress(payload: {
   
   if (!genAI) {
     // Fallback to simple analysis
-    console.warn('Using fallback logic: Gemini API key not configured');
+    logger.warn('Using fallback logic: Gemini API key not configured');
     const analysis = '基于您的数据，您在理论学习方面进展良好，但实践应用还需要加强。建议增加动手练习的时间。';
     
     return NextResponse.json({
@@ -629,7 +634,7 @@ ${payload.userContext.kpis?.join('\n') || '无'}
       return NextResponse.json({ 
         status: 'error', 
         error: errorMessage,
-        details: process.env.NODE_ENV !== 'production' ? g.error : undefined
+        details: serializeErrorDetailsSecurely(g.error)
       } as CoachResponse, { status: 400 });
     }
     try {
@@ -692,7 +697,7 @@ async function handleConsult(payload: {
   
   if (!genAI) {
     // Fallback response
-    console.warn('Using fallback logic: Gemini API key not configured');
+    logger.warn('Using fallback logic: Gemini API key not configured');
     const response = '这是一个很好的问题。让我基于您的学习历程来回答...';
     
     return NextResponse.json({
@@ -742,7 +747,7 @@ async function handleConsult(payload: {
     if (!g.ok) return NextResponse.json({ status: 'error', error: 'Failed to get consultation response' } as CoachResponse, { status: 400 });
     return NextResponse.json({ status: 'success', data: { response: g.text } } as CoachResponse);
   } catch (error) {
-    console.error('Gemini API error:', error);
+    logger.error('Gemini API error:', error);
     return NextResponse.json(
       { status: 'error', error: 'Failed to process consultation' } as CoachResponse,
       { status: 500 }
