@@ -9,6 +9,8 @@ import { useCognitiveCoachStore } from "@/lib/store"
 import { FrameworkNode } from "@/lib/types"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
+import { ErrorBoundary } from "@/components/error-boundary"
+import { reportError } from "@/lib/error-reporter"
 
 interface S1KnowledgeFrameworkViewProps {
   onProceed: () => void
@@ -67,10 +69,31 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   // 处理流式生成错误
   const handleStreamError = (error: string) => {
     console.error('S1 streaming error:', error);
+    
+    // 报告错误
+    reportError(new Error(error), {
+      stage: 'S1',
+      userGoal: userContext.userGoal,
+      component: 'S1KnowledgeFrameworkView',
+      hasFramework: !!framework,
+      frameworkLength: framework?.length || 0
+    });
   };
 
   // 递归渲染框架节点
-  const renderFrameworkNode = (node: FrameworkNode, parentId: string = ''): React.ReactElement => {
+  const renderFrameworkNode = (node: FrameworkNode, parentId: string = ''): React.ReactElement | null => {
+    // 防御性检查
+    if (!node || typeof node !== 'object') {
+      console.error('Invalid node:', node);
+      return null;
+    }
+    
+    // 确保必要的属性存在
+    if (!node.id || !node.title) {
+      console.error('Node missing required properties:', node);
+      return null;
+    }
+    
     const nodeId = parentId ? `${parentId}-${node.id}` : node.id;
     
     return (
@@ -80,7 +103,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
           <p className="text-gray-600 dark:text-gray-400 mb-2">{node.summary}</p>
           {node.children && node.children.length > 0 && (
             <Accordion type="single" collapsible className="ml-4">
-              {node.children.map(child => renderFrameworkNode(child, nodeId))}
+              {node.children.map(child => renderFrameworkNode(child, nodeId)).filter(Boolean)}
             </Accordion>
           )}
         </AccordionContent>
@@ -90,6 +113,13 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 如果正在加载且当前阶段是 S1，显示流式动画器
   if (isLoading && streaming.currentStage === 'S1') {
+    console.log('✅ S1 View: Should show CognitiveStreamAnimator', {
+      isLoading,
+      currentStage: streaming.currentStage,
+      isStreaming: streaming.isStreaming,
+      userGoal: userContext.userGoal
+    });
+    
     // 确保 userGoal 存在且有效再启动流式处理
     if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {
       return (
@@ -112,17 +142,19 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
           AI 正在为您构建结构化的知识框架，这将成为后续学习的基础...
         </p>
         
-        <CognitiveStreamAnimator 
-          stage="S1"
-          onComplete={handleStreamComplete}
-          onError={handleStreamError}
-          requestPayload={{ 
-            userGoal: userContext.userGoal,
-            decisionType: userContext.decisionType,
-            runTier: userContext.runTier,
-            seed: userContext.seed
-          }}
-        />
+        <ErrorBoundary>
+          <CognitiveStreamAnimator 
+            stage="S1"
+            onComplete={handleStreamComplete}
+            onError={handleStreamError}
+            requestPayload={{ 
+              userGoal: userContext.userGoal,
+              decisionType: userContext.decisionType,
+              runTier: userContext.runTier,
+              seed: userContext.seed
+            }}
+          />
+        </ErrorBoundary>
       </div>
     );
   }

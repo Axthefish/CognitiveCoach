@@ -9,6 +9,7 @@ import S3ActionPlanView from '@/components/s3-action-plan-view';
 import S4AutonomousOperationView from '@/components/s4-autonomous-operation-view';
 import FsmNavigator from '@/components/fsm-navigator';
 import { State } from '@/lib/types';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function Home() {
   // 优化：分别获取状态，避免不必要的重渲染
@@ -26,6 +27,7 @@ export default function Home() {
   // Local state for S0 conversation
   const [s0ConversationMode, setS0ConversationMode] = React.useState(false);
   const [s0AiQuestion, setS0AiQuestion] = React.useState<string | undefined>();
+  const [s0ForceClarification, setS0ForceClarification] = React.useState(false);
 
   // FSM状态定义
   const states: State[] = [
@@ -53,12 +55,15 @@ export default function Home() {
   const { startStreaming } = useCognitiveCoachStore();
   
   const generateKnowledgeFramework = React.useCallback(async (explicitGoal?: string) => {
-    startStreaming('S1');
-    // 如果提供了明确的goal，将其存储到store中以供CognitiveStreamAnimator使用
+    // 如果提供了明确的goal，先将其存储到store中
     if (explicitGoal && explicitGoal !== userContext.userGoal) {
       updateUserContext({ userGoal: explicitGoal });
     }
-    // 实际的流式处理将由 CognitiveStreamAnimator 组件处理
+    
+    // 使用 setTimeout 确保状态更新后再启动流式处理
+    setTimeout(() => {
+      startStreaming('S1');
+    }, 0);
   }, [startStreaming, updateUserContext, userContext.userGoal]);
 
   // S0状态的目标精炼处理 - 使用 useCallback 优化
@@ -88,6 +93,13 @@ export default function Home() {
       const result = await response.json();
 
       if (result.status === 'success') {
+        // 检查是否需要强制用户确认
+        if (result.data.force_clarification) {
+          setS0ForceClarification(true);
+        } else {
+          setS0ForceClarification(false);
+        }
+        
         if (result.data.status === 'clarification_needed' || result.data.status === 'recommendations_provided') {
           // AI needs more information or provided recommendations
           setS0ConversationMode(true);
@@ -143,17 +155,30 @@ export default function Home() {
     }
   }, [userContext.goalConversationHistory, s0ConversationMode, setLoading, setError, updateUserContext, setCurrentState, setS0ConversationMode, setS0AiQuestion, generateKnowledgeFramework]);
 
+  const handleForceProceedS0 = React.useCallback(async () => {
+    // 当用户选择强制进行时，我们使用对话历史中的最后一个用户输入作为目标
+    const lastUserInput = userContext.goalConversationHistory?.slice(-2)[0]?.content;
+    const goal = lastUserInput || userContext.userGoal || "已确认的学习目标";
+    
+    updateUserContext({ userGoal: goal });
+    setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
+    await generateKnowledgeFramework(goal);
+  }, [userContext.goalConversationHistory, userContext.userGoal, updateUserContext, setCurrentState, generateKnowledgeFramework]);
   
 
   // 生成系统动力学（流式版本）
   const generateSystemDynamics = async (): Promise<boolean> => {
-    startStreaming('S2');
+    setTimeout(() => {
+      startStreaming('S2');
+    }, 0);
     return true; // 流式处理不需要返回false来阻止状态转换
   };
 
   // 生成行动计划（流式版本）
   const generateActionPlan = async (): Promise<boolean> => {
-    startStreaming('S3');
+    setTimeout(() => {
+      startStreaming('S3');
+    }, 0);
     return true; // 流式处理不需要返回false来阻止状态转换
   };
 
@@ -187,26 +212,46 @@ export default function Home() {
     switch (currentState) {
       case 'S0_INTENT_CALIBRATION':
         return (
-          <S0IntentView 
-            onProceed={handleGoalRefinement}
-            conversationHistory={userContext.goalConversationHistory}
-            aiQuestion={s0AiQuestion}
-            isConversationMode={s0ConversationMode}
-            recommendations={userContext.goalRecommendations}
-          />
+          <ErrorBoundary>
+            <S0IntentView 
+              onProceed={handleGoalRefinement}
+              conversationHistory={userContext.goalConversationHistory}
+              aiQuestion={s0AiQuestion}
+              isConversationMode={s0ConversationMode}
+              recommendations={userContext.goalRecommendations}
+              forceClarification={s0ForceClarification}
+              onForceProceed={handleForceProceedS0}
+            />
+          </ErrorBoundary>
         );
       
       case 'S1_KNOWLEDGE_FRAMEWORK':
-        return <S1KnowledgeFrameworkView onProceed={handleProceedToNextState} />;
+        return (
+          <ErrorBoundary>
+            <S1KnowledgeFrameworkView onProceed={handleProceedToNextState} />
+          </ErrorBoundary>
+        );
       
       case 'S2_SYSTEM_DYNAMICS':
-        return <S2SystemDynamicsView onProceed={handleProceedToNextState} />;
+        return (
+          <ErrorBoundary>
+            <S2SystemDynamicsView onProceed={handleProceedToNextState} />
+          </ErrorBoundary>
+        );
       
       case 'S3_ACTION_PLAN':
-        return <S3ActionPlanView onProceed={handleProceedToNextState} />;
+        return (
+          <ErrorBoundary>
+            <S3ActionPlanView onProceed={handleProceedToNextState} />
+          </ErrorBoundary>
+        );
       
       case 'S4_AUTONOMOUS_OPERATION':
-        return <S4AutonomousOperationView />;
+        return (
+          <ErrorBoundary>
+            <S4AutonomousOperationView />
+          </ErrorBoundary>
+        );
       
       default:
         return <div>Unknown state</div>;
@@ -279,19 +324,23 @@ export default function Home() {
         {renderCurrentStateView()}
       </main>
 
-      {/* 调试信息（仅在开发环境显示） */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm">
-          <div className="font-bold mb-2">Debug Info:</div>
-          <div>Current State: {currentState}</div>
-          <div>User Goal: {userContext.userGoal || 'Not set'}</div>
-          <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
-          <div>Error: {error || 'None'}</div>
-          <div>RunTier: {userContext.runTier}</div>
-          <div>DecisionType: {userContext.decisionType}</div>
-          <div>Seed: {userContext.seed ?? '-'}</div>
-        </div>
-      )}
+              {/* 调试信息（仅在开发环境显示） */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm">
+            <div className="font-bold mb-2">Debug Info:</div>
+            <div>Current State: {currentState}</div>
+            <div>User Goal: {userContext.userGoal || 'Not set'}</div>
+            <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
+            <div>Streaming: {streaming.isStreaming ? 'Yes' : 'No'}</div>
+            <div>Stream Stage: {streaming.currentStage || 'None'}</div>
+            <div>Show Full Mask: {(isLoading && !streaming.isStreaming) ? 'Yes' : 'No'}</div>
+            <div>Show Stream UI: {(isLoading && streaming.currentStage === currentStateId.slice(0, 2)) ? 'Yes' : 'No'}</div>
+            <div>Error: {error || 'None'}</div>
+            <div>RunTier: {userContext.runTier}</div>
+            <div>DecisionType: {userContext.decisionType}</div>
+            <div>Seed: {userContext.seed ?? '-'}</div>
+          </div>
+        )}
     </div>
   );
 }

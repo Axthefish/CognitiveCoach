@@ -151,6 +151,8 @@ export const S0_TEMPLATES = {
       'Maintain a friendly and encouraging tone',
       'Ask only ONE question at a time when clarifying',
       'Focus on making goals specific, measurable, and achievable',
+      'A clarified goal must include a specific subject and a desired outcome.',
+      'After 2-3 rounds of questions, if the goal has a subject and an outcome, you should transition to the "clarified" status.',
       'Consider scope, timeline, specific outcomes, and measurable results',
       'If user input is vague or asks for recommendations, provide 2-3 specific options'
     ],

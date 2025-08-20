@@ -6,6 +6,7 @@ import { MicroLearningTip } from './ui/micro-learning-tip';
 import { ContentSkeleton } from './ui/content-skeleton';
 import { TypewriterContent } from './ui/typewriter-content';
 import { useCognitiveCoachStore } from '@/lib/store';
+import { reportError } from '@/lib/error-reporter';
 
 // 流式消息类型定义
 import { StreamResponseData, StreamPayload } from '@/lib/schemas';
@@ -183,10 +184,46 @@ export function CognitiveStreamAnimator({
           for (const line of lines) {
             if (line.trim()) {
               try {
-                const message: StreamMessage = JSON.parse(line);
+                // 处理SSE格式（移除 "data: " 前缀如果存在）
+                let jsonStr = line;
+                if (line.startsWith('data: ')) {
+                  jsonStr = line.substring(6);  // 移除 "data: " 前缀
+                }
+                
+                const message: StreamMessage = JSON.parse(jsonStr);
+                
+                // 开发环境调试记录
+                if (process.env.NODE_ENV === 'development') {
+                  (window as any).__streamMessages = (window as any).__streamMessages || [];
+                  (window as any).__streamMessages.push({
+                    timestamp: Date.now(),
+                    stage,
+                    message,
+                    rawLine: line,
+                    parsedJson: jsonStr
+                  });
+                }
+                
                 processStreamMessage(message);
               } catch (parseError) {
-                console.warn('Failed to parse stream message:', line, parseError);
+                // 增强错误日志记录
+                console.error('Failed to parse stream message:', {
+                  line,
+                  parseError,
+                  stage,
+                  timestamp: Date.now()
+                });
+                
+                // 开发环境错误记录
+                if (process.env.NODE_ENV === 'development') {
+                  (window as any).__streamErrors = (window as any).__streamErrors || [];
+                  (window as any).__streamErrors.push({
+                    timestamp: Date.now(),
+                    stage,
+                    line,
+                    error: parseError
+                  });
+                }
               }
             }
           }
@@ -198,7 +235,13 @@ export function CognitiveStreamAnimator({
       // 处理剩余的缓冲区内容
       if (buffer.trim()) {
         try {
-          const message: StreamMessage = JSON.parse(buffer);
+          // 处理SSE格式（移除 "data: " 前缀如果存在）
+          let jsonStr = buffer;
+          if (buffer.startsWith('data: ')) {
+            jsonStr = buffer.substring(6);  // 移除 "data: " 前缀
+          }
+          
+          const message: StreamMessage = JSON.parse(jsonStr);
           processStreamMessage(message);
         } catch (parseError) {
           console.warn('Failed to parse final stream message:', buffer, parseError);
@@ -206,7 +249,16 @@ export function CognitiveStreamAnimator({
       }
 
     } catch (error) {
-      console.error('Streaming error:', error);
+      // 使用错误报告工具
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      reportError(errorInstance, {
+        stage,
+        requestPayload,
+        isStreaming,
+        currentSteps: steps,
+        component: 'CognitiveStreamAnimator'
+      });
+      
       const errorMsg = error instanceof Error ? error.message : '网络错误，请重试';
       setError(errorMsg);
       setIsStreaming(false);

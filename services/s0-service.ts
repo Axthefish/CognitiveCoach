@@ -77,6 +77,9 @@ export class S0Service {
       const prompt = promptBuilder.build(context);
       
       logger.debug('Calling AI with prompt length:', prompt.length);
+
+      // 定义对话轮次阈值
+      const CONVERSATION_TURN_THRESHOLD = 5; // ~2-3轮对话
       
       // 使用智能重试机制调用 AI
       const result = await generateJsonWithRetry<RefineGoalResponse>(
@@ -110,9 +113,6 @@ export class S0Service {
         });
       }
       
-      logger.debug('AI call successful, validating response');
-      
-      // 验证响应
       const validationResult = S0RefineGoalSchema.safeParse(result.data);
       if (!validationResult.success) {
         throw createStageError.s0('Invalid response format', {
@@ -120,19 +120,35 @@ export class S0Service {
           receivedData: result.data
         });
       }
+
+      // 如果对话轮次超过阈值，且AI仍在追问，则给予用户选择权
+      if (
+        conversationHistory.length >= CONVERSATION_TURN_THRESHOLD &&
+        validationResult.data.status === 'clarification_needed'
+      ) {
+        logger.info(`Conversation turn threshold reached. Forcing clarification option for user.`);
+        // 在返回数据中添加一个标志，让前端知道应该显示确认按钮
+        return NextResponse.json({
+          status: 'success',
+          data: {
+            ...validationResult.data,
+            force_clarification: true, 
+          }
+        });
+      }
       
       // 记录成功日志
       logger.info('S0 goal refinement successful:', {
-        status: result.data.status,
+        status: validationResult.data.status,
         isFirstInteraction,
-        hasRecommendations: !!result.data.recommendations
+        hasRecommendations: !!validationResult.data.recommendations
       });
       
       logger.debug('S0 refinement completed successfully');
       
       return NextResponse.json({
         status: 'success',
-        data: result.data
+        data: validationResult.data
       });
       
     } catch (error) {

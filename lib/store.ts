@@ -106,6 +106,7 @@ interface CognitiveCoachStore {
   // Actions
   setCurrentState: (state: FSMState) => void;
   updateUserContext: (updates: Partial<UserContext>) => void;
+  batchUpdate: (updates: Partial<CognitiveCoachStore>) => void;
   addVersionSnapshot: () => void;
   setQaIssues: (stage: 'S1' | 'S2' | 'S3' | null, issues: CognitiveCoachStore['qaIssues']) => void;
   setLoading: (loading: boolean) => void;
@@ -172,6 +173,14 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       userContext: { ...state.userContext, ...updates }
     })),
   
+  // 批量更新方法 - 确保原子性操作
+  batchUpdate: (updates) => {
+    set((state) => ({
+      ...state,
+      ...updates,
+    }));
+  },
+  
   addVersionSnapshot: () => {
     const MAX_VERSIONS = 10; // 限制保存的版本数量
     const userContext = get().userContext;
@@ -211,20 +220,30 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     }),
 
   // 流式相关 Actions
-  startStreaming: (stage) => 
-    set((state) => ({
-      streaming: {
-        ...state.streaming,
-        isStreaming: true,
-        currentStage: stage,
-        cognitiveSteps: [],
-        streamContent: '',
-        microLearningTip: null,
-        streamError: null,
-      },
-      isLoading: true,
-      error: null,
-    })),
+  startStreaming: (stage) => {
+    console.log(`🚀 Starting streaming for stage: ${stage}`);
+    set((state) => {
+      const newState = {
+        streaming: {
+          ...state.streaming,
+          isStreaming: true,
+          currentStage: stage,
+          cognitiveSteps: [],
+          streamContent: '',
+          microLearningTip: null,
+          streamError: null,
+        },
+        isLoading: true,
+        error: null,
+      };
+      console.log('🔄 State updated:', {
+        isLoading: newState.isLoading,
+        isStreaming: newState.streaming.isStreaming,
+        currentStage: newState.streaming.currentStage
+      });
+      return newState;
+    });
+  },
 
   stopStreaming: () => 
     set((state) => ({

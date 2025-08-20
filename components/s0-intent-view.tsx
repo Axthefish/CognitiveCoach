@@ -19,6 +19,8 @@ interface S0IntentViewProps {
     examples: string[]
     description: string
   }>
+  forceClarification?: boolean
+  onForceProceed?: () => void
 }
 
 export default function S0IntentView({ 
@@ -26,7 +28,9 @@ export default function S0IntentView({
   conversationHistory = [], 
   aiQuestion,
   isConversationMode = false,
-  recommendations 
+  recommendations,
+  forceClarification = false,
+  onForceProceed,
 }: S0IntentViewProps) {
   const { userContext, updateUserContext } = useCognitiveCoachStore()
   const [userInput, setUserInput] = useState("")
@@ -244,7 +248,16 @@ export default function S0IntentView({
               </div>
             )}
             
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-end pt-4 space-x-2">
+              {forceClarification && (
+                <Button 
+                  onClick={onForceProceed}
+                  variant="outline"
+                  disabled={isLoading}
+                >
+                  目标已明确，直接开始
+                </Button>
+              )}
               <Button 
                 onClick={handleSubmit}
                 disabled={!userInput.trim() || isLoading}

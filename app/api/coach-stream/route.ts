@@ -54,9 +54,9 @@ interface CoachRequest {
   payload: CoachPayload;
 }
 
-// 流式响应辅助函数
+// 流式响应辅助函数 - 使用标准SSE格式
 function createStreamMessage(type: StreamMessage['type'], payload: StreamMessage['payload']): string {
-  return JSON.stringify({ type, payload }) + '\n';
+  return `data: ${JSON.stringify({ type, payload })}\n\n`;
 }
 
 // 预定义的认知步骤
@@ -156,9 +156,10 @@ export async function POST(request: NextRequest) {
     const errorStream = createStreamMessage('error', 'Too Many Requests');
     return new Response(encoder.encode(errorStream), {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Allow-Origin': origin || '*',
         'Retry-After': String(rl.retryAfter ?? 60),
       },
@@ -177,9 +178,10 @@ export async function POST(request: NextRequest) {
       const errorStream = createStreamMessage('error', '请求格式不正确，请检查您的输入并重试');
       return new Response(encoder.encode(errorStream), {
         headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
           'Access-Control-Allow-Origin': origin || '*',
         },
         status: 400,
@@ -235,9 +237,10 @@ export async function POST(request: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Allow-Origin': origin || '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
@@ -252,9 +255,10 @@ export async function POST(request: NextRequest) {
     const errorStream = createStreamMessage('error', errorMessage);
     return new Response(encoder.encode(errorStream), {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'Access-Control-Allow-Origin': origin || '*',
       },
       status: 500,
