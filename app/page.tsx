@@ -18,6 +18,7 @@ export default function Home() {
   const lastFailedStage = useCognitiveCoachStore(state => state.lastFailedStage);
   const isLoading = useCognitiveCoachStore(state => state.isLoading);
   const error = useCognitiveCoachStore(state => state.error);
+  const streaming = useCognitiveCoachStore(state => state.streaming);
   
   // 获取 actions（这些通常是稳定的，不会导致重渲染）
   const { setCurrentState, updateUserContext, setLoading, setError } = useCognitiveCoachStore();
@@ -51,10 +52,14 @@ export default function Home() {
   // 启动流式知识框架生成（使用新的store actions）
   const { startStreaming } = useCognitiveCoachStore();
   
-  const generateKnowledgeFramework = React.useCallback(async () => {
+  const generateKnowledgeFramework = React.useCallback(async (explicitGoal?: string) => {
     startStreaming('S1');
+    // 如果提供了明确的goal，将其存储到store中以供CognitiveStreamAnimator使用
+    if (explicitGoal && explicitGoal !== userContext.userGoal) {
+      updateUserContext({ userGoal: explicitGoal });
+    }
     // 实际的流式处理将由 CognitiveStreamAnimator 组件处理
-  }, [startStreaming]);
+  }, [startStreaming, updateUserContext, userContext.userGoal]);
 
   // S0状态的目标精炼处理 - 使用 useCallback 优化
   const handleGoalRefinement = React.useCallback(async (userInput: string) => {
@@ -124,8 +129,8 @@ export default function Home() {
           // 转换到下一个状态
           setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
           
-          // 触发S1的知识框架生成
-          await generateKnowledgeFramework();
+          // 触发S1的知识框架生成，直接传递精炼后的goal
+          await generateKnowledgeFramework(result.data.goal);
         }
       } else if (result.status === 'error') {
         setError(result.error || '目标精炼失败，请重试');
@@ -243,8 +248,8 @@ export default function Home() {
           </div>
         )}
         
-        {/* 加载遮罩 */}
-        {isLoading && (
+        {/* 加载遮罩 - 只在非流式模式下显示 */}
+        {isLoading && !streaming.isStreaming && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg">
               <div className="flex items-center space-x-4">

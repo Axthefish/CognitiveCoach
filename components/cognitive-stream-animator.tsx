@@ -45,7 +45,7 @@ export function CognitiveStreamAnimator({
   const [error, setError] = useState<string | null>(null);
   const [finalData, setFinalData] = useState<StreamResponseData | null>(null);
 
-  const { setLoading } = useCognitiveCoachStore();
+  const { startStreaming: startStreamingInStore, stopStreaming } = useCognitiveCoachStore();
 
   // 用于跟踪组件是否已卸载
   const isMountedRef = useRef(true);
@@ -94,18 +94,20 @@ export function CognitiveStreamAnimator({
         }
         break;
       
-      case 'error':
-        const errorMsg = message.payload as string;
-        setError(errorMsg);
-        setIsStreaming(false);
-        onError(errorMsg);
-        break;
+              case 'error':
+          const errorMsg = message.payload as string;
+          setError(errorMsg);
+          setIsStreaming(false);
+          stopStreaming();
+          onError(errorMsg);
+          break;
       
       case 'done':
         setIsStreaming(false);
+        stopStreaming();
         break;
     }
-  }, [onComplete, onError]);
+  }, [onComplete, onError, stopStreaming]);
 
   // 启动流式请求
   const startStreaming = useCallback(async () => {
@@ -119,14 +121,14 @@ export function CognitiveStreamAnimator({
     abortControllerRef.current = abortController;
     
     try {
-      if (isMountedRef.current) {
-        setLoading(true);
-        setIsStreaming(true);
-        setError(null);
-        setContent('');
-        setSteps([]);
-        setCurrentTip('');
-      }
+             if (isMountedRef.current) {
+         startStreamingInStore(stage);
+         setIsStreaming(true);
+         setError(null);
+         setContent('');
+         setSteps([]);
+         setCurrentTip('');
+       }
 
       // 构建请求体
       const actionMap = {
@@ -208,11 +210,12 @@ export function CognitiveStreamAnimator({
       const errorMsg = error instanceof Error ? error.message : '网络错误，请重试';
       setError(errorMsg);
       setIsStreaming(false);
+      stopStreaming();
       onError(errorMsg);
     } finally {
-      setLoading(false);
+      stopStreaming();
     }
-  }, [stage, requestPayload, processStreamMessage, onError, setLoading]);
+  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming]);
 
   // 组件挂载时启动流式请求
   useEffect(() => {

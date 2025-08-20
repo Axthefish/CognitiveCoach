@@ -1,5 +1,6 @@
 "use client"
 
+import React, { useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -14,8 +15,45 @@ interface S1KnowledgeFrameworkViewProps {
 }
 
 export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrameworkViewProps) {
-  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming, setError } = useCognitiveCoachStore();
   const framework = userContext.knowledgeFramework;
+  const hasStartedStream = useRef(false);
+
+  // 监听userGoal变化，确保在目标设置后才启动流式处理
+  useEffect(() => {
+    // 如果正在S1阶段加载，有有效的userGoal，但还没有启动流式处理
+    if (isLoading && 
+        streaming.currentStage === 'S1' && 
+        userContext.userGoal && 
+        userContext.userGoal.trim().length > 0 && 
+        !hasStartedStream.current) {
+      
+      hasStartedStream.current = true;
+      // CognitiveStreamAnimator会自动处理流式请求
+    }
+    
+    // 如果在S1阶段等待userGoal太长时间（超过5秒），显示错误
+    if (isLoading && 
+        streaming.currentStage === 'S1' && 
+        (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
+      
+      const timeout = setTimeout(() => {
+        if (isLoading && streaming.currentStage === 'S1' && (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
+          setError('目标精炼失败，请重新开始');
+          stopStreaming();
+        }
+      }, 5000); // 5秒超时
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [userContext.userGoal, isLoading, streaming.currentStage, setError, stopStreaming]);
+
+  // 重置流式处理状态当组件卸载时
+  useEffect(() => {
+    return () => {
+      hasStartedStream.current = false;
+    };
+  }, []);
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
@@ -52,6 +90,21 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 如果正在加载且当前阶段是 S1，显示流式动画器
   if (isLoading && streaming.currentStage === 'S1') {
+    // 确保 userGoal 存在且有效再启动流式处理
+    if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {
+      return (
+        <div className="animate-fade-in">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            正在准备学习目标...
+          </p>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="animate-fade-in">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
