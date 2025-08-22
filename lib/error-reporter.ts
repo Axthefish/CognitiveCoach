@@ -14,8 +14,8 @@ export function reportError(error: Error, context: Record<string, unknown> = {})
     
     // 在开发环境中存储到全局对象供调试
     if (typeof window !== 'undefined') {
-      (window as Record<string, unknown>).__errorReports = (window as Record<string, unknown>).__errorReports || [];
-      ((window as Record<string, unknown>).__errorReports as Record<string, unknown>[]).push(errorReport);
+      (window as unknown as Record<string, unknown>).__errorReports = (window as unknown as Record<string, unknown>).__errorReports || [];
+      ((window as unknown as Record<string, unknown>).__errorReports as Record<string, unknown>[]).push(errorReport);
     }
   } else if (process.env.NODE_ENV === 'production') {
     // 生产环境可以发送到监控服务
@@ -35,11 +35,11 @@ export function getDebugInfo() {
   if (typeof window === 'undefined') return null;
   
   return {
-    streamMessages: (window as Record<string, unknown>).__streamMessages || [],
-    streamErrors: (window as Record<string, unknown>).__streamErrors || [],
-    errorReports: (window as Record<string, unknown>).__errorReports || [],
+    streamMessages: (window as unknown as Record<string, unknown>).__streamMessages || [],
+    streamErrors: (window as unknown as Record<string, unknown>).__streamErrors || [],
+    errorReports: (window as unknown as Record<string, unknown>).__errorReports || [],
     performance: {
-      memory: (performance as PerformanceNavigatorTiming & { memory?: unknown }).memory,
+      memory: (performance as Performance & { memory?: unknown }).memory,
       navigation: performance.navigation,
       timing: performance.timing
     }
@@ -50,9 +50,9 @@ export function getDebugInfo() {
 export function clearDebugData() {
   if (typeof window === 'undefined') return;
   
-  delete (window as Record<string, unknown>).__streamMessages;
-  delete (window as Record<string, unknown>).__streamErrors;
-  delete (window as Record<string, unknown>).__errorReports;
+  delete (window as unknown as Record<string, unknown>).__streamMessages;
+  delete (window as unknown as Record<string, unknown>).__streamErrors;
+  delete (window as unknown as Record<string, unknown>).__errorReports;
   
   console.log('Debug data cleared');
 }

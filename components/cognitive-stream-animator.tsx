@@ -194,8 +194,8 @@ export function CognitiveStreamAnimator({
                 
                 // 开发环境调试记录
                 if (process.env.NODE_ENV === 'development') {
-                  (window as Record<string, unknown>).__streamMessages = (window as Record<string, unknown>).__streamMessages || [];
-                  ((window as Record<string, unknown>).__streamMessages as Record<string, unknown>[]).push({
+                  (window as unknown as Record<string, unknown>).__streamMessages = (window as unknown as Record<string, unknown>).__streamMessages || [];
+                  ((window as unknown as Record<string, unknown>).__streamMessages as Record<string, unknown>[]).push({
                     timestamp: Date.now(),
                     stage,
                     message,
@@ -216,8 +216,8 @@ export function CognitiveStreamAnimator({
                 
                 // 开发环境错误记录
                 if (process.env.NODE_ENV === 'development') {
-                  (window as Record<string, unknown>).__streamErrors = (window as Record<string, unknown>).__streamErrors || [];
-                  ((window as Record<string, unknown>).__streamErrors as Record<string, unknown>[]).push({
+                  (window as unknown as Record<string, unknown>).__streamErrors = (window as unknown as Record<string, unknown>).__streamErrors || [];
+                  ((window as unknown as Record<string, unknown>).__streamErrors as Record<string, unknown>[]).push({
                     timestamp: Date.now(),
                     stage,
                     line,
