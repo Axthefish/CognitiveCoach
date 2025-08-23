@@ -10,6 +10,7 @@ import S4AutonomousOperationView from '@/components/s4-autonomous-operation-view
 import FsmNavigator from '@/components/fsm-navigator';
 import { State } from '@/lib/types';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { enhancedFetch, NetworkError } from '@/lib/network-utils';
 
 export default function Home() {
   // 优化：分别获取状态，避免不必要的重渲染
@@ -76,7 +77,7 @@ export default function Home() {
       const conversationHistory = userContext.goalConversationHistory || [];
       
       // 调用API进行目标精炼
-      const response = await fetch('/api/coach', {
+      const response = await enhancedFetch('/api/coach', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,6 +89,8 @@ export default function Home() {
             conversationHistory 
           }
         }),
+        timeout: 30000,
+        retries: 2,
       });
 
       const result = await response.json();
@@ -149,7 +152,21 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error refining goal:', error);
-      setError('网络错误，请检查连接后重试');
+      if (error instanceof Error && 'type' in error) {
+        // NetworkError with enhanced error info
+        const networkError = error as NetworkError;
+        if (networkError.type === 'timeout') {
+          setError('请求超时，请稍后重试');
+        } else if (networkError.type === 'network') {
+          setError('网络连接失败，请检查您的网络连接');
+        } else if (networkError.type === 'server') {
+          setError('服务器暂时不可用，请稍后重试');
+        } else {
+          setError(networkError.message || '请求失败，请重试');
+        }
+      } else {
+        setError('网络错误，请检查连接后重试');
+      }
     } finally {
       setLoading(false);
     }

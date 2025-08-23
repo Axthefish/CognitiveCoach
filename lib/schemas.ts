@@ -34,11 +34,17 @@ export const S0RefineGoalSchema = z.object({
     category: z.string(),
     examples: z.array(z.string()),
     description: z.string()
+    // TODO: 扩展点 - 可添加 allow_multiple: z.boolean().optional(), is_other: z.boolean().optional()
   })).optional(),
   // Make metadata fields optional to match AI output capabilities
   evidence: EvidenceArraySchema.optional(),
   confidence: ConfidenceSchema.optional(),
   applicability: ApplicabilitySchema.optional(),
+  // TODO: 扩展点 - 可添加以下字段以支持更丰富的交互：
+  // question_type: z.enum(['form', 'choice', 'confirmation']).optional(),
+  // missing_fields: z.array(z.string()).optional(),
+  // assumptions: z.array(z.string()).optional(),
+  // draft_goal: z.string().optional(),
 }).strict();
 
 // S1 knowledge framework node

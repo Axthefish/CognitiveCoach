@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Gauge, TrendingUp, Target, MessageSquarePlus, Send, X, BarChart3 } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { enhancedFetch, NetworkError } from "@/lib/network-utils"
 
 export default function S4AutonomousOperationView() {
   const { userContext, isLoading, setLoading, setError } = useCognitiveCoachStore()
@@ -39,7 +40,7 @@ export default function S4AutonomousOperationView() {
     setError(null)
     
     try {
-      const response = await fetch('/api/coach', {
+      const response = await enhancedFetch('/api/coach', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,6 +62,8 @@ export default function S4AutonomousOperationView() {
             }
           }
         }),
+        timeout: 30000,
+        retries: 2,
       })
 
       const result = await response.json()
@@ -72,7 +75,20 @@ export default function S4AutonomousOperationView() {
       }
     } catch (error) {
       console.error('Error analyzing progress:', error)
-      setError('网络错误，请检查连接后重试')
+      if (error instanceof Error && 'type' in error) {
+        const networkError = error as NetworkError;
+        if (networkError.type === 'timeout') {
+          setError('分析请求超时，请稍后重试');
+        } else if (networkError.type === 'network') {
+          setError('网络连接失败，请检查您的网络连接');
+        } else if (networkError.type === 'server') {
+          setError('服务器暂时不可用，请稍后重试');
+        } else {
+          setError(networkError.message || '分析失败，请重试');
+        }
+      } else {
+        setError('网络错误，请检查连接后重试');
+      }
     } finally {
       setLoading(false)
     }
@@ -86,7 +102,7 @@ export default function S4AutonomousOperationView() {
     setConsultResponse("")
     
     try {
-      const response = await fetch('/api/coach', {
+      const response = await enhancedFetch('/api/coach', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,6 +119,8 @@ export default function S4AutonomousOperationView() {
             }
           }
         }),
+        timeout: 45000,
+        retries: 1,
       })
 
       const result = await response.json()
@@ -114,7 +132,20 @@ export default function S4AutonomousOperationView() {
       }
     } catch (error) {
       console.error('Error consulting:', error)
-      setConsultResponse('网络错误，请检查连接后重试。')
+      if (error instanceof Error && 'type' in error) {
+        const networkError = error as NetworkError;
+        if (networkError.type === 'timeout') {
+          setConsultResponse('咨询请求超时，请稍后重试。');
+        } else if (networkError.type === 'network') {
+          setConsultResponse('网络连接失败，请检查您的网络连接后重试。');
+        } else if (networkError.type === 'server') {
+          setConsultResponse('服务器暂时不可用，请稍后重试。');
+        } else {
+          setConsultResponse(networkError.message || '咨询失败，请稍后重试。');
+        }
+      } else {
+        setConsultResponse('网络错误，请检查连接后重试。');
+      }
     } finally {
       setIsConsulting(false)
     }

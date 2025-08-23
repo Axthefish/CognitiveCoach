@@ -113,9 +113,9 @@ export const S0_TEMPLATES = {
         input: '我想学编程',
         output: JSON.stringify({
           status: 'clarification_needed',
-          ai_question: '您想学习编程的哪个方向呢？是Web开发、移动应用开发，还是数据科学相关的编程？'
+          ai_question: '为加速明确目标，请一次性回答：1) 具体编程主题（如Web开发、Python数据分析、移动应用开发）；2) 期望产出（作品/证书/岗位能力）；3) 时间范围（如3个月内）。若已有部分明确，仅补充缺失项即可。'
         }, null, 2),
-        explanation: 'Goal is too broad, needs direction clarification'
+        explanation: 'Goal is too broad, use structured one-shot clarification'
       },
       {
         input: '学习 React 构建现代 Web 应用，在3个月内完成一个完整项目',
@@ -129,32 +129,50 @@ export const S0_TEMPLATES = {
         input: '不知道学什么，请推荐',
         output: JSON.stringify({
           status: 'recommendations_provided',
-          ai_question: '基于您的兴趣，我为您准备了几个学习方向的推荐。请问您对以下哪个领域最感兴趣？',
+          ai_question: '基于不同发展方向，我为您推荐以下学习领域。您可以选择1-2个感兴趣的方向，或者在"其他/自定义"中描述您的具体需求：',
           recommendations: [
             {
               category: '技术开发',
-              examples: ['Web开发', '人工智能', '移动应用'],
-              description: '学习编程和软件开发相关技能'
+              examples: ['Web开发', 'Python编程', '移动应用开发'],
+              description: '掌握编程技能，构建软件产品'
             },
             {
               category: '数据分析',
-              examples: ['数据科学', '商业分析', '数据可视化'],
-              description: '学习如何分析和解释数据'
+              examples: ['数据科学', 'Excel高级应用', 'Power BI'],
+              description: '学习数据处理与商业洞察分析'
+            },
+            {
+              category: '设计创作',
+              examples: ['UI/UX设计', '平面设计', '视频剪辑'],
+              description: '培养视觉设计与创意表达能力'
+            },
+            {
+              category: '职业技能',
+              examples: ['项目管理', '演讲表达', '英语口语'],
+              description: '提升职场竞争力和沟通协作能力'
+            },
+            {
+              category: '其他/自定义',
+              examples: ['请描述您的具体学习需求'],
+              description: '如果以上都不合适，请告诉我您想学习的具体内容'
             }
           ]
         }, null, 2),
-        explanation: 'User asks for recommendations, provide categorized options'
+        explanation: 'User asks for recommendations, provide 4 diverse categories plus custom option'
       }
     ],
     constraints: [
       'Always respond in Simplified Chinese (简体中文)',
       'Maintain a friendly and encouraging tone',
-      'Ask only ONE question at a time when clarifying',
+      // 新约束：优先一次性补齐关键信息，总澄清不超过2轮
+      '优先一次性补齐关键信息（主题/期望产出/时间范围），必要时可追加最多1轮微澄清；总澄清不超过2轮',
+      '仅针对未确认字段发问；不得重复询问已确认维度',
+      '追问与建议必须显式引用已确认字段，严禁偏题',
+      '提供推荐时，给出3-5个多样化选项，并包含"其他/自定义"；避免二选一措辞；允许用户补充文本',
+      '若2轮澄清后仍不完整，生成含合理假设的草拟目标并请用户一次性确认或指出需要修改的最多2处',
       'Focus on making goals specific, measurable, and achievable',
       'A clarified goal must include a specific subject and a desired outcome.',
-      'After 2-3 rounds of questions, if the goal has a subject and an outcome, you should transition to the "clarified" status.',
-      'Consider scope, timeline, specific outcomes, and measurable results',
-      'If user input is vague or asks for recommendations, provide 2-3 specific options'
+      'Consider scope, timeline, specific outcomes, and measurable results'
     ],
     outputFormat: {
       type: 'json',
@@ -509,12 +527,13 @@ export class DynamicPromptBuilder {
 
 // 预定义的动态调整策略
 export const PROMPT_STRATEGIES = {
-  // 当用户输入模糊时
+  // 当用户输入模糊时 - 优化为一次性表单式澄清
   vague_input: (builder: DynamicPromptBuilder) => {
     return builder
       .withConstraints(
-        'The user input is vague - help clarify direction through targeted questions',
-        'Provide 2-3 specific options for user selection',
+        'The user input is vague - help clarify direction through structured one-shot form',
+        'Provide 3-5 diverse options plus an "other/custom" option; avoid binary A-or-B wording; prefer one-shot form-style clarification first',
+        '若用户已提供主题或产出，追问仅补齐缺失维度，避免重复',
         'Guide the conversation towards concrete, actionable goals'
       )
       .withAdditionalContext('User may need more guidance and suggestions to clarify intentions');

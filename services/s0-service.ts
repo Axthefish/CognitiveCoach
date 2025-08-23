@@ -78,8 +78,9 @@ export class S0Service {
       
       logger.debug('Calling AI with prompt length:', prompt.length);
 
-      // 定义对话轮次阈值
-      const CONVERSATION_TURN_THRESHOLD = 5; // ~2-3轮对话
+      // 计算用户澄清轮次（排除首次输入，只计算user消息）
+      const userClarificationRounds = conversationHistory.filter(msg => msg.role === 'user').length;
+      const CLARIFICATION_ROUND_LIMIT = 2; // 与模板承诺一致：最多2轮澄清
       
       // 使用智能重试机制调用 AI
       const result = await generateJsonWithRetry<RefineGoalResponse>(
@@ -121,18 +122,20 @@ export class S0Service {
         });
       }
 
-      // 如果对话轮次超过阈值，且AI仍在追问，则给予用户选择权
+      // 如果澄清轮次达到限制，生成草拟目标或强制确认
       if (
-        conversationHistory.length >= CONVERSATION_TURN_THRESHOLD &&
+        userClarificationRounds >= CLARIFICATION_ROUND_LIMIT &&
         validationResult.data.status === 'clarification_needed'
       ) {
-        logger.info(`Conversation turn threshold reached. Forcing clarification option for user.`);
-        // 在返回数据中添加一个标志，让前端知道应该显示确认按钮
+        logger.info(`Clarification round limit reached (${userClarificationRounds}/${CLARIFICATION_ROUND_LIMIT}). Generating draft goal for confirmation.`);
+        
+        // 生成含合理假设的草拟目标供用户确认
+        const draftGoal = this.generateDraftGoalFromHistory(conversationHistory, payload.userInput);
         return NextResponse.json({
           status: 'success',
           data: {
-            ...validationResult.data,
-            force_clarification: true, 
+            status: 'clarification_needed',
+            ai_question: `基于我们的对话，我生成了一个草拟目标："${draftGoal}"。请确认是否正确，或指出需要修改的最多2处地方。如果基本正确，回复"确认"即可进入下一阶段。`
           }
         });
       }
@@ -186,8 +189,9 @@ export class S0Service {
     }
   }
   
-  // 判断用户输入是否模糊
+  // 判断用户输入是否模糊 - 优化误触发，加入具体实体检测
   private isVagueInput(input: string): boolean {
+    // 模糊指示词模式
     const vaguePatterns = [
       /不知道/,
       /不确定/,
@@ -200,7 +204,22 @@ export class S0Service {
       /暂时/
     ];
     
-    return vaguePatterns.some(pattern => pattern.test(input)) || input.length < 10;
+    // 具体实体/关键词模式 - 如果包含这些则不视为模糊
+    const specificEntityPatterns = [
+      /React|Vue|Angular|JavaScript|TypeScript|Python|Java|C\+\+|Go/i,
+      /雅思|托福|CFA|PMP|CISSP|AWS|Azure|GCP/i,
+      /产品经理|数据分析师|UI设计师|前端|后端|全栈/i,
+      /机器学习|人工智能|区块链|云计算|大数据/i,
+      /英语|日语|韩语|德语|法语|西班牙语/i,
+      /\d+个?月|\d+周|\d+天/  // 时间表达
+    ];
+    
+    const hasVagueWords = vaguePatterns.some(pattern => pattern.test(input));
+    const hasSpecificEntities = specificEntityPatterns.some(pattern => pattern.test(input));
+    const isTooShort = input.length < 5; // 降低长度阈值从10到5
+    
+    // 仅当包含模糊指示词且缺少具体实体时才判定为模糊
+    return (hasVagueWords && !hasSpecificEntities) || isTooShort;
   }
   
   // 格式化对话历史
@@ -212,7 +231,7 @@ export class S0Service {
       .join('\n');
   }
   
-  // 处理空响应的智能 fallback
+  // 处理空响应的智能 fallback - 使用结构化一次性补齐
   private handleEmptyResponseFallback(
     payload: RefineGoalPayload,
     conversationHistory: ConversationMessage[]
@@ -221,26 +240,90 @@ export class S0Service {
     
     // 用户表示完成或确认
     if (this.isCompletionSignal(lastUserInput)) {
-      const firstUserInput = conversationHistory.find(msg => msg.role === 'user')?.content || '';
-      const fallbackGoal = this.generateFallbackGoal(firstUserInput);
+      const draftGoal = this.generateDraftGoalFromHistory(conversationHistory, payload.userInput);
       
       return NextResponse.json({
         status: 'success',
         data: {
           status: 'clarified',
-          goal: fallbackGoal
+          goal: draftGoal
         }
       });
     }
     
-    // 继续对话
+    // 使用结构化一次性补齐方式继续对话
     return NextResponse.json({
       status: 'success',
       data: {
         status: 'clarification_needed',
-        ai_question: '我想确保完全理解您的学习目标。您能再详细描述一下您希望达到的具体成果吗？'
+        ai_question: '为加速明确目标，请一次性回答：1) 具体学习主题（如React、数据分析、英语口语）；2) 期望产出（作品/证书/岗位能力）；3) 时间范围（如3个月内）。若已有部分明确，仅补充缺失项即可。'
       }
     });
+  }
+  
+  // 基于对话历史生成草拟目标
+  private generateDraftGoalFromHistory(
+    conversationHistory: ConversationMessage[],
+    currentInput: string
+  ): string {
+    // 提取所有用户输入
+    const allUserInputs = [
+      ...conversationHistory.filter(msg => msg.role === 'user').map(msg => msg.content),
+      currentInput
+    ].join(' ');
+    
+    // 提取关键信息
+    const keywords = this.extractKeywords(allUserInputs);
+    const timeframe = this.extractTimeframe(allUserInputs) || '3个月';
+    const outcome = this.extractOutcome(allUserInputs) || '熟练掌握相关技能';
+    
+    if (keywords.length > 0) {
+      return `在${timeframe}内学习并掌握${keywords.join('、')}，目标达到${outcome}的水平，能够独立完成相关实践项目`;
+    }
+    
+    return `在${timeframe}内完成学习目标，达到${outcome}的水平，能够熟练应用所学内容`;
+  }
+  
+  // 提取时间框架
+  private extractTimeframe(text: string): string | null {
+    const timePatterns = [
+      /(\d+)个?月/,
+      /(\d+)周/,
+      /(\d+)天/,
+      /半年/,
+      /一年/
+    ];
+    
+    for (const pattern of timePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        return match[0];
+      }
+    }
+    
+    return null;
+  }
+  
+  // 提取期望产出
+  private extractOutcome(text: string): string | null {
+    const outcomePatterns = [
+      /找工作|求职|就业/,
+      /项目|作品|产品/,
+      /证书|认证|考试/,
+      /技能|能力|水平/,
+      /创业|自主/
+    ];
+    
+    for (const pattern of outcomePatterns) {
+      if (pattern.test(text)) {
+        if (pattern.source.includes('工作')) return '就业准备';
+        if (pattern.source.includes('项目')) return '项目实践';
+        if (pattern.source.includes('证书')) return '获得认证';
+        if (pattern.source.includes('创业')) return '创业应用';
+      }
+    }
+    
+    return null;
   }
   
   // 判断是否为完成信号
