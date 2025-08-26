@@ -10,6 +10,7 @@ import { FrameworkNode } from "@/lib/types"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { reportError } from "@/lib/error-reporter"
 
 interface S1KnowledgeFrameworkViewProps {
@@ -128,9 +129,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
           <p className="text-gray-600 dark:text-gray-400 mb-8">
             正在准备学习目标...
           </p>
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
+          <LoadingOverlay variant="inline" stage="S1" message="正在整理你的目标..." />
         </div>
       );
     }

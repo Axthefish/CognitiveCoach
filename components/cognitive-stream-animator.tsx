@@ -51,14 +51,17 @@ export function CognitiveStreamAnimator({
   // 用于跟踪组件是否已卸载
   const isMountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hasStartedRef = useRef(false);
   
   // 组件卸载时清理
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      hasStartedRef.current = false;
       // 取消正在进行的请求
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
   }, []);
@@ -116,6 +119,14 @@ export function CognitiveStreamAnimator({
     if (!isMountedRef.current) {
       return;
     }
+    
+    // 防止重复启动：如果已经有进行中的请求或已经启动过，直接返回
+    if (abortControllerRef.current || hasStartedRef.current) {
+      return;
+    }
+    
+    // 标记已启动
+    hasStartedRef.current = true;
     
     // 创建新的AbortController
     const abortController = new AbortController();
@@ -189,6 +200,9 @@ export function CognitiveStreamAnimator({
                 if (line.startsWith('data: ')) {
                   jsonStr = line.substring(6);  // 移除 "data: " 前缀
                 }
+                // 兼容 CRLF 与尾随空白
+                jsonStr = jsonStr.trim();
+                if (!jsonStr) continue;
                 
                 const message: StreamMessage = JSON.parse(jsonStr);
                 
@@ -240,9 +254,14 @@ export function CognitiveStreamAnimator({
           if (buffer.startsWith('data: ')) {
             jsonStr = buffer.substring(6);  // 移除 "data: " 前缀
           }
+          jsonStr = jsonStr.trim();
+          if (!jsonStr) {
+            // nothing left to parse
+          } else {
           
-          const message: StreamMessage = JSON.parse(jsonStr);
-          processStreamMessage(message);
+            const message: StreamMessage = JSON.parse(jsonStr);
+            processStreamMessage(message);
+          }
         } catch (parseError) {
           console.warn('Failed to parse final stream message:', buffer, parseError);
         }
@@ -265,14 +284,19 @@ export function CognitiveStreamAnimator({
       stopStreaming();
       onError(errorMsg);
     } finally {
+      // 清理标记和 controller
+      hasStartedRef.current = false;
+      abortControllerRef.current = null;
       stopStreaming();
     }
-  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming, isStreaming, steps]);
+  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming]);
 
-  // 组件挂载时启动流式请求
+  // 组件挂载或 stage 改变时启动流式请求
   useEffect(() => {
+    // 重置启动标记，允许为新的 stage 启动
+    hasStartedRef.current = false;
     startStreaming();
-  }, [startStreaming]);
+  }, [stage]);
 
   // 如果出现错误，显示错误状态
   if (error) {

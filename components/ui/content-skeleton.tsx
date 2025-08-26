@@ -1,6 +1,7 @@
 "use client"
 
 import React from 'react';
+import { LoadingOverlay } from './loading-overlay';
 
 interface ContentSkeletonProps {
   stage: 'S0' | 'S1' | 'S2' | 'S3' | 'S4';
@@ -136,12 +137,7 @@ export function ContentSkeleton({ stage }: ContentSkeletonProps) {
       </div>
       
       {/* 底部提示 */}
-      <div className="text-center">
-        <div className="inline-flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
-          <div className="w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded-full animate-spin" />
-          <span>AI 正在思考中，请稍候...</span>
-        </div>
-      </div>
+      <LoadingOverlay variant="inline" stage={stage} />
     </div>
   );
 }

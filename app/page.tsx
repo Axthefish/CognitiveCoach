@@ -10,6 +10,7 @@ import S4AutonomousOperationView from '@/components/s4-autonomous-operation-view
 import FsmNavigator from '@/components/fsm-navigator';
 import { State } from '@/lib/types';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { enhancedFetch, NetworkError } from '@/lib/network-utils';
 
 export default function Home() {
@@ -185,6 +186,11 @@ export default function Home() {
 
   // 生成系统动力学（流式版本）
   const generateSystemDynamics = async (): Promise<boolean> => {
+    // 前置条件：必须有 S1 知识框架
+    if (!userContext.knowledgeFramework || userContext.knowledgeFramework.length === 0) {
+      setError('请先完成 S1：知识框架尚未生成');
+      return false;
+    }
     setTimeout(() => {
       startStreaming('S2');
     }, 0);
@@ -193,6 +199,15 @@ export default function Home() {
 
   // 生成行动计划（流式版本）
   const generateActionPlan = async (): Promise<boolean> => {
+    // 前置条件：需要 S1 知识框架与已确认的学习目标
+    if (!userContext.knowledgeFramework || userContext.knowledgeFramework.length === 0) {
+      setError('缺少知识框架，无法生成行动计划');
+      return false;
+    }
+    if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {
+      setError('缺少学习目标，无法生成行动计划');
+      return false;
+    }
     setTimeout(() => {
       startStreaming('S3');
     }, 0);
@@ -312,16 +327,11 @@ export default function Home() {
         
         {/* 加载遮罩 - 只在非流式模式下显示 */}
         {isLoading && !streaming.isStreaming && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg">
-              <div className="flex items-center space-x-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="text-lg font-semibold text-gray-700 dark:text-gray-200">
-                  AI 正在生成内容...
-                </span>
-              </div>
-            </div>
-          </div>
+          <LoadingOverlay 
+            variant="blocking" 
+            stage={currentStateId as 'S0' | 'S1' | 'S2' | 'S3' | 'S4'} 
+            message="AI 正在构思与结构化内容..." 
+          />
         )}
         
         {/* QA Issues banner */}
