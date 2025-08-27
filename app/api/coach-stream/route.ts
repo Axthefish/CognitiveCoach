@@ -594,36 +594,62 @@ async function handleGenerateSystemDynamicsStream(
     steps[1].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
+    // Extract all S1 framework IDs for coverage requirement
+    const extractFrameworkIds = (framework: any): string[] => {
+      const ids: string[] = [];
+      const walk = (node: any) => {
+        if (!node || typeof node !== 'object') return;
+        if (typeof node.id === 'string') ids.push(node.id);
+        if (Array.isArray(node.children)) node.children.forEach(walk);
+      };
+      if (Array.isArray(framework)) framework.forEach(walk);
+      else walk(framework);
+      return ids;
+    };
+    
+    const s1Ids = extractFrameworkIds(payload.framework);
+    const s1IdsExample = s1Ids.slice(0, 2).map(id => `    { "id": "${id}", "title": "<中文名称或与 S1 同步>" }`).join(',\n');
+
     const prompt = `基于以下知识框架，创建一个系统动力学图表和一个生动的比喻：
 
 知识框架：
 ${frameworkDescription}
 
-请完成两个任务：
+请完成三个关键任务：
 
 1. 创建一个Mermaid流程图，展示这些知识点之间的关系和学习流程。
 2. 创建一个生动形象的比喻，帮助理解整个学习过程。
+3. **MUST包含nodes数组**：必须包含所有S1框架中的ID，不能遗漏任何一个。
+
+**CRITICAL REQUIREMENT**: nodes数组必须完全覆盖所有S1框架ID。
+- ID集合必须完全等同于S1框架的id集合（原样使用，不要标准化）
+- 不允许额外的ID
+- 如果S1某个id没有清晰的标签，请复用其id作为title
 
 请严格按照以下JSON格式返回（不要包含任何其他文字）：
 {
   "mermaidChart": "以 graph TD 开头的 Mermaid 图，不要添加 <br/>",
   "metaphor": "一个生动的比喻（50-100字）",
-  "nodes": [{ "id": "<与框架一致>", "title": "<中文>" }],
+  "nodes": [
+${s1IdsExample}
+  ],
   "evidence": [],
   "confidence": 0.6,
   "applicability": ""
 }
 
-      Mermaid图表要求：
-      - 使用graph TD（从上到下）
-      - 节点使用中文标签
-      - 展示学习路径和知识点之间的关系
-      - 包含反馈循环或进阶路径
+Mermaid图表要求：
+- 使用graph TD（从上到下）
+- 节点使用中文标签
+- 展示学习路径和知识点之间的关系
+- 包含反馈循环或进阶路径
 
 比喻要求：
 - 使用日常生活中的事物
 - 能够形象地说明学习过程
-- 与知识框架内容相关`;
+- 与知识框架内容相关
+
+请只返回JSON格式内容。`;
 
     await new Promise(resolve => setTimeout(resolve, 1000));
     steps[1].status = 'completed';
@@ -684,22 +710,95 @@ ${frameworkDescription}
       throw new Error('SCHEMA');
     }
 
+    // Helper function to extract nodes from framework
+    function extractNodesFromFramework(fw: KnowledgeFramework): Array<{ id: string; title: string }> {
+      const out: Array<{ id: string; title: string }> = [];
+      const walk = (n: any) => {
+        if (!n || typeof n !== 'object') return;
+        if (typeof n.id === 'string') out.push({ id: n.id, title: typeof n.title === 'string' ? n.title : n.id });
+        if (Array.isArray(n.children)) n.children.forEach(walk);
+      };
+      fw.forEach(walk);
+      return out;
+    }
+
     const qa = runQualityGates('S2', dynamics, { framework: payload.framework });
     if (!qa.passed) {
-      steps[3].status = 'error';
-      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('QA', 'Quality gates failed');
-      throw new Error('QA');
+      // Check if any issue is a schema blocker
+      const schemaBlockers = qa.issues.filter(i => i.severity === 'blocker' && i.area === 'schema');
+      
+      if (schemaBlockers.length > 0) {
+        // Keep current behavior for schema errors
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('SCHEMA', 'Schema validation failed');
+        throw new Error('SCHEMA');
+      }
+      
+      // Non-schema blockers or only warnings - apply auto-repair
+      logger.info('S2 QA failed but non-schema, applying auto-repair', { 
+        traceId,
+        issueCount: qa.issues.length,
+        blockerCount: qa.issues.filter(i => i.severity === 'blocker').length
+      });
+      
+      // Derive nodes from S1 framework
+      const frameworkNodes = extractNodesFromFramework(payload.framework);
+      
+      // Ensure dynamics.nodes exists and merge
+      if (!dynamics.nodes || !Array.isArray(dynamics.nodes)) {
+        dynamics.nodes = [];
+      }
+      
+      // Create a union by id (prefer model-provided title, fallback to framework title)
+      const nodeMap = new Map<string, { id: string; title: string }>();
+      
+      // First add framework nodes (fallback)
+      frameworkNodes.forEach(node => {
+        nodeMap.set(node.id, node);
+      });
+      
+      // Then add model-provided nodes (preferred)
+      dynamics.nodes.forEach(node => {
+        if (node.id && node.title) {
+          nodeMap.set(node.id, { id: node.id, title: node.title });
+        }
+      });
+      
+      // Update dynamics with merged nodes
+      dynamics.nodes = Array.from(nodeMap.values());
+      
+      // Send informative message
+      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', {
+        steps: steps.map(s => ({ ...s, status: s.status })),
+        message: 'Quality gates warnings found, applying safe fallback to ensure continuity.'
+      })));
+      
+      logger.info('S2 auto-repair completed', {
+        traceId,
+        derivedNodesCount: frameworkNodes.length,
+        finalNodesCount: dynamics.nodes.length,
+        missingResolved: frameworkNodes.length - (dynamics.nodes?.length || 0)
+      });
     }
 
     await new Promise(resolve => setTimeout(resolve, 500));
     steps[3].status = 'completed';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
-    controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
-      status: 'success',
-      data: dynamics
-    })));
+    // Prepare final response with warning flags if auto-repair was applied
+    const finalResponse = {
+      status: 'success' as const,
+      data: {
+        ...dynamics,
+        ...(qa.passed ? {} : {
+          requiresHumanReview: true,
+          qaIssues: qa.issues
+        })
+      }
+    };
+
+    controller.enqueue(encoder.encode(createStreamMessage('data_structure', finalResponse)));
     
   } catch (error) {
     steps.forEach(s => { if (s.status === 'in_progress') s.status = 'error'; });

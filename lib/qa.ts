@@ -45,13 +45,19 @@ export function runQualityGates(
     addIssue(issues, { severity: 'blocker', area: 'schema', hint: message, targetPath: stage });
   }
 
-  // S1 -> S2 consistency: key framework ids must appear in S2 nodes
+  // S1 -> S2 consistency: key framework ids must appear in S2 nodes (with tolerance)
   if (stage === 'S2' && context?.framework && Array.isArray((output as { nodes?: Array<{ id: string }> })?.nodes)) {
     const fwIds = new Set(extractFrameworkIds(context.framework as Record<string, unknown> | Array<unknown>).map(normalizeId));
     const nodeIds = new Set(((output as { nodes?: Array<{ id: string }> }).nodes || []).map(n => normalizeId(n.id)));
     const missing = [...fwIds].filter(id => !nodeIds.has(id));
     if (missing.length > 0) {
-      addIssue(issues, { severity: 'blocker', area: 'consistency', hint: `Framework ids not found in S2.nodes: ${missing.join(', ')}`, targetPath: 'nodes' });
+      const severity = classifyS2CoverageSeverity(fwIds.size, missing);
+      addIssue(issues, { 
+        severity, 
+        area: severity === 'blocker' ? 'consistency' : 'coverage', 
+        hint: `Framework ids not found in S2.nodes: ${missing.join(', ')} (${missing.length}/${fwIds.size} missing)`, 
+        targetPath: 'nodes' 
+      });
     }
   }
 
@@ -112,7 +118,25 @@ export function runQualityGates(
     }
   }
 
-  return { passed: issues.length === 0, issues };
+  // Only blocker issues cause failure
+  const blockers = issues.filter(i => i.severity === 'blocker');
+  return { passed: blockers.length === 0, issues };
+}
+
+// Helper function to classify S2 coverage severity with tolerance
+function classifyS2CoverageSeverity(totalIds: number, missing: string[]): IssueSeverity {
+  const missingCount = missing.length;
+  
+  if (missingCount === 0) {
+    return 'warn'; // This shouldn't be called, but for safety
+  }
+  
+  // Tolerance: if missing <= 3 OR missing percentage <= 40%, downgrade to warn
+  if (missingCount <= 3 || (missingCount / totalIds) <= 0.4) {
+    return 'warn';
+  }
+  
+  return 'blocker';
 }
 
 export function normalizeId(id: string): string {

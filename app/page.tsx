@@ -330,7 +330,7 @@ export default function Home() {
           <LoadingOverlay 
             variant="blocking" 
             stage={currentStateId as 'S0' | 'S1' | 'S2' | 'S3' | 'S4'} 
-            message="AI 正在构思与结构化内容..." 
+            message={currentStateId === 'S0' ? "AI 正在理解与校准你的目标…" : undefined} 
           />
         )}
         

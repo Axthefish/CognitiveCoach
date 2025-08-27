@@ -29,6 +29,23 @@ export function LoadingOverlay({
 }: LoadingOverlayProps) {
   const { streaming } = useCognitiveCoachStore();
   const [currentTip, setCurrentTip] = useState<LoadingTip | null>(null);
+  
+  // S0 soft phases state
+  const [phaseIndex, setPhaseIndex] = useState(0);
+  const [showLongWaitHelper, setShowLongWaitHelper] = useState(false);
+  
+  // S0 phases definition
+  const s0Phases = [
+    { id: 'parse', label: '解析输入' },
+    { id: 'extract', label: '抽取要点' },
+    { id: 'draft', label: '生成候选' }
+  ];
+  
+  const s0PhaseMessages = [
+    "AI 正在理解你的目标与上下文…",
+    "正在抽取目标中的关键要素与边界…",
+    "正在生成更明确、可执行的目标候选…"
+  ];
 
   // Get tips for the stage
   const stageTips = getTipsForStage(stage);
@@ -49,6 +66,30 @@ export function LoadingOverlay({
     return () => clearInterval(interval);
   }, [stageTips, showTips]);
 
+  // S0 phase cycling and long wait helper
+  useEffect(() => {
+    if (stage !== 'S0') {
+      setPhaseIndex(0);
+      setShowLongWaitHelper(false);
+      return;
+    }
+
+    // Cycle through phases every 1200-1800ms (randomized)
+    const phaseInterval = setInterval(() => {
+      setPhaseIndex(prevIndex => (prevIndex + 1) % s0Phases.length);
+    }, 1200 + Math.random() * 600);
+
+    // Show helper text after 5 seconds
+    const helperTimer = setTimeout(() => {
+      setShowLongWaitHelper(true);
+    }, 5000);
+
+    return () => {
+      clearInterval(phaseInterval);
+      clearTimeout(helperTimer);
+    };
+  }, [stage, s0Phases.length]);
+
   // 计算真实步骤进度
   const steps = streaming.cognitiveSteps;
   const total = steps.length;
@@ -66,8 +107,18 @@ export function LoadingOverlay({
     ? `AI 正在进行${STAGE_LABELS[stage]}分析...`
     : 'AI 正在准备中...';
 
-  // 如果有当前步骤信息，优先使用；否则使用估算进度或默认消息
-  const finalMessage = currentMsg || message || defaultMessage;
+  // Determine final message with priority order
+  let finalMessage: string;
+  if (currentMsg) {
+    // S1-S3 in-progress step exists - use its message (unchanged)
+    finalMessage = currentMsg;
+  } else if (stage === 'S0' && progress === null) {
+    // S0 soft phases active - show phase-specific message
+    finalMessage = s0PhaseMessages[phaseIndex];
+  } else {
+    // Fallback to provided message or default
+    finalMessage = message || defaultMessage;
+  }
 
   // 错误态组件
   const ErrorContent = () => (
@@ -123,6 +174,26 @@ export function LoadingOverlay({
         </div>
       )}
 
+      {/* S0 soft phases stepper - only shown when S0 and no real progress */}
+      {stage === 'S0' && progress === null && (
+        <div className="flex items-center space-x-2">
+          {s0Phases.map((phase, index) => (
+            <div
+              key={phase.id}
+              className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium transition-all duration-300 ${
+                index === phaseIndex
+                  ? 'bg-blue-500 text-white shadow-md'
+                  : index < phaseIndex
+                  ? 'bg-blue-200 dark:bg-blue-800 text-blue-600 dark:text-blue-300'
+                  : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {index + 1}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Message with shimmer */}
       <div className="text-center">
         <div 
@@ -152,6 +223,15 @@ export function LoadingOverlay({
         <div className="max-w-xs text-center">
           <div className="text-xs text-gray-500 dark:text-gray-400 animate-fade-in">
             💡 {displayTip}
+          </div>
+        </div>
+      )}
+
+      {/* S0 long wait helper */}
+      {stage === 'S0' && progress === null && showLongWaitHelper && (
+        <div className="max-w-xs text-center">
+          <div className="text-xs text-gray-400 dark:text-gray-500 opacity-75">
+            可能需要 5–10 秒，请稍候；也可改写输入以加速
           </div>
         </div>
       )}

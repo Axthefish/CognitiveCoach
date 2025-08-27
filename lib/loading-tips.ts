@@ -9,9 +9,10 @@ export interface LoadingTip {
 
 const STAGE_TIPS: Record<string, LoadingTip[]> = {
   S0: [
-    { text: "AI 正在理解您的目标背景...", stage: 'S0' },
-    { text: "准确的目标描述能提高后续分析质量", stage: 'S0' },
-    { text: "系统正在识别关键概念和领域", stage: 'S0' },
+    { text: "用 动词 + 对象 + 约束（时间/范围） 能显著提升质量", stage: 'S0' },
+    { text: "若有已有基础或限制条件，请一并写出", stage: 'S0' },
+    { text: "目标越具体，后续框架与计划越准确", stage: 'S0' },
+    { text: "示例：在8周内完成XX基础并输出2个练习作品", stage: 'S0' },
   ],
   S1: [
     { text: "构建知识框架需要分析多个维度...", stage: 'S1' },
