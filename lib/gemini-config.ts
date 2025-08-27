@@ -36,6 +36,14 @@ type GenConfig = {
   responseMimeType?: string;
 };
 
+// 获取超时配置
+function getTimeoutConfig(runTier?: 'Lite' | 'Pro' | 'Review'): number {
+  if (runTier === 'Lite') {
+    return parseInt(process.env.GENERATION_TIMEOUT_MS_LITE || '45000', 10);
+  }
+  return parseInt(process.env.GENERATION_TIMEOUT_MS_PRO || '90000', 10);
+}
+
 export async function withTimeout<T>(p: Promise<T>, ms = 30_000): Promise<T> {
   return await Promise.race([
     p,
@@ -60,25 +68,35 @@ export async function generateJson<T>(
     ...overrides,
   };
 
+  const timeoutMs = getTimeoutConfig(runTier);
+  
   const run = async (temperature: number) => {
     const model = client.getGenerativeModel({ model: getModelName(runTier) });
-    const res = await withTimeout(
-      model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { ...config, temperature },
-      })
-    );
-    const text = res.response.text();
-    if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
     try {
-      const data = JSON.parse(text) as T;
-      return { ok: true as const, data };
-    } catch (parseError) {
-      logger.warn('Gemini JSON parse failed:', {
-        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        sample: truncate(text)
-      });
-      return { ok: false as const, error: 'PARSE_ERROR', raw: truncate(text) };
+      const res = await withTimeout(
+        model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { ...config, temperature },
+        }),
+        timeoutMs
+      );
+      const text = res.response.text();
+      if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
+      try {
+        const data = JSON.parse(text) as T;
+        return { ok: true as const, data };
+      } catch (parseError) {
+        logger.warn('Gemini JSON parse failed:', {
+          error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+          sample: truncate(text)
+        });
+        return { ok: false as const, error: 'PARSE_ERROR', raw: truncate(text) };
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Request timeout')) {
+        return { ok: false as const, error: 'TIMEOUT' };
+      }
+      throw error;
     }
   };
 
@@ -105,17 +123,27 @@ export async function generateText(
     ...overrides,
   };
 
+  const timeoutMs = getTimeoutConfig(runTier);
+  
   const run = async (temperature: number) => {
     const model = client.getGenerativeModel({ model: getModelName(runTier) });
-    const res = await withTimeout(
-      model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { ...config, temperature },
-      })
-    );
-    const text = res.response.text();
-    if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
-    return { ok: true as const, text };
+    try {
+      const res = await withTimeout(
+        model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { ...config, temperature },
+        }),
+        timeoutMs
+      );
+      const text = res.response.text();
+      if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
+      return { ok: true as const, text };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Request timeout')) {
+        return { ok: false as const, error: 'TIMEOUT' };
+      }
+      throw error;
+    }
   };
 
   const first = await run(config.temperature ?? 0.7);

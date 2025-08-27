@@ -205,10 +205,14 @@ export type StreamPayload = StreamResponseData | string | {
 } | { 
   steps: Array<{ id: string; message: string; status: string }>; 
   tip?: string;
+  traceId?: string;
 } | {
   status: 'success' | 'error';
   data?: unknown;
   error?: string;
+} | {
+  code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN';
+  message: string;
 } | null;
 
 // Request schemas for /api/coach

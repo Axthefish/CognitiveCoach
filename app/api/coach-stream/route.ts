@@ -59,6 +59,16 @@ function createStreamMessage(type: StreamMessage['type'], payload: StreamMessage
   return `data: ${JSON.stringify({ type, payload })}\n\n`;
 }
 
+// 错误发送辅助函数
+function sendError(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN',
+  message: string
+) {
+  controller.enqueue(encoder.encode(createStreamMessage('error', { code, message })));
+}
+
 // 预定义的认知步骤
 const getCognitiveSteps = (action: CoachAction): CognitiveStep[] => {
   switch (action) {
@@ -195,6 +205,16 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
+        // 确保每个请求只发送一次错误
+        const errorState = { sent: false };
+        const sendErrorSafe = (
+          code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN',
+          message: string
+        ) => {
+          if (errorState.sent) return;
+          controller.enqueue(encoder.encode(createStreamMessage('error', { code, message })));
+          errorState.sent = true;
+        };
         
         try {
           // 根据action调用对应的处理器
@@ -203,16 +223,16 @@ export async function POST(request: NextRequest) {
               await handleRefineGoalStream(controller, encoder, payload as RefineGoalPayload);
               break;
             case 'generateFramework':
-              await handleGenerateFrameworkStream(controller, encoder, payload as GenerateFrameworkPayload);
+              await handleGenerateFrameworkStream(controller, encoder, payload as GenerateFrameworkPayload, sendErrorSafe);
               break;
             case 'generateSystemDynamics':
-              await handleGenerateSystemDynamicsStream(controller, encoder, payload as GenerateSystemDynamicsPayload);
+              await handleGenerateSystemDynamicsStream(controller, encoder, payload as GenerateSystemDynamicsPayload, sendErrorSafe);
               break;
             case 'generateActionPlan':
-              await handleGenerateActionPlanStream(controller, encoder, payload as GenerateActionPlanPayload);
+              await handleGenerateActionPlanStream(controller, encoder, payload as GenerateActionPlanPayload, sendErrorSafe);
               break;
             case 'analyzeProgress':
-              await handleAnalyzeProgressStream(controller, encoder, payload as AnalyzeProgressPayload);
+              await handleAnalyzeProgressStream(controller, encoder, payload as AnalyzeProgressPayload, sendErrorSafe);
               break;
             case 'consult':
               await handleConsultStream(controller, encoder, payload as ConsultPayload);
@@ -227,8 +247,16 @@ export async function POST(request: NextRequest) {
           logger.error('Streaming API Error:', { 
             error: error instanceof Error ? error.message : String(error) 
           });
-          const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-          controller.enqueue(encoder.encode(createStreamMessage('error', errorMessage)));
+          const readableMessage = error instanceof Error ? error.message : 'Internal server error';
+          
+          // 判断错误类型并发送结构化错误
+          if (readableMessage.includes('network') || readableMessage.includes('connection')) {
+            sendErrorSafe('NETWORK', readableMessage);
+          } else if (readableMessage.includes('timeout')) {
+            sendErrorSafe('TIMEOUT', readableMessage);
+          } else {
+            sendErrorSafe('UNKNOWN', readableMessage);
+          }
         } finally {
           controller.close();
         }
@@ -251,8 +279,17 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : String(error) 
     });
     const encoder = new TextEncoder();
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    const errorStream = createStreamMessage('error', errorMessage);
+    const readableMessage = error instanceof Error ? error.message : 'Internal server error';
+    
+    // 判断错误类型并发送结构化错误
+    let errorCode: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN' = 'UNKNOWN';
+    if (readableMessage.includes('network') || readableMessage.includes('connection')) {
+      errorCode = 'NETWORK';
+    } else if (readableMessage.includes('timeout')) {
+      errorCode = 'TIMEOUT';
+    }
+    
+    const errorStream = createStreamMessage('error', { code: errorCode, message: readableMessage });
     return new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
@@ -315,16 +352,30 @@ async function handleRefineGoalStream(
 async function handleGenerateFrameworkStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
-  payload: GenerateFrameworkPayload
+  payload: GenerateFrameworkPayload,
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
 ) {
+  // 生成 traceId
+  const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  
   const steps = getCognitiveSteps('generateFramework');
   const tips = getMicroLearningTips('generateFramework');
   
-  // 发送初始步骤和提示
+  // 发送初始步骤和提示（附带traceId）
   controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
     steps: steps.map(s => ({ ...s, status: 'pending' })),
-    tip: tips[Math.floor(Math.random() * tips.length)]
+    tip: tips[Math.floor(Math.random() * tips.length)],
+    traceId
   })));
+
+  // 启动心跳机制
+  const hb = setInterval(() => {
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
+      steps, 
+      tip: tips[Math.floor(Math.random() * tips.length)],
+      traceId
+    })));
+  }, 9000);
 
   const genAI = createGeminiClient();
   
@@ -406,10 +457,29 @@ async function handleGenerateFrameworkStream(
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
     // 调用AI
-    const g = await generateJson<KnowledgeFramework>(prompt, { 
+    let g = await generateJson<KnowledgeFramework>(prompt, { 
       maxOutputTokens: 65536,
       temperature: 0.8
     }, payload.runTier);
+
+    // 检查是否超时，如果是则降级重试
+    if (!g.ok && g.error === 'TIMEOUT') {
+      // 推送降级重试状态
+      steps[2].status = 'in_progress';
+      steps[2].message = '模型响应超时，正在降级重试…';
+      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+      
+      // 降级重试
+      g = await generateJson<KnowledgeFramework>(prompt, { 
+        maxOutputTokens: 65536,
+        temperature: 0.4
+      }, 'Lite');
+      
+      if (!g.ok && g.error === 'TIMEOUT') {
+        sendErrorSafe('TIMEOUT', '生成超时，请稍后重试');
+        throw new Error('TIMEOUT');
+      }
+    }
 
     // 步骤3：构建结构
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -429,7 +499,8 @@ async function handleGenerateFrameworkStream(
     if (!s1.success) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Schema validation failed for S1 output');
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S1 output');
+      throw new Error('SCHEMA');
     }
 
     // QA gate
@@ -437,7 +508,8 @@ async function handleGenerateFrameworkStream(
     if (!qa.passed) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Quality gates failed');
+      sendErrorSafe('QA', 'Quality gates failed');
+      throw new Error('QA');
     }
 
     // 步骤4：优化完成
@@ -455,21 +527,37 @@ async function handleGenerateFrameworkStream(
     steps.forEach(s => { if (s.status === 'in_progress') s.status = 'error'; });
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     throw error;
+  } finally {
+    clearInterval(hb);
   }
 }
 
 async function handleGenerateSystemDynamicsStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
-  payload: GenerateSystemDynamicsPayload
+  payload: GenerateSystemDynamicsPayload,
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
 ) {
+  // 生成 traceId
+  const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  
   const steps = getCognitiveSteps('generateSystemDynamics');
   const tips = getMicroLearningTips('generateSystemDynamics');
   
   controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
     steps: steps.map(s => ({ ...s, status: 'pending' })),
-    tip: tips[Math.floor(Math.random() * tips.length)]
+    tip: tips[Math.floor(Math.random() * tips.length)],
+    traceId
   })));
+
+  // 启动心跳机制
+  const hb = setInterval(() => {
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
+      steps, 
+      tip: tips[Math.floor(Math.random() * tips.length)],
+      traceId
+    })));
+  }, 9000);
 
   const genAI = createGeminiClient();
   
@@ -552,11 +640,31 @@ ${frameworkDescription}
     steps[2].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
-    const g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
+    let g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
       prompt,
       { maxOutputTokens: 65536, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 },
       payload.runTier
     );
+
+    // 检查是否超时，如果是则降级重试
+    if (!g.ok && g.error === 'TIMEOUT') {
+      // 推送降级重试状态
+      steps[2].status = 'in_progress';
+      steps[2].message = '模型响应超时，正在降级重试…';
+      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+      
+      // 降级重试
+      g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
+        prompt,
+        { maxOutputTokens: 65536, temperature: 0.4 },
+        'Lite'
+      );
+      
+      if (!g.ok && g.error === 'TIMEOUT') {
+        sendErrorSafe('TIMEOUT', '生成超时，请稍后重试');
+        throw new Error('TIMEOUT');
+      }
+    }
 
     await new Promise(resolve => setTimeout(resolve, 800));
     steps[2].status = 'completed';
@@ -574,21 +682,24 @@ ${frameworkDescription}
     if (!s2.success) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Schema validation failed for S2 output');
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S2 output');
+      throw new Error('SCHEMA');
     }
 
     // Mermaid precheck and QA
     if (typeof dynamics.mermaidChart !== 'string' || !dynamics.mermaidChart.trim().startsWith('graph TD')) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Invalid Mermaid chart: must start with "graph TD"');
+      sendErrorSafe('SCHEMA', 'Invalid Mermaid chart: must start with "graph TD"');
+      throw new Error('SCHEMA');
     }
 
     const qa = runQualityGates('S2', dynamics, { framework: payload.framework });
     if (!qa.passed) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Quality gates failed');
+      sendErrorSafe('QA', 'Quality gates failed');
+      throw new Error('QA');
     }
 
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -604,21 +715,37 @@ ${frameworkDescription}
     steps.forEach(s => { if (s.status === 'in_progress') s.status = 'error'; });
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     throw error;
+  } finally {
+    clearInterval(hb);
   }
 }
 
 async function handleGenerateActionPlanStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
-  payload: GenerateActionPlanPayload
+  payload: GenerateActionPlanPayload,
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
 ) {
+  // 生成 traceId
+  const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  
   const steps = getCognitiveSteps('generateActionPlan');
   const tips = getMicroLearningTips('generateActionPlan');
   
   controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
     steps: steps.map(s => ({ ...s, status: 'pending' })),
-    tip: tips[Math.floor(Math.random() * tips.length)]
+    tip: tips[Math.floor(Math.random() * tips.length)],
+    traceId
   })));
+
+  // 启动心跳机制
+  const hb = setInterval(() => {
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
+      steps, 
+      tip: tips[Math.floor(Math.random() * tips.length)],
+      traceId
+    })));
+  }, 9000);
 
   const genAI = createGeminiClient();
   
@@ -726,13 +853,37 @@ ${frameworkDescription}
     // n-best generation
     const variants = [] as Array<{ text: string; qaScore: number; issues: string[] }>;
     const n = payload.runTier === 'Pro' ? 2 : 1;
+    
     for (let i = 0; i < n; i++) {
       const r = await generateJson<Record<string, unknown>>(prompt, { 
         maxOutputTokens: 65536, 
         temperature: i === 0 ? (payload.runTier === 'Lite' ? 0.5 : 0.8) : 0.6 
       }, payload.runTier);
-      const text = r.ok ? JSON.stringify(r.data) : '';
-      variants.push({ text, qaScore: 0, issues: [] });
+      
+      if (!r.ok && r.error === 'TIMEOUT') {
+        // 推送降级重试状态
+        steps[2].status = 'in_progress';
+        steps[2].message = '模型响应超时，正在降级重试…';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        
+        // 降级重试
+        const retryR = await generateJson<Record<string, unknown>>(prompt, { 
+          maxOutputTokens: 65536, 
+          temperature: 0.4 
+        }, 'Lite');
+        
+        if (!retryR.ok && retryR.error === 'TIMEOUT') {
+          sendErrorSafe('TIMEOUT', '生成超时，请稍后重试');
+          throw new Error('TIMEOUT');
+        }
+        
+        const text = retryR.ok ? JSON.stringify(retryR.data) : '';
+        variants.push({ text, qaScore: 0, issues: [] });
+        break; // 降级重试成功后退出循环
+      } else {
+        const text = r.ok ? JSON.stringify(r.data) : '';
+        variants.push({ text, qaScore: 0, issues: [] });
+      }
     }
 
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -802,10 +953,16 @@ ${frameworkDescription}
     };
     
     const s3 = ActionPlanResponseSchema.safeParse(enrichedPlanData);
-    if (!s3.success) throw new Error('schema');
+    if (!s3.success) {
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S3 output');
+      throw new Error('SCHEMA');
+    }
     
     const qa = runQualityGates('S3', planData, { nodes: (payload.systemNodes || []).map(n => ({ id: n.id })) });
-    if (!qa.passed) throw new Error('qa');
+    if (!qa.passed) {
+      sendErrorSafe('QA', 'Quality gates failed');
+      throw new Error('QA');
+    }
     
     await new Promise(resolve => setTimeout(resolve, 500));
     steps[3].status = 'completed';
@@ -826,21 +983,37 @@ ${frameworkDescription}
     steps.forEach(s => { if (s.status === 'in_progress') s.status = 'error'; });
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     throw error;
+  } finally {
+    clearInterval(hb);
   }
 }
 
 async function handleAnalyzeProgressStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
-  payload: AnalyzeProgressPayload
+  payload: AnalyzeProgressPayload,
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
 ) {
+  // 生成 traceId
+  const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  
   const steps = getCognitiveSteps('analyzeProgress');
   const tips = getMicroLearningTips('analyzeProgress');
   
   controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
     steps: steps.map(s => ({ ...s, status: 'pending' })),
-    tip: tips[Math.floor(Math.random() * tips.length)]
+    tip: tips[Math.floor(Math.random() * tips.length)],
+    traceId
   })));
+
+  // 启动心跳机制
+  const hb = setInterval(() => {
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
+      steps, 
+      tip: tips[Math.floor(Math.random() * tips.length)],
+      traceId
+    })));
+  }, 9000);
 
   const genAI = createGeminiClient();
   
@@ -924,7 +1097,26 @@ ${payload.userContext.kpis?.join('\n') || '无'}
     steps[2].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
-    const g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 65536 }, 'Pro');
+    let g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 65536 }, 'Pro');
+
+    // 检查是否超时，如果是则降级重试
+    if (!g.ok && g.error === 'TIMEOUT') {
+      // 推送降级重试状态
+      steps[2].status = 'in_progress';
+      steps[2].message = '模型响应超时，正在降级重试…';
+      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+      
+      // 降级重试
+      g = await generateJson<Record<string, unknown>>(prompt, { 
+        maxOutputTokens: 65536, 
+        temperature: 0.4 
+      }, 'Lite');
+      
+      if (!g.ok && g.error === 'TIMEOUT') {
+        sendErrorSafe('TIMEOUT', '生成超时，请稍后重试');
+        throw new Error('TIMEOUT');
+      }
+    }
 
     await new Promise(resolve => setTimeout(resolve, 800));
     steps[2].status = 'completed';
@@ -945,7 +1137,8 @@ ${payload.userContext.kpis?.join('\n') || '无'}
     if (!s4.success) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Schema validation failed for S4 output');
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S4 output');
+      throw new Error('SCHEMA');
     }
 
     // QA S3->S4 linkage
@@ -953,7 +1146,8 @@ ${payload.userContext.kpis?.join('\n') || '无'}
     if (!s4qa.passed) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      throw new Error('Quality gates failed');
+      sendErrorSafe('QA', 'Quality gates failed');
+      throw new Error('QA');
     }
 
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -969,6 +1163,8 @@ ${payload.userContext.kpis?.join('\n') || '无'}
     steps.forEach(s => { if (s.status === 'in_progress') s.status = 'error'; });
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     throw error;
+  } finally {
+    clearInterval(hb);
   }
 }
 

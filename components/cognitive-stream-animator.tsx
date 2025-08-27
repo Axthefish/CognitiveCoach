@@ -46,7 +46,14 @@ export function CognitiveStreamAnimator({
   const [error, setError] = useState<string | null>(null);
   const [finalData, setFinalData] = useState<StreamResponseData | null>(null);
 
-  const { startStreaming: startStreamingInStore, stopStreaming } = useCognitiveCoachStore();
+  const { 
+    startStreaming: startStreamingInStore, 
+    stopStreaming,
+    updateCognitiveSteps,
+    setMicroLearningTip,
+    appendStreamContent,
+    setStreamError
+  } = useCognitiveCoachStore();
 
   // 用于跟踪组件是否已卸载
   const isMountedRef = useRef(true);
@@ -76,15 +83,24 @@ export function CognitiveStreamAnimator({
     switch (message.type) {
       case 'cognitive_step':
         if (message.payload && typeof message.payload === 'object' && 'steps' in message.payload) {
-          setSteps(message.payload.steps as CognitiveStep[]);
+          const steps = message.payload.steps as CognitiveStep[];
+          setSteps(steps);
+          // 同步到全局状态
+          updateCognitiveSteps(steps);
         }
         if (message.payload && typeof message.payload === 'object' && 'tip' in message.payload) {
-          setCurrentTip(message.payload.tip as string);
+          const tip = message.payload.tip as string;
+          setCurrentTip(tip);
+          // 同步到全局状态
+          setMicroLearningTip(tip);
         }
         break;
       
       case 'content_chunk':
-        setContent(prev => prev + (message.payload as string));
+        const chunk = message.payload as string;
+        setContent(prev => prev + chunk);
+        // 同步到全局状态
+        appendStreamContent(String(message.payload));
         break;
       
       case 'data_structure':
@@ -98,20 +114,41 @@ export function CognitiveStreamAnimator({
         }
         break;
       
-              case 'error':
-          const errorMsg = message.payload as string;
-          setError(errorMsg);
-          setIsStreaming(false);
-          stopStreaming();
-          onError(errorMsg);
-          break;
+      case 'error':
+        // 兼容两种负载：字符串或对象
+        let errorMsg: string;
+        let errorCode: string | undefined;
+        
+        if (typeof message.payload === 'string') {
+          errorMsg = message.payload;
+        } else if (message.payload && typeof message.payload === 'object') {
+          const payloadObj = message.payload as Record<string, unknown>;
+          errorCode = payloadObj.code as string;
+          errorMsg = payloadObj.message as string || payloadObj.error as string || '处理过程中出现错误';
+          
+          // 根据错误代码提供用户友好的消息
+          if (errorCode === 'TIMEOUT') {
+            errorMsg = '请求超时，已尝试降级重试。可以重新尝试或切换到 Lite 档位。';
+          } else if (errorCode === 'NETWORK' || errorCode === 'UNKNOWN') {
+            errorMsg = '网络抖动或连接被中止，可重试一次。';
+          }
+        } else {
+          errorMsg = '处理过程中出现错误';
+        }
+        
+        setError(errorMsg);
+        setStreamError(errorMsg);
+        setIsStreaming(false);
+        stopStreaming();
+        onError(errorMsg);
+        break;
       
       case 'done':
         setIsStreaming(false);
         stopStreaming();
         break;
     }
-  }, [onComplete, onError, stopStreaming]);
+  }, [onComplete, onError, stopStreaming, updateCognitiveSteps, setMicroLearningTip, appendStreamContent, setStreamError]);
 
   // 启动流式请求
   const startStreaming = useCallback(async () => {
@@ -278,8 +315,19 @@ export function CognitiveStreamAnimator({
         component: 'CognitiveStreamAnimator'
       });
       
-      const errorMsg = error instanceof Error ? error.message : '网络错误，请重试';
+      let errorMsg = error instanceof Error ? error.message : '网络错误，请重试';
+      
+      // 特殊处理连接中断错误
+      if (errorInstance.message.includes('BodyStreamBuffer was aborted') || errorInstance.name === 'AbortError') {
+        errorMsg = '网络抖动或连接被中止，可重试一次';
+        // 不打印堆栈到用户界面，只在控制台记录
+        console.warn('Stream connection aborted:', errorInstance.message);
+      } else if (errorInstance.message.includes('timeout')) {
+        errorMsg = '请求超时，已尝试降级重试。可以重新尝试或切换到 Lite 档位。';
+      }
+      
       setError(errorMsg);
+      setStreamError(errorMsg);
       setIsStreaming(false);
       stopStreaming();
       onError(errorMsg);
@@ -289,14 +337,14 @@ export function CognitiveStreamAnimator({
       abortControllerRef.current = null;
       stopStreaming();
     }
-  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming]);
+  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming, isStreaming, steps, setStreamError]);
 
   // 组件挂载或 stage 改变时启动流式请求
   useEffect(() => {
     // 重置启动标记，允许为新的 stage 启动
     hasStartedRef.current = false;
     startStreaming();
-  }, [stage]);
+  }, [stage, startStreaming]);
 
   // 如果出现错误，显示错误状态
   if (error) {
