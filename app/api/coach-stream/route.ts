@@ -59,16 +59,6 @@ function createStreamMessage(type: StreamMessage['type'], payload: StreamMessage
   return `data: ${JSON.stringify({ type, payload })}\n\n`;
 }
 
-// 错误发送辅助函数
-function sendError(
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder,
-  code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN',
-  message: string
-) {
-  controller.enqueue(encoder.encode(createStreamMessage('error', { code, message })));
-}
-
 // 预定义的认知步骤
 const getCognitiveSteps = (action: CoachAction): CognitiveStep[] => {
   switch (action) {
