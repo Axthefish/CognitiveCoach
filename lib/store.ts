@@ -50,6 +50,8 @@ export interface UserContext {
     mermaidChart: string;
     metaphor: string;
     nodes?: Array<{ id: string; title: string }>;
+    requiresHumanReview?: boolean;
+    qaIssues?: Array<{ severity: string; area: string; hint: string; targetPath: string }>;
   } | null;
   actionPlan: ActionPlan | null;
   kpis: string[] | null;
