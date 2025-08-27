@@ -3,7 +3,7 @@ import { CoachRequestSchema, StreamPayload } from '@/lib/schemas';
 import { handleOptions } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { KnowledgeFramework, ActionPlan } from '@/lib/types';
+import { KnowledgeFramework, ActionPlan, FrameworkNode } from '@/lib/types';
 import { createGeminiClient, generateJson, generateText } from '@/lib/gemini-config';
 import {
   KnowledgeFrameworkSchema,
@@ -595,9 +595,9 @@ async function handleGenerateSystemDynamicsStream(
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
     // Extract all S1 framework IDs for coverage requirement
-    const extractFrameworkIds = (framework: any): string[] => {
+    const extractFrameworkIds = (framework: KnowledgeFramework | FrameworkNode): string[] => {
       const ids: string[] = [];
-      const walk = (node: any) => {
+      const walk = (node: FrameworkNode) => {
         if (!node || typeof node !== 'object') return;
         if (typeof node.id === 'string') ids.push(node.id);
         if (Array.isArray(node.children)) node.children.forEach(walk);
@@ -713,7 +713,7 @@ Mermaid图表要求：
     // Helper function to extract nodes from framework
     function extractNodesFromFramework(fw: KnowledgeFramework): Array<{ id: string; title: string }> {
       const out: Array<{ id: string; title: string }> = [];
-      const walk = (n: any) => {
+      const walk = (n: FrameworkNode) => {
         if (!n || typeof n !== 'object') return;
         if (typeof n.id === 'string') out.push({ id: n.id, title: typeof n.title === 'string' ? n.title : n.id });
         if (Array.isArray(n.children)) n.children.forEach(walk);
