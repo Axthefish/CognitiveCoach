@@ -5,9 +5,10 @@ import { LoadingOverlay } from './loading-overlay';
 
 interface ContentSkeletonProps {
   stage: 'S0' | 'S1' | 'S2' | 'S3' | 'S4';
+  onRetry?: () => void;
 }
 
-export function ContentSkeleton({ stage }: ContentSkeletonProps) {
+export function ContentSkeleton({ stage, onRetry }: ContentSkeletonProps) {
   // 根据阶段显示不同的骨架屏
   const renderSkeletonByStage = () => {
     switch (stage) {
@@ -137,7 +138,7 @@ export function ContentSkeleton({ stage }: ContentSkeletonProps) {
       </div>
       
       {/* 底部提示 */}
-      <LoadingOverlay variant="inline" stage={stage} />
+      <LoadingOverlay variant="inline" stage={stage} onRetry={onRetry} />
     </div>
   );
 }

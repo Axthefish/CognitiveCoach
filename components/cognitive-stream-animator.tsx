@@ -57,8 +57,10 @@ export function CognitiveStreamAnimator({
 
   // 用于跟踪组件是否已卸载
   const isMountedRef = useRef(true);
+  const streamCompletedSuccessfully = useRef(false); // <--- 添加这一行
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasStartedRef = useRef(false);
+  const currentStreamIdRef = useRef<string | null>(null);
   
   // 组件卸载时清理
   useEffect(() => {
@@ -104,13 +106,23 @@ export function CognitiveStreamAnimator({
         break;
       
       case 'data_structure':
-        setFinalData(message.payload as StreamResponseData);
-        if (message.payload && typeof message.payload === 'object' && 'status' in message.payload && message.payload.status === 'success') {
-          onComplete((message.payload as { data: StreamResponseData }).data);
+        // 提取最终数据：兼容 { status, data } 包装或直接数据
+        if (message.payload && typeof message.payload === 'object' && 'status' in message.payload) {
+          const wrapped = message.payload as { status: string; data?: StreamResponseData; error?: string };
+          if (wrapped.status === 'success' && wrapped.data) {
+            setFinalData(wrapped.data);
+            onComplete(wrapped.data);
+          } else if (wrapped.error) {
+            const errorMsg = wrapped.error || '处理过程中出现错误';
+            setError(errorMsg);
+            onError(errorMsg);
+          }
         } else if (message.payload && typeof message.payload === 'object' && 'error' in message.payload) {
           const errorMsg = (message.payload as { error: string }).error || '处理过程中出现错误';
           setError(errorMsg);
           onError(errorMsg);
+        } else {
+          setFinalData(message.payload as StreamResponseData);
         }
         break;
       
@@ -142,10 +154,16 @@ export function CognitiveStreamAnimator({
         stopStreaming();
         onError(errorMsg);
         break;
-      
+
       case 'done':
+        streamCompletedSuccessfully.current = true;
         setIsStreaming(false);
         stopStreaming();
+        break;
+        
+      default:
+        // 如果我们收到了一个未知的消息类型，记录它以进行调试
+        console.warn('Received unknown stream message type:', message.type);
         break;
     }
   }, [onComplete, onError, stopStreaming, updateCognitiveSteps, setMicroLearningTip, appendStreamContent, setStreamError]);
@@ -157,17 +175,25 @@ export function CognitiveStreamAnimator({
       return;
     }
     
-    // 防止重复启动：如果已经有进行中的请求或已经启动过，直接返回
-    if (abortControllerRef.current || hasStartedRef.current) {
+    // 若已有进行中的请求，先主动中止以避免并发
+    if (abortControllerRef.current) {
+      try { abortControllerRef.current.abort(); } catch {}
+      abortControllerRef.current = null;
+    }
+
+    // 防止重复启动：如果已经启动过，直接返回
+    if (hasStartedRef.current) {
       return;
     }
     
     // 标记已启动
     hasStartedRef.current = true;
     
-    // 创建新的AbortController
+    // 创建新的AbortController，并生成本次流的标识
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    const streamId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    currentStreamIdRef.current = streamId;
     
     try {
              if (isMountedRef.current) {
@@ -305,6 +331,10 @@ export function CognitiveStreamAnimator({
       }
 
     } catch (error) {
+      // 若该错误已不属于当前活动流（例如阶段切换后新流已启动），静默忽略
+      if (currentStreamIdRef.current && currentStreamIdRef.current !== undefined) {
+        // 在 finally 中通过 streamId 精确清理
+      }
       // 使用错误报告工具
       const errorInstance = error instanceof Error ? error : new Error(String(error));
       reportError(errorInstance, {
@@ -316,32 +346,52 @@ export function CognitiveStreamAnimator({
       });
       
       let errorMsg = error instanceof Error ? error.message : '网络错误，请重试';
-      
-      // 特殊处理连接中断错误
-      if (errorInstance.message.includes('BodyStreamBuffer was aborted') || errorInstance.name === 'AbortError') {
-        errorMsg = '网络抖动或连接被中止，可重试一次';
-        // 不打印堆栈到用户界面，只在控制台记录
-        console.warn('Stream connection aborted:', errorInstance.message);
-      } else if (errorInstance.message.includes('timeout')) {
-        errorMsg = '请求超时，已尝试降级重试。可以重新尝试或切换到 Lite 档位。';
+
+      // 如果流已经成功完成，这是一个预期的结束，忽略异常
+      if (streamCompletedSuccessfully.current) {
+        // 如果流已经成功完成，这是一个预期的中止，忽略它
+        console.log('Stream ended gracefully, ignoring abort error.');
+        return;
+      }
+
+      // 如果是 AbortError，进一步判断是否组件卸载导致，避免误报
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('BodyStreamBuffer was aborted'))) {
+        if (!isMountedRef.current) {
+          console.warn('Stream aborted due to unmount/navigation, ignoring.');
+          return;
+        }
+        errorMsg = '连接中断或被浏览器终止，可重试一次或切换 Lite 档';
       }
       
-      setError(errorMsg);
-      setStreamError(errorMsg);
-      setIsStreaming(false);
-      stopStreaming();
-      onError(errorMsg);
+      // 若当前流已被新的流替换，则不再上报 UI 错误
+      if (currentStreamIdRef.current === streamId) {
+        setError(errorMsg);
+        setStreamError(errorMsg); // 同步错误到全局状态
+        setIsStreaming(false);
+        stopStreaming();
+        onError(errorMsg);
+      }
     } finally {
-      // 清理标记和 controller
-      hasStartedRef.current = false;
-      abortControllerRef.current = null;
-      stopStreaming();
+      // 仅当仍是当前活动流时才进行收尾，避免踩踏新连接
+      if (currentStreamIdRef.current === streamId) {
+        hasStartedRef.current = false;
+        abortControllerRef.current = null;
+        // 避免在组件卸载后多余地触发全局 stop
+        if (isMountedRef.current) {
+          stopStreaming();
+        }
+      }
     }
   }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming, isStreaming, steps, setStreamError]);
 
   // 组件挂载或 stage 改变时启动流式请求
   useEffect(() => {
-    // 重置启动标记，允许为新的 stage 启动
+    // 阶段切换：主动中止旧流，重置标志并启动新流
+    if (abortControllerRef.current) {
+      try { abortControllerRef.current.abort(); } catch {}
+      abortControllerRef.current = null;
+    }
+    streamCompletedSuccessfully.current = false;
     hasStartedRef.current = false;
     startStreaming();
   }, [stage, startStreaming]);
@@ -377,7 +427,20 @@ export function CognitiveStreamAnimator({
 
   // 如果还在加载且没有内容，显示骨架屏
   if (isStreaming && steps.length === 0) {
-    return <ContentSkeleton stage={stage} />;
+    return <ContentSkeleton 
+      stage={stage} 
+      onRetry={() => {
+        // 重新启动流式处理
+        setError(null);
+        setIsStreaming(true);
+        setContent('');
+        setSteps([]);
+        setCurrentTip('');
+        hasStartedRef.current = false;
+        streamCompletedSuccessfully.current = false;
+        startStreaming();
+      }}
+    />;
   }
 
   return (

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCognitiveCoachStore } from '@/lib/store';
 import { getTipsForStage, LoadingTip } from '@/lib/loading-tips';
+import { CognitiveCatalystAnimation } from './cognitive-catalyst-animation';
 
 interface LoadingOverlayProps {
   variant?: 'blocking' | 'inline';
@@ -10,6 +11,7 @@ interface LoadingOverlayProps {
   stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4';
   showTips?: boolean;
   estimatedSteps?: number;
+  onRetry?: () => void; // 添加重试回调
 }
 
 const STAGE_LABELS = {
@@ -26,13 +28,20 @@ export function LoadingOverlay({
   stage,
   showTips = true,
   estimatedSteps, // eslint-disable-line @typescript-eslint/no-unused-vars
+  onRetry,
 }: LoadingOverlayProps) {
-  const { streaming } = useCognitiveCoachStore();
+  const { streaming, userContext } = useCognitiveCoachStore();
   const [currentTip, setCurrentTip] = useState<LoadingTip | null>(null);
   
   // S0 soft phases state
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [showLongWaitHelper, setShowLongWaitHelper] = useState(false);
+  const [softProgress, setSoftProgress] = useState(0);
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [showOfflineMessage, setShowOfflineMessage] = useState(false);
+  const [useCognitiveCatalyst, setUseCognitiveCatalyst] = useState(false);
+  const [catalystStage, setCatalystStage] = useState('');
   
   // S0 phases definition
   const s0Phases = [
@@ -66,11 +75,22 @@ export function LoadingOverlay({
     return () => clearInterval(interval);
   }, [stageTips, showTips]);
 
+  // Decide whether to use Cognitive Catalyst animation
+  useEffect(() => {
+    if (stage === 'S0' && userContext.userGoal && userContext.userGoal.trim().length > 0) {
+      setUseCognitiveCatalyst(true);
+    } else {
+      setUseCognitiveCatalyst(false);
+    }
+  }, [stage, userContext.userGoal]);
+
   // S0 phase cycling and long wait helper
   useEffect(() => {
     if (stage !== 'S0') {
       setPhaseIndex(0);
       setShowLongWaitHelper(false);
+      setSoftProgress(0);
+      setUseCognitiveCatalyst(false);
       return;
     }
 
@@ -84,17 +104,67 @@ export function LoadingOverlay({
       setShowLongWaitHelper(true);
     }, 5000);
 
+    // Enhanced soft progress with smooth acceleration curve
+    const progressInterval = setInterval(() => {
+      setSoftProgress(prev => {
+        if (prev >= 92) return 92;
+        
+        // Smooth acceleration: faster at start, slower as it approaches 92%
+        const remaining = 92 - prev;
+        const accelerationFactor = Math.max(0.1, remaining / 92);
+        const delta = (0.5 + Math.random() * 1.5) * accelerationFactor;
+        
+        return Math.min(92, prev + delta);
+      });
+    }, 300);
+
     return () => {
       clearInterval(phaseInterval);
       clearTimeout(helperTimer);
+      clearInterval(progressInterval);
     };
   }, [stage, s0Phases.length]);
+
+  // Monitor network status for UX feedback
+  useEffect(() => {
+    const onlineHandler = () => {
+      setIsOnline(true);
+      setShowOfflineMessage(false);
+      setReconnectAttempts(0);
+    };
+    
+    const offlineHandler = () => {
+      setIsOnline(false);
+      setShowOfflineMessage(true);
+      setReconnectAttempts(prev => prev + 1);
+    };
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', onlineHandler);
+      window.addEventListener('offline', offlineHandler);
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', onlineHandler);
+        window.removeEventListener('offline', offlineHandler);
+      }
+    };
+  }, []);
 
   // 计算真实步骤进度
   const steps = streaming.cognitiveSteps;
   const total = steps.length;
   const completed = steps.filter(s => s.status === 'completed').length;
-  const progress = total > 0 ? Math.min(99, Math.round((completed / total) * 100)) : null;
+  const inProgress = steps.filter(s => s.status === 'in_progress').length;
+  
+  // Enhanced progress calculation with smooth handover from soft progress
+  const realProgress = total > 0 ? Math.min(99, Math.round(((completed + inProgress * 0.5) / total) * 100)) : null;
+  
+  // For S0, blend soft progress with real progress for seamless transition
+  const progress = stage === 'S0' && realProgress !== null 
+    ? Math.max(softProgress, realProgress) // Real progress takes over when available
+    : realProgress;
   
   // 获取当前进行中的步骤
   const currentMsg = steps.find(s => s.status === 'in_progress')?.message;
@@ -112,6 +182,9 @@ export function LoadingOverlay({
   if (currentMsg) {
     // S1-S3 in-progress step exists - use its message (unchanged)
     finalMessage = currentMsg;
+  } else if (stage === 'S0' && useCognitiveCatalyst && catalystStage) {
+    // S0 with Cognitive Catalyst - use catalyst stage message
+    finalMessage = catalystStage;
   } else if (stage === 'S0' && progress === null) {
     // S0 soft phases active - show phase-specific message
     finalMessage = s0PhaseMessages[phaseIndex];
@@ -143,7 +216,7 @@ export function LoadingOverlay({
         
         {/* 重试按钮 */}
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => onRetry ? onRetry() : window.location.reload()}
           className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-md transition-colors"
         >
           重试
@@ -154,68 +227,92 @@ export function LoadingOverlay({
 
   const LoadingContent = () => (
     <div className="flex flex-col items-center space-y-4">
-      {/* Orbit indicator with pulse ring */}
-      <div className="relative">
-        {/* Pulse ring */}
-        <div className="absolute inset-0 rounded-full border-2 border-blue-400/30 pulse-ring" />
-        
-        {/* Orbit container */}
-        <div className="relative w-8 h-8 orbit">
-          <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-500 rounded-full orbit-dot" />
-          <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-400 rounded-full orbit-dot" style={{ animationDelay: '0.4s' }} />
-          <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-300 rounded-full orbit-dot" style={{ animationDelay: '0.8s' }} />
-        </div>
-      </div>
-
-      {/* Stage chip */}
-      {stage && (
-        <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-medium rounded-full">
-          {STAGE_LABELS[stage]}
-        </div>
-      )}
-
-      {/* S0 soft phases stepper - only shown when S0 and no real progress */}
-      {stage === 'S0' && progress === null && (
-        <div className="flex items-center space-x-2">
-          {s0Phases.map((phase, index) => (
-            <div
-              key={phase.id}
-              className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium transition-all duration-300 ${
-                index === phaseIndex
-                  ? 'bg-blue-500 text-white shadow-md'
-                  : index < phaseIndex
-                  ? 'bg-blue-200 dark:bg-blue-800 text-blue-600 dark:text-blue-300'
-                  : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
-              }`}
-            >
-              {index + 1}
+      {/* Cognitive Catalyst Animation for S0 with user goal */}
+      {stage === 'S0' && useCognitiveCatalyst && userContext.userGoal ? (
+        <CognitiveCatalystAnimation
+          userGoal={userContext.userGoal}
+          onStageChange={setCatalystStage}
+        />
+      ) : (
+        <>
+          {/* Default orbit indicator with pulse ring */}
+          <div className="relative">
+            {/* Pulse ring */}
+            <div className="absolute inset-0 rounded-full border-2 border-blue-400/30 pulse-ring" />
+            
+            {/* Orbit container */}
+            <div className="relative w-8 h-8 orbit">
+              <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-500 rounded-full orbit-dot" />
+              <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-400 rounded-full orbit-dot" style={{ animationDelay: '0.4s' }} />
+              <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-300 rounded-full orbit-dot" style={{ animationDelay: '0.8s' }} />
             </div>
-          ))}
-        </div>
+          </div>
+
+          {/* Stage chip */}
+          {stage && (
+            <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-medium rounded-full">
+              {STAGE_LABELS[stage]}
+            </div>
+          )}
+
+          {/* S0 soft phases stepper - only shown when S0 and no real progress */}
+          {stage === 'S0' && progress === null && (
+            <div className="flex items-center space-x-2">
+              {s0Phases.map((phase, index) => (
+                <div
+                  key={phase.id}
+                  className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium transition-all duration-300 ${
+                    index === phaseIndex
+                      ? 'bg-blue-500 text-white shadow-md'
+                      : index < phaseIndex
+                      ? 'bg-blue-200 dark:bg-blue-800 text-blue-600 dark:text-blue-300'
+                      : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {index + 1}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Message with shimmer */}
+          <div className="text-center">
+            <div 
+              className="text-sm font-medium text-gray-700 dark:text-gray-200 gradient-shimmer px-4 py-1 rounded"
+              role="status"
+              aria-live="polite"
+            >
+              {finalMessage}
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Message with shimmer */}
-      <div className="text-center">
-        <div 
-          className="text-sm font-medium text-gray-700 dark:text-gray-200 gradient-shimmer px-4 py-1 rounded"
-          role="status"
-          aria-live="polite"
-        >
-          {finalMessage}
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      {progress !== null && (
-        <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-          <div 
-            className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
-            {progress}%
-          </div>
-        </div>
+      {/* Progress bar - only show if not using Cognitive Catalyst */}
+      {!(stage === 'S0' && useCognitiveCatalyst) && (
+        <>
+          {progress !== null ? (
+            <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+              <div 
+                className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+              <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+                {progress}%
+              </div>
+            </div>
+          ) : stage === 'S0' && (
+            <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+              <div
+                className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${softProgress}%` }}
+              />
+              <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+                {Math.round(softProgress)}%
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Tips carousel */}
@@ -233,6 +330,29 @@ export function LoadingOverlay({
           <div className="text-xs text-gray-400 dark:text-gray-500 opacity-75">
             可能需要 5–10 秒，请稍候；也可改写输入以加速
           </div>
+        </div>
+      )}
+
+      {/* Enhanced network status with offline messaging */}
+      {stage === 'S0' && (
+        <div className="text-center">
+          {showOfflineMessage && !isOnline ? (
+            <div className="bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-3 mb-2">
+              <div className="flex items-center justify-center space-x-2">
+                <div className="w-3 h-3 bg-orange-500 rounded-full animate-pulse" />
+                <div className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                  网络连接中断
+                </div>
+              </div>
+              <div className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                正在尝试重新连接... {reconnectAttempts > 1 && `(第 ${reconnectAttempts} 次)`}
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-gray-400 dark:text-gray-500">
+              网络状态：{isOnline ? '在线' : '离线'}
+            </div>
+          )}
         </div>
       )}
     </div>

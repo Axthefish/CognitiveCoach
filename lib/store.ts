@@ -102,6 +102,11 @@ interface CognitiveCoachStore {
   isLoading: boolean;
   error: string | null;
   
+  // Iterative state
+  completedStages: FSMState[];
+  iterationCount: Partial<Record<FSMState, number>>;
+  isIterativeMode: boolean;
+  
   // 流式状态
   streaming: StreamingState;
   
@@ -114,6 +119,12 @@ interface CognitiveCoachStore {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   resetStore: () => void;
+  
+  // Iterative actions
+  markStageCompleted: (stage: FSMState) => void;
+  navigateToStage: (targetState: FSMState) => void;
+  startIterativeRefinement: (targetState: FSMState) => void;
+  incrementIteration: (stage: FSMState) => void;
   
   // 流式相关 Actions
   startStreaming: (stage: 'S0' | 'S1' | 'S2' | 'S3' | 'S4') => void;
@@ -165,6 +176,12 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   lastFailedStage: null,
   isLoading: false,
   error: null,
+  
+  // Iterative state
+  completedStages: [],
+  iterationCount: {},
+  isIterativeMode: false,
+  
   streaming: initialStreamingState,
   
   // Actions
@@ -218,8 +235,47 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       lastFailedStage: null,
       isLoading: false,
       error: null,
+      completedStages: [],
+      iterationCount: {},
+      isIterativeMode: false,
       streaming: initialStreamingState,
     }),
+
+  // Iterative actions implementation
+  markStageCompleted: (stage) => 
+    set((state) => ({
+      completedStages: state.completedStages.includes(stage) 
+        ? state.completedStages 
+        : [...state.completedStages, stage]
+    })),
+
+  navigateToStage: (targetState) => 
+    set((state) => ({
+      currentState: targetState,
+      isIterativeMode: state.completedStages.includes(targetState),
+      isLoading: false,
+      error: null
+    })),
+
+  startIterativeRefinement: (targetState) => 
+    set((state) => ({
+      currentState: targetState,
+      isIterativeMode: true,
+      isLoading: true,
+      error: null,
+      iterationCount: {
+        ...state.iterationCount,
+        [targetState]: (state.iterationCount[targetState] || 0) + 1
+      }
+    })),
+
+  incrementIteration: (stage) => 
+    set((state) => ({
+      iterationCount: {
+        ...state.iterationCount,
+        [stage]: (state.iterationCount[stage] || 0) + 1
+      }
+    })),
 
   // 流式相关 Actions
   startStreaming: (stage) => {

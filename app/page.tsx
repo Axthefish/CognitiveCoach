@@ -7,8 +7,8 @@ import S1KnowledgeFrameworkView from '@/components/s1-knowledge-framework-view';
 import S2SystemDynamicsView from '@/components/s2-system-dynamics-view';
 import S3ActionPlanView from '@/components/s3-action-plan-view';
 import S4AutonomousOperationView from '@/components/s4-autonomous-operation-view';
-import FsmNavigator from '@/components/fsm-navigator';
-import { State } from '@/lib/types';
+import { IterativeNavigator } from '@/components/ui/iterative-navigator';
+
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { enhancedFetch, NetworkError } from '@/lib/network-utils';
@@ -23,35 +23,31 @@ export default function Home() {
   const error = useCognitiveCoachStore(state => state.error);
   const streaming = useCognitiveCoachStore(state => state.streaming);
   
+  // Iterative state
+  const completedStages = useCognitiveCoachStore(state => state.completedStages);
+  const iterationCount = useCognitiveCoachStore(state => state.iterationCount);
+  
   // 获取 actions（这些通常是稳定的，不会导致重渲染）
-  const { setCurrentState, updateUserContext, setLoading, setError } = useCognitiveCoachStore();
+  const { 
+    setCurrentState, 
+    updateUserContext, 
+    setLoading, 
+    setError,
+    markStageCompleted,
+    navigateToStage,
+    startIterativeRefinement
+  } = useCognitiveCoachStore();
   
   // Local state for S0 conversation
   const [s0ConversationMode, setS0ConversationMode] = React.useState(false);
   const [s0AiQuestion, setS0AiQuestion] = React.useState<string | undefined>();
   const [s0ForceClarification, setS0ForceClarification] = React.useState(false);
 
-  // FSM状态定义
-  const states: State[] = [
-    { id: 'S0', name: 'Intent Calibration' },
-    { id: 'S1', name: 'Knowledge Framework' },
-    { id: 'S2', name: 'System Dynamics' },
-    { id: 'S3', name: 'Action Plan' },
-    { id: 'S4', name: 'Autonomous Operation' }
-  ];
-
   // 获取当前状态ID（S0, S1等） - 使用 useMemo 优化
   const currentStateId = React.useMemo(() => 
-    currentState.split('_')[0] as State['id'], 
+    currentState.split('_')[0] as 'S0' | 'S1' | 'S2' | 'S3' | 'S4', 
     [currentState]
   );
-
-  // 获取已完成的状态列表 - 使用 useMemo 优化
-  const completedStates = React.useMemo((): State['id'][] => {
-    const stateOrder = ['S0', 'S1', 'S2', 'S3', 'S4'];
-    const currentIndex = stateOrder.indexOf(currentStateId);
-    return stateOrder.slice(0, currentIndex) as State['id'][];
-  }, [currentStateId]);
 
   // 启动流式知识框架生成（使用新的store actions）
   const { startStreaming } = useCognitiveCoachStore();
@@ -143,6 +139,7 @@ export default function Home() {
           setS0AiQuestion(undefined);
           
           // 转换到下一个状态
+          markStageCompleted('S0_INTENT_CALIBRATION');
           setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
           
           // 触发S1的知识框架生成，直接传递精炼后的goal
@@ -171,7 +168,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [userContext.goalConversationHistory, s0ConversationMode, setLoading, setError, updateUserContext, setCurrentState, setS0ConversationMode, setS0AiQuestion, generateKnowledgeFramework]);
+  }, [userContext.goalConversationHistory, s0ConversationMode, setLoading, setError, updateUserContext, setCurrentState, setS0ConversationMode, setS0AiQuestion, generateKnowledgeFramework, markStageCompleted]);
 
   const handleForceProceedS0 = React.useCallback(async () => {
     // 当用户选择强制进行时，我们使用对话历史中的最后一个用户输入作为目标
@@ -227,15 +224,45 @@ export default function Home() {
       // 先生成并校验，再流转
       if (nextState === 'S2_SYSTEM_DYNAMICS') {
         const ok = await generateSystemDynamics();
-        if (ok) setCurrentState(nextState);
+        if (ok) {
+          setCurrentState(nextState);
+          markStageCompleted(currentState);
+        }
         else return; // QA failed, block transition
       } else if (nextState === 'S3_ACTION_PLAN') {
         const ok = await generateActionPlan();
-        if (ok) setCurrentState(nextState);
+        if (ok) {
+          setCurrentState(nextState);
+          markStageCompleted(currentState);
+        }
         else return; // QA failed, block transition
       } else {
         setCurrentState(nextState);
+        markStageCompleted(currentState);
       }
+    }
+  };
+
+  // Iterative navigation handlers
+  const handleIterativeNavigation = (targetState: typeof currentState) => {
+    navigateToStage(targetState);
+  };
+
+  const handleIterativeRefinement = async (targetState: typeof currentState) => {
+    // Start iterative refinement
+    startIterativeRefinement(targetState);
+    
+    // Trigger appropriate generation based on target state
+    switch (targetState) {
+      case 'S2_SYSTEM_DYNAMICS':
+        await generateSystemDynamics();
+        break;
+      case 'S3_ACTION_PLAN':
+        await generateActionPlan();
+        break;
+      case 'S4_AUTONOMOUS_OPERATION':
+        // S4 doesn't have generation, just navigate
+        break;
     }
   };
 
@@ -292,13 +319,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* FSM导航器 */}
+      {/* Iterative Navigator */}
       <div className="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <FsmNavigator 
-            states={states} 
-            currentState={currentStateId} 
-            completedStates={completedStates} 
+          <IterativeNavigator
+            currentState={currentState}
+            completedStages={completedStages}
+            onNavigate={handleIterativeNavigation}
+            onRefine={handleIterativeRefinement}
+            hasContextForIteration={
+              userContext.userGoal !== '' && 
+              (userContext.knowledgeFramework?.length || 0) > 0
+            }
+            iterationCount={iterationCount}
           />
         </div>
       </div>
@@ -330,7 +363,28 @@ export default function Home() {
           <LoadingOverlay 
             variant="blocking" 
             stage={currentStateId as 'S0' | 'S1' | 'S2' | 'S3' | 'S4'} 
-            message={currentStateId === 'S0' ? "AI 正在理解与校准你的目标…" : undefined} 
+            message={currentStateId === 'S0' ? "AI 正在理解与校准你的目标…" : undefined}
+            onRetry={() => {
+              // 清除错误状态并重新开始当前阶段
+              setError(null);
+              switch(currentStateId) {
+                case 'S0':
+                  // S0的重试需要保持当前状态，用户需要重新输入
+                  setLoading(false);
+                  break;
+                case 'S1':
+                  generateKnowledgeFramework();
+                  break;
+                case 'S2':
+                  generateSystemDynamics();
+                  break;
+                case 'S3':
+                  generateActionPlan();
+                  break;
+                default:
+                  setLoading(false);
+              }
+            }}
           />
         )}
         

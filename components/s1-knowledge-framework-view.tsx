@@ -129,7 +129,15 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
           <p className="text-gray-600 dark:text-gray-400 mb-8">
             正在准备学习目标...
           </p>
-          <LoadingOverlay variant="inline" stage="S1" message="正在整理你的目标..." />
+          <LoadingOverlay 
+            variant="inline" 
+            stage="S1" 
+            message="正在整理你的目标..." 
+            onRetry={() => {
+              // S1阶段的重试：重新生成知识框架
+              window.location.reload(); // 对于简单的inline显示，保持原有行为
+            }}
+          />
         </div>
       );
     }

@@ -1,4 +1,8 @@
 import { NextRequest } from 'next/server';
+// Ensure this route is always dynamic and not cached by Next.js
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 import { CoachRequestSchema, StreamPayload } from '@/lib/schemas';
 import { handleOptions } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
@@ -157,7 +161,7 @@ export async function POST(request: NextRequest) {
     return new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
         'Access-Control-Allow-Origin': origin || '*',
@@ -179,7 +183,7 @@ export async function POST(request: NextRequest) {
       return new Response(encoder.encode(errorStream), {
         headers: {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no',
           'Access-Control-Allow-Origin': origin || '*',
@@ -256,7 +260,7 @@ export async function POST(request: NextRequest) {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
         'Access-Control-Allow-Origin': origin || '*',
@@ -283,7 +287,7 @@ export async function POST(request: NextRequest) {
     return new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
         'Access-Control-Allow-Origin': origin || '*',

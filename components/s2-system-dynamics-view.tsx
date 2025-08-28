@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb, AlertTriangle } from "lucide-react"
-import Mermaid from "@/components/mermaid"
+import { InteractiveMermaid } from "@/components/ui/interactive-mermaid"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
@@ -112,7 +112,12 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                 <CardTitle>System Map</CardTitle>
               </CardHeader>
               <CardContent>
-                <Mermaid chart={dynamics.mermaidChart} />
+                <InteractiveMermaid 
+                  chart={dynamics.mermaidChart} 
+                  nodes={dynamics.nodes}
+                  onNodeClick={(nodeId) => console.log('Node clicked:', nodeId)}
+                  onWhatIfSimulation={(nodeId) => console.log('What-if simulation for:', nodeId)}
+                />
               </CardContent>
             </Card>
           </div>
