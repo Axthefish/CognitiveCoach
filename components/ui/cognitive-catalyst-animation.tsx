@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface CognitiveCatalystAnimationProps {
   userGoal: string;
@@ -190,8 +190,7 @@ export function CognitiveCatalystAnimation({
     return () => clearTimeout(stageTimer);
   }, [animationStage, isAnimating, onStageChange]);
 
-  // Memoize keyword extraction to prevent unnecessary recalculation
-  const keywords = useMemo(() => extractKeywords(userGoal), [userGoal, extractKeywords]);
+
 
   // Page visibility change handler for performance optimization
   useEffect(() => {
