@@ -11,6 +11,9 @@ import { reportError } from '@/lib/error-reporter';
 // 流式消息类型定义
 import { StreamResponseData, StreamPayload } from '@/lib/schemas';
 
+// 辅助函数：将任何值安全转换为字符串
+const toText = (v: unknown): string => typeof v === 'string' ? v : v == null ? '' : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
+
 interface StreamMessage {
   type: 'cognitive_step' | 'content_chunk' | 'data_structure' | 'error' | 'done';
   payload: StreamPayload;
@@ -113,12 +116,12 @@ export function CognitiveStreamAnimator({
             setFinalData(wrapped.data);
             onComplete(wrapped.data);
           } else if (wrapped.error) {
-            const errorMsg = wrapped.error || '处理过程中出现错误';
+            const errorMsg = toText(wrapped.error) || '处理过程中出现错误';
             setError(errorMsg);
             onError(errorMsg);
           }
         } else if (message.payload && typeof message.payload === 'object' && 'error' in message.payload) {
-          const errorMsg = (message.payload as { error: string }).error || '处理过程中出现错误';
+          const errorMsg = toText((message.payload as Record<string, unknown>).error) || '处理过程中出现错误';
           setError(errorMsg);
           onError(errorMsg);
         } else {
@@ -128,31 +131,41 @@ export function CognitiveStreamAnimator({
       
       case 'error':
         // 兼容两种负载：字符串或对象
-        let errorMsg: string;
         let errorCode: string | undefined;
         
         if (typeof message.payload === 'string') {
-          errorMsg = message.payload;
+          const errorMsg = toText(message.payload);
+          setError(errorMsg);
+          setStreamError(errorMsg);
+          setIsStreaming(false);
+          stopStreaming();
+          onError(errorMsg);
         } else if (message.payload && typeof message.payload === 'object') {
           const payloadObj = message.payload as Record<string, unknown>;
           errorCode = payloadObj.code as string;
-          errorMsg = payloadObj.message as string || payloadObj.error as string || '处理过程中出现错误';
+          const errorMsg = toText((payloadObj as Record<string, unknown>).message ?? (payloadObj as Record<string, unknown>).error ?? '处理过程中出现错误');
           
           // 根据错误代码提供用户友好的消息
+          let finalErrorMsg = errorMsg;
           if (errorCode === 'TIMEOUT') {
-            errorMsg = '请求超时，已尝试降级重试。可以重新尝试或切换到 Lite 档位。';
+            finalErrorMsg = '请求超时，已尝试降级重试。可以重新尝试或切换到 Lite 档位。';
           } else if (errorCode === 'NETWORK' || errorCode === 'UNKNOWN') {
-            errorMsg = '网络抖动或连接被中止，可重试一次。';
+            finalErrorMsg = '网络抖动或连接被中止，可重试一次。';
           }
+          
+          setError(finalErrorMsg);
+          setStreamError(finalErrorMsg);
+          setIsStreaming(false);
+          stopStreaming();
+          onError(finalErrorMsg);
         } else {
-          errorMsg = '处理过程中出现错误';
+          const errorMsg = '处理过程中出现错误';
+          setError(errorMsg);
+          setStreamError(errorMsg);
+          setIsStreaming(false);
+          stopStreaming();
+          onError(errorMsg);
         }
-        
-        setError(errorMsg);
-        setStreamError(errorMsg);
-        setIsStreaming(false);
-        stopStreaming();
-        onError(errorMsg);
         break;
 
       case 'done':
@@ -336,7 +349,7 @@ export function CognitiveStreamAnimator({
         // 在 finally 中通过 streamId 精确清理
       }
       // 使用错误报告工具
-      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      const errorInstance = error instanceof Error ? error : new Error(toText(error));
       reportError(errorInstance, {
         stage,
         requestPayload,
@@ -345,7 +358,7 @@ export function CognitiveStreamAnimator({
         component: 'CognitiveStreamAnimator'
       });
       
-      let errorMsg = error instanceof Error ? error.message : '网络错误，请重试';
+      let errorMsg = error instanceof Error ? error.message : toText(error);
 
       // 如果流已经成功完成，这是一个预期的结束，忽略异常
       if (streamCompletedSuccessfully.current) {

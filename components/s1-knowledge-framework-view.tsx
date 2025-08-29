@@ -13,6 +13,9 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { reportError } from "@/lib/error-reporter"
 
+// 辅助函数：将任何值安全转换为字符串
+const toText = (v: unknown): string => typeof v === 'string' ? v : v == null ? '' : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
+
 interface S1KnowledgeFrameworkViewProps {
   onProceed: () => void
 }
@@ -69,10 +72,11 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 处理流式生成错误
   const handleStreamError = (error: string) => {
-    console.error('S1 streaming error:', error);
+    const msg = typeof error === 'string' ? error : toText(error);
+    console.error('S1 streaming error:', msg);
     
     // 报告错误
-    reportError(new Error(error), {
+    reportError(new Error(msg), {
       stage: 'S1',
       userGoal: userContext.userGoal,
       component: 'S1KnowledgeFrameworkView',
@@ -99,14 +103,14 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     
     return (
       <AccordionItem key={nodeId} value={nodeId}>
-        <AccordionTrigger>{node.title}</AccordionTrigger>
+        <AccordionTrigger>{toText(node.title)}</AccordionTrigger>
         <AccordionContent>
-          <p className="text-gray-600 dark:text-gray-400 mb-2">{node.summary}</p>
-          {node.children && node.children.length > 0 && (
+          <p className="text-gray-600 dark:text-gray-400 mb-2">{toText(node.summary)}</p>
+          {Array.isArray(node.children) ? (
             <Accordion type="single" collapsible className="ml-4">
               {node.children.map(child => renderFrameworkNode(child, nodeId)).filter(Boolean)}
             </Accordion>
-          )}
+          ) : null}
         </AccordionContent>
       </AccordionItem>
     );

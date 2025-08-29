@@ -230,15 +230,19 @@
   
   .orbit {
     position: relative;
-    animation: orbit 1.2s linear infinite;
+    animation: orbit 1.4s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
   
   .orbit-dot {
-    animation: orbit 1.2s linear infinite;
+    will-change: transform;
+    transform: translate3d(16px,0,0); /* no animation here */
   }
   
   .pulse-ring {
-    animation: pulse-ring 1.6s ease-out infinite;
+    animation: pulse-ring 1.8s ease-out infinite;
   }
   
   @keyframes pulse-ring {
@@ -253,6 +257,12 @@
     100% {
       transform: scale(1.4);
       opacity: 0;
+    }
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    .orbit, .pulse-ring {
+      animation: none !important;
     }
   }
 }

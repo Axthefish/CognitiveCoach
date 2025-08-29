@@ -327,10 +327,16 @@ export function LoadingOverlay({
             <div className="absolute inset-0 rounded-full border-2 border-blue-400/30 pulse-ring" />
             
             {/* Orbit container */}
-            <div className="relative w-8 h-8 orbit">
-              <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-500 rounded-full orbit-dot" />
-              <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-400 rounded-full orbit-dot" style={{ animationDelay: '0.4s' }} />
-              <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-300 rounded-full orbit-dot" style={{ animationDelay: '0.8s' }} />
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 orbit" style={{ animationDelay: '0s' }}>
+                <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-500 rounded-full orbit-dot" />
+              </div>
+              <div className="absolute inset-0 orbit" style={{ animationDelay: '0.4s' }}>
+                <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-400 rounded-full orbit-dot" />
+              </div>
+              <div className="absolute inset-0 orbit" style={{ animationDelay: '0.8s' }}>
+                <div className="absolute top-0 left-1/2 w-2 h-2 -ml-1 bg-blue-300 rounded-full orbit-dot" />
+              </div>
             </div>
           </div>
 

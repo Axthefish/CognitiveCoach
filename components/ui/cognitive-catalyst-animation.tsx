@@ -37,6 +37,9 @@ export function CognitiveCatalystAnimation({
   const animationRef = useRef<number | undefined>(undefined);
   const lastUpdateTimeRef = useRef<number>(0);
   const isPageVisibleRef = useRef<boolean>(true);
+  
+  // Check for reduced motion preference
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Safe requestAnimationFrame with polyfill
   const safeRequestAnimationFrame = useCallback((callback: (time: number) => void) => {
@@ -97,9 +100,9 @@ export function CognitiveCatalystAnimation({
       return;
     }
 
-    // Throttle animation updates to ~60fps
+    // Throttle animation updates to ~30fps
     const deltaTime = currentTime - lastUpdateTimeRef.current;
-    if (deltaTime < 16) { // ~60fps
+    if (deltaTime < 33) { // ~30fps
       animationRef.current = safeRequestAnimationFrame(animate);
       return;
     }
@@ -209,6 +212,13 @@ export function CognitiveCatalystAnimation({
     const particles = initializeParticles();
     setParticles(particles);
     
+    // Skip animation if reduced motion is preferred
+    if (prefersReducedMotion) {
+      setIsAnimating(false);
+      onStageChange?.(ANIMATION_STAGES[0].message);
+      return;
+    }
+    
     // Start animation loop
     animationRef.current = safeRequestAnimationFrame(animate);
     
@@ -221,7 +231,7 @@ export function CognitiveCatalystAnimation({
         animationRef.current = undefined;
       }
     };
-  }, [userGoal, animate, initializeParticles, onStageChange, safeRequestAnimationFrame, safeCancelAnimationFrame]); // Re-initialize when userGoal changes
+  }, [userGoal, animate, initializeParticles, onStageChange, safeRequestAnimationFrame, safeCancelAnimationFrame, prefersReducedMotion]); // Re-initialize when userGoal changes
 
   // Stop animation when component unmounts or animation completes
   useEffect(() => {
