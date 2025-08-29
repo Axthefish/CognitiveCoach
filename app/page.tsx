@@ -158,7 +158,8 @@ export default function Home() {
         } else if (networkError.type === 'network') {
           setError('网络连接失败，请检查您的网络连接');
         } else if (networkError.type === 'server') {
-          setError('服务器暂时不可用，请稍后重试');
+          // Use specific server error message if available
+          setError(networkError.message || '服务器暂时不可用，请稍后重试');
         } else {
           setError(networkError.message || '请求失败，请重试');
         }

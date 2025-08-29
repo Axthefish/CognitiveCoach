@@ -6,6 +6,7 @@ import { generateJsonWithRetry } from '@/lib/ai-retry-handler';
 import { DynamicPromptBuilder, S0_TEMPLATES, PROMPT_STRATEGIES } from '@/lib/prompt-templates';
 import { AppError, ErrorCodes, handleError, createStageError } from '@/lib/app-errors';
 import { logger } from '@/lib/logger';
+import { getAIApiKey } from '@/lib/env-validator';
 import type { ConversationMessage } from '@/lib/store';
 
 export interface RefineGoalPayload {
@@ -78,6 +79,19 @@ export class S0Service {
       
       logger.debug('Calling AI with prompt length:', prompt.length);
 
+      // Check if API key is available before making the AI call
+      const apiKey = getAIApiKey();
+      if (!apiKey) {
+        logger.warn('No AI API key configured, returning fallback clarification response');
+        return NextResponse.json({
+          status: 'success',
+          data: {
+            status: 'clarification_needed',
+            ai_question: '为加速明确目标，请一次性回答：1) 具体学习主题；2) 期望产出；3) 时间范围。（若已有部分明确，仅补充缺失项即可。）'
+          }
+        });
+      }
+
       // 计算用户澄清轮次（排除首次输入，只计算user消息）
       const userClarificationRounds = conversationHistory.filter(msg => msg.role === 'user').length;
       const CLARIFICATION_ROUND_LIMIT = 2; // 与模板承诺一致：最多2轮澄清
@@ -101,6 +115,18 @@ export class S0Service {
           error: result.error,
           attempts: result.attempts
         });
+        
+        // Handle NO_API_KEY error with fallback
+        if (result.error === 'NO_API_KEY') {
+          logger.warn('NO_API_KEY error from generateJsonWithRetry, returning fallback clarification response');
+          return NextResponse.json({
+            status: 'success',
+            data: {
+              status: 'clarification_needed',
+              ai_question: '为加速明确目标，请一次性回答：1) 具体学习主题；2) 期望产出；3) 时间范围。（若已有部分明确，仅补充缺失项即可。）'
+            }
+          });
+        }
         
         // 智能 fallback 处理
         if (result.error.includes('EMPTY_RESPONSE') && conversationHistory.length > 0) {

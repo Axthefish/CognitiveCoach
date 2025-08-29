@@ -64,8 +64,24 @@ export async function enhancedFetch(url: string, options: FetchOptions = {}): Pr
             true
           );
         } else if (response.status >= 400) {
+          // Enhanced error message extraction for 4xx errors
+          let errorMessage = `Client error: ${response.status}`;
+          try {
+            const msg = await response.clone().json().catch(() => null) || await response.clone().text().catch(() => '');
+            if (msg) {
+              if (typeof msg === 'object') {
+                errorMessage = msg.error || msg.message || msg.code || String(msg);
+              } else {
+                errorMessage = String(msg);
+              }
+            }
+          } catch {
+            // If extraction fails, use default message
+            errorMessage = `Client error: ${response.status}`;
+          }
+          
           throw createNetworkError(
-            { message: `Client error: ${response.status}`, status: response.status },
+            { message: errorMessage, status: response.status },
             'server',
             false
           );

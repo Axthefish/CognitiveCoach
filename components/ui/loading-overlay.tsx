@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useCognitiveCoachStore } from '@/lib/store';
 import { getTipsForStage, LoadingTip } from '@/lib/loading-tips';
 import { CognitiveCatalystAnimation } from './cognitive-catalyst-animation';
@@ -22,6 +22,62 @@ const STAGE_LABELS = {
   S4: '自主运营',
 };
 
+// Custom hook for smooth number animation
+function useSmoothedNumber(target: number | null, speed = 0.18, frameMs = 16): number | null {
+  const [displayValue, setDisplayValue] = useState<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
+
+  const animate = useCallback((timestamp: number) => {
+    if (lastTimeRef.current === 0) {
+      lastTimeRef.current = timestamp;
+    }
+
+    const elapsed = timestamp - lastTimeRef.current;
+    
+    if (elapsed >= frameMs) {
+      setDisplayValue(prevValue => {
+        if (target === null) return null;
+        if (prevValue === null) return target;
+        
+        const delta = target - prevValue;
+        if (Math.abs(delta) < 0.5) {
+          return target; // Snap to target when close enough
+        }
+        
+        return prevValue + delta * speed;
+      });
+      
+      lastTimeRef.current = timestamp;
+    }
+
+    rafRef.current = requestAnimationFrame(animate);
+  }, [target, speed, frameMs]);
+
+  useEffect(() => {
+    if (target === null) {
+      setDisplayValue(null);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      return;
+    }
+
+    rafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      lastTimeRef.current = 0;
+    };
+  }, [target, animate]);
+
+  return displayValue;
+}
+
 export function LoadingOverlay({
   variant = 'inline',
   message,
@@ -32,6 +88,7 @@ export function LoadingOverlay({
 }: LoadingOverlayProps) {
   const { streaming, userContext } = useCognitiveCoachStore();
   const [currentTip, setCurrentTip] = useState<LoadingTip | null>(null);
+  const [showTip, setShowTip] = useState(true);
   
   // S0 soft phases state
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -43,12 +100,12 @@ export function LoadingOverlay({
   const [useCognitiveCatalyst, setUseCognitiveCatalyst] = useState(false);
   const [catalystStage, setCatalystStage] = useState('');
   
-  // S0 phases definition
-  const s0Phases = [
+  // S0 phases definition - memoized to prevent re-creation
+  const s0Phases = useMemo(() => [
     { id: 'parse', label: '解析输入' },
     { id: 'extract', label: '抽取要点' },
     { id: 'draft', label: '生成候选' }
-  ];
+  ], []);
   
   const s0PhaseMessages = [
     "AI 正在理解你的目标与上下文…",
@@ -59,21 +116,46 @@ export function LoadingOverlay({
   // Get tips for the stage
   const stageTips = getTipsForStage(stage);
 
-  // Rotate tips every 2.5 seconds
+  // Controlled crossfade tips rotation
   useEffect(() => {
-    if (!showTips || stageTips.length === 0) return;
+    if (!showTips || stageTips.length === 0) {
+      setCurrentTip(null);
+      return;
+    }
 
     // Initialize with first tip
     setCurrentTip(stageTips[0]);
+    setShowTip(true);
+
+    if (stageTips.length <= 1) return; // No need to rotate if only one tip
 
     let tipIndex = 0;
     const interval = setInterval(() => {
-      tipIndex = (tipIndex + 1) % stageTips.length;
-      setCurrentTip(stageTips[tipIndex]);
-    }, 2500);
+      // Start crossfade: fade out current tip
+      setShowTip(false);
+      
+      // After fade out, change tip and fade in
+      setTimeout(() => {
+        tipIndex = (tipIndex + 1) % stageTips.length;
+        setCurrentTip(stageTips[tipIndex]);
+        setShowTip(true);
+      }, 200); // 200ms fade out duration
+    }, 4500); // 4.5s interval
 
     return () => clearInterval(interval);
   }, [stageTips, showTips]);
+
+  // Handle streaming tip changes with crossfade
+  useEffect(() => {
+    if (streaming.microLearningTip && streaming.microLearningTip !== currentTip?.text) {
+      // Crossfade to new streaming tip
+      setShowTip(false);
+      setTimeout(() => {
+        setCurrentTip({ text: streaming.microLearningTip! }); // Non-null assertion since we checked above
+        setShowTip(true);
+      }, 200);
+    }
+  }, [streaming.microLearningTip, currentTip?.text]);
 
   // Decide whether to use Cognitive Catalyst animation
   useEffect(() => {
@@ -84,7 +166,7 @@ export function LoadingOverlay({
     }
   }, [stage, userContext.userGoal]);
 
-  // S0 phase cycling and long wait helper
+  // S0 phase cycling and long wait helper - only recreate timers when stage changes
   useEffect(() => {
     if (stage !== 'S0') {
       setPhaseIndex(0);
@@ -94,10 +176,10 @@ export function LoadingOverlay({
       return;
     }
 
-    // Cycle through phases every 1200-1800ms (randomized)
+    // Cycle through phases every 1400-2000ms (≥1400ms as required)
     const phaseInterval = setInterval(() => {
       setPhaseIndex(prevIndex => (prevIndex + 1) % s0Phases.length);
-    }, 1200 + Math.random() * 600);
+    }, 1400 + Math.random() * 600);
 
     // Show helper text after 5 seconds
     const helperTimer = setTimeout(() => {
@@ -123,7 +205,7 @@ export function LoadingOverlay({
       clearTimeout(helperTimer);
       clearInterval(progressInterval);
     };
-  }, [stage, s0Phases.length]);
+  }, [stage, s0Phases.length]); // Include s0Phases.length dependency
 
   // Monitor network status for UX feedback
   useEffect(() => {
@@ -161,10 +243,14 @@ export function LoadingOverlay({
   // Enhanced progress calculation with smooth handover from soft progress
   const realProgress = total > 0 ? Math.min(99, Math.round(((completed + inProgress * 0.5) / total) * 100)) : null;
   
-  // For S0, blend soft progress with real progress for seamless transition
-  const progress = stage === 'S0' && realProgress !== null 
-    ? Math.max(softProgress, realProgress) // Real progress takes over when available
-    : realProgress;
+  // Compute target progress based on stage
+  const targetProgress = stage === 'S0' 
+    ? Math.max(softProgress, realProgress ?? 0) // For S0, blend soft and real progress
+    : realProgress; // For other stages, use real progress only
+  
+  // Use smooth animation for progress display
+  const displayProgress = useSmoothedNumber(targetProgress);
+  const progress = displayProgress;
   
   // 获取当前进行中的步骤
   const currentMsg = steps.find(s => s.status === 'in_progress')?.message;
@@ -289,36 +375,25 @@ export function LoadingOverlay({
       )}
 
       {/* Progress bar - only show if not using Cognitive Catalyst */}
-      {!(stage === 'S0' && useCognitiveCatalyst) && (
-        <>
-          {progress !== null ? (
-            <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-              <div 
-                className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-              <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
-                {progress}%
-              </div>
-            </div>
-          ) : stage === 'S0' && (
-            <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-              <div
-                className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${softProgress}%` }}
-              />
-              <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
-                {Math.round(softProgress)}%
-              </div>
-            </div>
-          )}
-        </>
+      {!(stage === 'S0' && useCognitiveCatalyst) && progress !== null && (
+        <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div 
+            className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${Math.round(progress)}%` }}
+          />
+          <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+            {Math.round(progress)}%
+          </div>
+        </div>
       )}
 
       {/* Tips carousel */}
       {showTips && displayTip && (
         <div className="max-w-xs text-center">
-          <div className="text-xs text-gray-500 dark:text-gray-400 animate-fade-in">
+          <div 
+            className="text-xs text-gray-500 dark:text-gray-400 transition-opacity duration-300 ease-out"
+            style={{opacity: showTip ? 1 : 0}}
+          >
             💡 {displayTip}
           </div>
         </div>
