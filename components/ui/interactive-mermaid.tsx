@@ -78,7 +78,7 @@ export function InteractiveMermaid({
       try {
         // Sanitize incoming chart text to avoid common breakages (e.g., stray <br/>)
         const sanitize = (src: string): string => {
-          let s = src.replace(/<br\s*\/?>/gi, '\n');
+          const s = src.replace(/<br\s*\/?>/gi, '\n');
           // Ensure graph direction prefix is correct
           if (!/^\s*graph\s+TD/.test(s)) {
             const idx = s.indexOf('graph ');
