@@ -18,13 +18,22 @@ export interface FetchOptions extends RequestInit {
  * Creates a network error with proper categorization
  */
 function createNetworkError(error: unknown, type: NetworkError['type'], retryable: boolean = true): NetworkError {
-  const message = error instanceof Error ? error.message : 'Network error occurred';
+  const toText = (v: unknown): string => {
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object' && 'message' in v && typeof (v as Record<string, unknown>).message === 'string') {
+      return (v as Record<string, unknown>).message as string;
+    }
+    try { return JSON.stringify(v); } catch { return String(v); }
+  };
+
+  const message = error instanceof Error ? error.message : toText(error) || 'Network error occurred';
   const networkError = new Error(message) as NetworkError;
   networkError.type = type;
   networkError.retryable = retryable;
   
-  if (error && typeof error === 'object' && 'status' in error) {
-    networkError.status = error.status as number;
+  if (error && typeof error === 'object' && 'status' in (error as Record<string, unknown>)) {
+    const statusCandidate = (error as Record<string, unknown>).status;
+    if (typeof statusCandidate === 'number') networkError.status = statusCandidate;
   }
   
   return networkError;

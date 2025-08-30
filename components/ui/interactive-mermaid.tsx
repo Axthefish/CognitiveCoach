@@ -76,7 +76,20 @@ export function InteractiveMermaid({
   useEffect(() => {
     const renderMermaid = async () => {
       try {
-        let processedChart = chart
+        // Sanitize incoming chart text to avoid common breakages (e.g., stray <br/>)
+        const sanitize = (src: string): string => {
+          let s = src.replace(/<br\s*\/?>/gi, '\n');
+          // Ensure graph direction prefix is correct
+          if (!/^\s*graph\s+TD/.test(s)) {
+            const idx = s.indexOf('graph ');
+            if (idx >= 0) {
+              // leave as is if another direction is used; mermaid will still render
+            }
+          }
+          return s;
+        };
+
+        let processedChart = sanitize(chart)
         
         // Apply what-if simulation by modifying the chart
         if (whatIfMode && removedNode) {

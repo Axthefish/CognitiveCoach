@@ -230,7 +230,7 @@
   
   .orbit {
     position: relative;
-    animation: orbit 1.4s linear infinite;
+    animation: orbit 1.6s linear infinite;
     will-change: transform;
     transform: translateZ(0);
     backface-visibility: hidden;
@@ -238,11 +238,11 @@
   
   .orbit-dot {
     will-change: transform;
-    transform: translate3d(16px,0,0); /* no animation here */
+    transform: translate3d(16px,0,0);
   }
   
   .pulse-ring {
-    animation: pulse-ring 1.8s ease-out infinite;
+    animation: pulse-ring 2.2s ease-out infinite;
   }
   
   @keyframes pulse-ring {

@@ -20,7 +20,12 @@ export default function Mermaid({ chart }: MermaidProps) {
   useEffect(() => {
     const renderMermaid = async () => {
       try {
-        const { svg } = await mermaid.render("mermaid-graph", chart)
+        // sanitize: replace HTML line breaks and trim BOM/whitespace
+        const sanitize = (src: string): string => src
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/^\uFEFF/, '')
+          .trim();
+        const { svg } = await mermaid.render("mermaid-graph", sanitize(chart))
         setSvg(svg)
       } catch (error) {
         console.error("Mermaid rendering failed:", error)
