@@ -86,10 +86,13 @@ export function LoadingOverlay({
   message,
   stage,
   showTips = true,
-  estimatedSteps, // eslint-disable-line @typescript-eslint/no-unused-vars
+  estimatedSteps: _estimatedSteps, // Explicitly ignore parameter
   onRetry,
 }: LoadingOverlayProps) {
   const { streaming, userContext } = useCognitiveCoachStore();
+  
+  // Track phase cycling state
+  const phaseIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [currentTip, setCurrentTip] = useState<LoadingTip | null>(null);
   const [showTip, setShowTip] = useState(true);
   
@@ -179,7 +182,7 @@ export function LoadingOverlay({
     }
   }, [stage, userContext.userGoal]);
 
-  // S0 phase cycling and long wait helper - only recreate timers when stage changes
+  // S0 phase cycling with intelligent stopping - only recreate timers when stage changes
   useEffect(() => {
     if (stage !== 'S0') {
       setPhaseIndex(0);
@@ -188,10 +191,33 @@ export function LoadingOverlay({
       return;
     }
 
-    // Cycle through phases every 1400-2000ms (≥1400ms as required)
+    let cycleCount = 0;
+    const maxCycles = 10; // Prevent infinite cycling - max 30 seconds of cycling
+    
+    // Cycle through phases every 1400-2000ms, but stop after reasonable attempts
     const phaseInterval = setInterval(() => {
+      // Check if we have real progress from streaming - if so, stop phase cycling
+      if (streaming.cognitiveSteps && streaming.cognitiveSteps.length > 0) {
+        clearInterval(phaseInterval);
+        phaseIntervalRef.current = null;
+        return;
+      }
+      
+      cycleCount++;
+      
+      // Stop cycling after max attempts to prevent infinite loop
+      if (cycleCount >= maxCycles) {
+        clearInterval(phaseInterval);
+        phaseIntervalRef.current = null;
+        // Hold on the last phase instead of continuing to cycle
+        setPhaseIndex(s0Phases.length - 1);
+        return;
+      }
+      
       setPhaseIndex(prevIndex => (prevIndex + 1) % s0Phases.length);
     }, 1400 + Math.random() * 600);
+
+    phaseIntervalRef.current = phaseInterval;
 
     // Show helper text after 5 seconds
     const helperTimer = setTimeout(() => {
@@ -203,8 +229,20 @@ export function LoadingOverlay({
     return () => {
       clearInterval(phaseInterval);
       clearTimeout(helperTimer);
+      phaseIntervalRef.current = null;
     };
-  }, [stage, s0Phases.length]); // Include s0Phases.length dependency
+  }, [stage, s0Phases.length, streaming.cognitiveSteps]); // Include cognitiveSteps for proper dependency tracking
+
+  // Stop phase cycling immediately when real progress starts
+  useEffect(() => {
+    if (stage === 'S0' && streaming.cognitiveSteps && streaming.cognitiveSteps.length > 0) {
+      if (phaseIntervalRef.current) {
+        clearInterval(phaseIntervalRef.current);
+        phaseIntervalRef.current = null;
+        console.log('🛑 LoadingOverlay: Stopping phase cycling - real progress detected');
+      }
+    }
+  }, [stage, streaming.cognitiveSteps]); // Include full cognitiveSteps for proper dependency tracking
 
   // Monitor network status for UX feedback
   useEffect(() => {

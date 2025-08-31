@@ -11,6 +11,26 @@ import { reportError } from '@/lib/error-reporter';
 // 流式消息类型定义
 import { StreamResponseData, StreamPayload } from '@/lib/schemas';
 
+// 声明全局变量类型以便调试
+declare global {
+  interface Window {
+    __streamMessages?: Array<{
+      timestamp: number;
+      stage: string;
+      message: StreamMessage;
+      rawLine: string;
+      parsedJson: string;
+      streamId?: string;
+    }>;
+    __streamErrors?: Array<{
+      timestamp: number;
+      stage: string;
+      line: string;
+      error: unknown;
+    }>;
+  }
+}
+
 // 辅助函数：将任何值安全转换为字符串
 const toText = (v: unknown): string => typeof v === 'string' ? v : v == null ? '' : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
 
@@ -72,7 +92,9 @@ export function CognitiveStreamAnimator({
     isNavigatingRef.current = false;
     
     return () => {
-      console.log('🧹 CognitiveStreamAnimator unmounting, cleaning up...');
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('🧹 CognitiveStreamAnimator unmounting, cleaning up...');
+      }
       isMountedRef.current = false;
       hasStartedRef.current = false;
       isNavigatingRef.current = true; // 标记为导航中止
@@ -98,12 +120,14 @@ export function CognitiveStreamAnimator({
   const processStreamMessage = useCallback((message: StreamMessage, streamId?: string) => {
     // 检查组件是否已卸载或流ID不匹配
     if (!isMountedRef.current || (streamId && currentStreamIdRef.current !== streamId)) {
-      console.log('🚫 Ignoring stream message: component unmounted or stale stream', {
-        isMounted: isMountedRef.current,
-        expectedStreamId: currentStreamIdRef.current,
-        receivedStreamId: streamId,
-        messageType: message.type
-      });
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('🚫 Ignoring stream message: component unmounted or stale stream', {
+          isMounted: isMountedRef.current,
+          expectedStreamId: currentStreamIdRef.current,
+          receivedStreamId: streamId,
+          messageType: message.type
+        });
+      }
       return;
     }
     
@@ -333,8 +357,8 @@ export function CognitiveStreamAnimator({
                 
                 // 开发环境调试记录
                 if (process.env.NODE_ENV === 'development') {
-                  (window as unknown as Record<string, unknown>).__streamMessages = (window as unknown as Record<string, unknown>).__streamMessages || [];
-                  ((window as unknown as Record<string, unknown>).__streamMessages as Record<string, unknown>[]).push({
+                  window.__streamMessages = window.__streamMessages || [];
+                  window.__streamMessages.push({
                     timestamp: Date.now(),
                     stage,
                     message,
@@ -356,8 +380,8 @@ export function CognitiveStreamAnimator({
                 
                 // 开发环境错误记录
                 if (process.env.NODE_ENV === 'development') {
-                  (window as unknown as Record<string, unknown>).__streamErrors = (window as unknown as Record<string, unknown>).__streamErrors || [];
-                  ((window as unknown as Record<string, unknown>).__streamErrors as Record<string, unknown>[]).push({
+                  window.__streamErrors = window.__streamErrors || [];
+                  window.__streamErrors.push({
                     timestamp: Date.now(),
                     stage,
                     line,
@@ -394,18 +418,22 @@ export function CognitiveStreamAnimator({
       }
 
     } catch (error) {
-      console.log('🔥 Stream error caught:', {
-        error: error instanceof Error ? error.message : toText(error),
-        streamId,
-        currentStreamId: currentStreamIdRef.current,
-        isMounted: isMountedRef.current,
-        isNavigating: isNavigatingRef.current,
-        streamCompleted: streamCompletedSuccessfully.current
-      });
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('🔥 Stream error caught:', {
+          error: error instanceof Error ? error.message : toText(error),
+          streamId,
+          currentStreamId: currentStreamIdRef.current,
+          isMounted: isMountedRef.current,
+          isNavigating: isNavigatingRef.current,
+          streamCompleted: streamCompletedSuccessfully.current
+        });
+      }
 
       // 检查是否是已废弃的流 - 如果不是当前活动流，静默忽略
       if (currentStreamIdRef.current !== streamId) {
-        console.log('🚫 Ignoring error from stale stream');
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          console.log('🚫 Ignoring error from stale stream');
+        }
         return;
       }
 
@@ -414,7 +442,9 @@ export function CognitiveStreamAnimator({
 
       // 如果流已经成功完成，这是一个预期的结束，忽略异常
       if (streamCompletedSuccessfully.current) {
-        console.log('✅ Stream ended gracefully, ignoring post-completion error');
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          console.log('✅ Stream ended gracefully, ignoring post-completion error');
+        }
         return;
       }
 
@@ -425,7 +455,9 @@ export function CognitiveStreamAnimator({
 
       if (isAbortError) {
         if (!isMountedRef.current || isNavigatingRef.current) {
-          console.log('🧭 Stream aborted due to unmount/navigation - this is expected');
+          if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+            console.log('🧭 Stream aborted due to unmount/navigation - this is expected');
+          }
           return;
         }
         // 如果是挂载状态下的中止，可能是网络问题
@@ -469,11 +501,15 @@ export function CognitiveStreamAnimator({
 
   // 组件挂载或 stage 改变时启动流式请求
   useEffect(() => {
-    console.log(`🔄 Stage changed to ${stage}, initializing new stream...`);
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log(`🔄 Stage changed to ${stage}, initializing new stream...`);
+    }
     
     // 阶段切换：主动中止旧流，重置所有状态标志
     if (abortControllerRef.current) {
-      console.log('🛑 Aborting previous stream due to stage change');
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('🛑 Aborting previous stream due to stage change');
+      }
       try { 
         abortControllerRef.current.abort(); 
       } catch {

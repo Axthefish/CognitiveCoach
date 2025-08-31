@@ -29,13 +29,15 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 统一的 useEffect 处理所有流式相关逻辑和组件生命周期
   useEffect(() => {
-    console.log('🔧 S1KnowledgeFrameworkView: Effect triggered', {
-      isLoading,
-      currentStage: streaming.currentStage,
-      hasUserGoal: !!userContext.userGoal,
-      hasStarted: hasStartedStream.current,
-      isMounted: isMountedRef.current
-    });
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('🔧 S1KnowledgeFrameworkView: Effect triggered', {
+        isLoading,
+        currentStage: streaming.currentStage,
+        hasUserGoal: !!userContext.userGoal,
+        hasStarted: hasStartedStream.current,
+        isMounted: isMountedRef.current
+      });
+    }
     
     isMountedRef.current = true;
     
@@ -52,7 +54,9 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         userContext.userGoal.trim().length > 0 && 
         !hasStartedStream.current) {
       
-      console.log('✅ S1: Starting stream processing for goal:', userContext.userGoal);
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('✅ S1: Starting stream processing for goal:', userContext.userGoal);
+      }
       hasStartedStream.current = true;
       // CognitiveStreamAnimator会自动处理流式请求
     }
@@ -62,13 +66,17 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
              streaming.currentStage === 'S1' && 
              (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
       
-      console.log('⏱️ S1: Setting timeout for missing userGoal');
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('⏱️ S1: Setting timeout for missing userGoal');
+      }
       timeoutRef.current = setTimeout(() => {
         if (isMountedRef.current && 
             isLoading && 
             streaming.currentStage === 'S1' && 
             (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
-          console.log('❌ S1: Timeout - no userGoal found');
+          if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+            console.log('❌ S1: Timeout - no userGoal found');
+          }
           setError('目标精炼失败，请重新开始');
           stopStreaming();
         }
@@ -77,7 +85,9 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     
     // 清理函数
     return () => {
-      console.log('🧹 S1KnowledgeFrameworkView: Cleaning up');
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('🧹 S1KnowledgeFrameworkView: Cleaning up');
+      }
       isMountedRef.current = false;
       
       // 清理超时定时器
@@ -91,7 +101,9 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       
       // 如果组件卸载时还在流式处理中，停止流式处理
       if (streaming.isStreaming && streaming.currentStage === 'S1') {
-        console.log('🛑 S1: Stopping stream due to unmount');
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          console.log('🛑 S1: Stopping stream due to unmount');
+        }
         stopStreaming();
       }
     };
@@ -99,25 +111,33 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
-    console.log('✅ S1: Stream completed successfully');
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('✅ S1: Stream completed successfully');
+    }
     
     if (isMountedRef.current && 'framework' in data && data.framework) {
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
       setQaIssues(null, []);
     } else if (!isMountedRef.current) {
-      console.log('⚠️ S1: Component unmounted before stream completion');
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('⚠️ S1: Component unmounted before stream completion');
+      }
     }
   };
 
   // 处理流式生成错误
   const handleStreamError = (error: string) => {
     const msg = typeof error === 'string' ? error : toText(error);
-    console.error('❌ S1 streaming error:', msg);
+    if (typeof window !== 'undefined') {
+      console.error('❌ S1 streaming error:', msg);
+    }
     
     // 只在组件仍挂载时处理错误
     if (!isMountedRef.current) {
-      console.log('⚠️ S1: Component unmounted before error handling');
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('⚠️ S1: Component unmounted before error handling');
+      }
       return;
     }
     
@@ -165,12 +185,14 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 如果正在加载且当前阶段是 S1，显示流式动画器
   if (isLoading && streaming.currentStage === 'S1') {
-    console.log('✅ S1 View: Should show CognitiveStreamAnimator', {
-      isLoading,
-      currentStage: streaming.currentStage,
-      isStreaming: streaming.isStreaming,
-      userGoal: userContext.userGoal
-    });
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('✅ S1 View: Should show CognitiveStreamAnimator', {
+        isLoading,
+        currentStage: streaming.currentStage,
+        isStreaming: streaming.isStreaming,
+        userGoal: userContext.userGoal
+      });
+    }
     
     // 确保 userGoal 存在且有效再启动流式处理
     if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {

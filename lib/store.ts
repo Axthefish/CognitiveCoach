@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { StrategySpecZod as StrategySpec } from './schemas';
+import { getHydrationSafeTimestamp, getHydrationSafeRandom, hydrationSafeLog } from './hydration-safe';
 
 // FSM状态定义
 export type FSMState = 
@@ -203,8 +204,9 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   addVersionSnapshot: () => {
     const MAX_VERSIONS = 10; // 限制保存的版本数量
     const userContext = get().userContext;
-    const timestamp = new Date().toISOString();
-    const id = `v-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
+    const timestamp = getHydrationSafeTimestamp();
+    const randomSuffix = (getHydrationSafeRandom() * 1000000).toFixed(0).padStart(6, '0');
+    const id = `v-${timestamp}-${randomSuffix}`;
     // Inline snapshot creation to avoid circular deps
     const snapshot = { 
       id, 
@@ -226,7 +228,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   setError: (error) => set({ error }),
   
   resetStore: () => {
-    console.log('🔄 Store: Resetting all store state');
+    hydrationSafeLog('🔄 Store: Resetting all store state');
     set({
       currentState: 'S0_INTENT_CALIBRATION',
       userContext: { ...initialUserContext }, // 使用展开操作符创建新实例
@@ -252,7 +254,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     })),
 
   navigateToStage: (targetState) => {
-    console.log(`🧭 Store: Navigating to stage ${targetState}, canceling active streams`);
+    hydrationSafeLog(`🧭 Store: Navigating to stage ${targetState}, canceling active streams`);
     set((state) => ({
       currentState: targetState,
       isIterativeMode: state.completedStages.includes(targetState),
@@ -270,7 +272,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   },
 
   startIterativeRefinement: (targetState) => {
-    console.log(`🔄 Store: Starting iterative refinement for ${targetState}`);
+    hydrationSafeLog(`🔄 Store: Starting iterative refinement for ${targetState}`);
     set((state) => ({
       currentState: targetState,
       isIterativeMode: true,
@@ -300,7 +302,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
 
   // 流式相关 Actions
   startStreaming: (stage) => {
-    console.log(`🚀 Starting streaming for stage: ${stage}`);
+    hydrationSafeLog(`🚀 Starting streaming for stage: ${stage}`);
     set((state) => {
       const newState = {
         streaming: {
@@ -315,7 +317,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
         isLoading: true,
         error: null,
       };
-      console.log('🔄 State updated:', {
+      hydrationSafeLog('🔄 State updated:', {
         isLoading: newState.isLoading,
         isStreaming: newState.streaming.isStreaming,
         currentStage: newState.streaming.currentStage
@@ -325,7 +327,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   },
 
   stopStreaming: () => {
-    console.log('🛑 Store: Stopping streaming and clearing all stream state');
+    hydrationSafeLog('🛑 Store: Stopping streaming and clearing all stream state');
     set((state) => ({
       streaming: {
         ...initialStreamingState,
@@ -370,7 +372,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     })),
 
   setStreamError: (error) => {
-    console.log('❌ Store: Setting stream error:', error);
+    hydrationSafeLog('❌ Store: Setting stream error:', error);
     set((state) => ({
       streaming: {
         ...state.streaming,

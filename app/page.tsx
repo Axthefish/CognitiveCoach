@@ -12,6 +12,7 @@ import { IterativeNavigator } from '@/components/ui/iterative-navigator';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { enhancedFetch, NetworkError } from '@/lib/network-utils';
+import { markHydrationComplete } from '@/lib/hydration-safe';
 
 export default function Home() {
   // 防止 hydration mismatch 的标志
@@ -49,6 +50,8 @@ export default function Home() {
   // 客户端挂载标志，避免 hydration mismatch
   React.useEffect(() => {
     setIsClientMounted(true);
+    // 标记 hydration 完成，允许使用真实的随机数和时间戳
+    markHydrationComplete();
   }, []);
 
   // 获取当前状态ID（S0, S1等） - 使用 useMemo 优化

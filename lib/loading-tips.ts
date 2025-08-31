@@ -2,6 +2,8 @@
  * Loading tips helper - provides stage-specific tips for LoadingOverlay
  */
 
+import { getHydrationSafeRandom } from './hydration-safe';
+
 export interface LoadingTip {
   text: string;
   stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4';
@@ -57,5 +59,5 @@ export function getTipsForStage(stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): Loadi
  */
 export function getRandomTip(stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): LoadingTip {
   const tips = getTipsForStage(stage);
-  return tips[Math.floor(Math.random() * tips.length)];
+  return tips[Math.floor(getHydrationSafeRandom() * tips.length)];
 }
