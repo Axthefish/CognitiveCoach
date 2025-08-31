@@ -225,10 +225,11 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   
   setError: (error) => set({ error }),
   
-  resetStore: () => 
+  resetStore: () => {
+    console.log('🔄 Store: Resetting all store state');
     set({
       currentState: 'S0_INTENT_CALIBRATION',
-      userContext: initialUserContext,
+      userContext: { ...initialUserContext }, // 使用展开操作符创建新实例
       versions: [],
       currentVersion: null,
       qaIssues: [],
@@ -238,8 +239,9 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       completedStages: [],
       iterationCount: {},
       isIterativeMode: false,
-      streaming: initialStreamingState,
-    }),
+      streaming: { ...initialStreamingState }, // 使用展开操作符创建新实例
+    });
+  },
 
   // Iterative actions implementation
   markStageCompleted: (stage) => 
@@ -249,15 +251,26 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
         : [...state.completedStages, stage]
     })),
 
-  navigateToStage: (targetState) => 
+  navigateToStage: (targetState) => {
+    console.log(`🧭 Store: Navigating to stage ${targetState}, canceling active streams`);
     set((state) => ({
       currentState: targetState,
       isIterativeMode: state.completedStages.includes(targetState),
       isLoading: false,
-      error: null
-    })),
+      error: null,
+      // 导航时清除所有流状态，防止竞态条件
+      streaming: {
+        ...initialStreamingState,
+        // 如果导航到新阶段，清除之前的内容
+        streamContent: '',
+        cognitiveSteps: [],
+        microLearningTip: null,
+      },
+    }));
+  },
 
-  startIterativeRefinement: (targetState) => 
+  startIterativeRefinement: (targetState) => {
+    console.log(`🔄 Store: Starting iterative refinement for ${targetState}`);
     set((state) => ({
       currentState: targetState,
       isIterativeMode: true,
@@ -266,8 +279,16 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       iterationCount: {
         ...state.iterationCount,
         [targetState]: (state.iterationCount[targetState] || 0) + 1
-      }
-    })),
+      },
+      // 清除之前的流状态，准备新的迭代
+      streaming: {
+        ...initialStreamingState,
+        streamContent: '',
+        cognitiveSteps: [],
+        microLearningTip: null,
+      },
+    }));
+  },
 
   incrementIteration: (stage) => 
     set((state) => ({
@@ -303,14 +324,18 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
     });
   },
 
-  stopStreaming: () => 
+  stopStreaming: () => {
+    console.log('🛑 Store: Stopping streaming and clearing all stream state');
     set((state) => ({
       streaming: {
-        ...state.streaming,
-        isStreaming: false,
+        ...initialStreamingState,
+        // 保持已完成的内容，但清除流状态
+        streamContent: state.streaming.streamContent,
+        cognitiveSteps: state.streaming.cognitiveSteps,
       },
       isLoading: false,
-    })),
+    }));
+  },
 
   updateCognitiveSteps: (steps) => 
     set((state) => ({
@@ -344,16 +369,20 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       },
     })),
 
-  setStreamError: (error) => 
+  setStreamError: (error) => {
+    console.log('❌ Store: Setting stream error:', error);
     set((state) => ({
       streaming: {
         ...state.streaming,
         streamError: error,
         isStreaming: false,
+        // 清除当前阶段，避免混乱
+        currentStage: null,
       },
       error,
       isLoading: false,
-    })),
+    }));
+  },
 
   resetStreamingState: () => 
     set(() => ({

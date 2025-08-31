@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useCognitiveCoachStore } from '@/lib/store';
 import { getTipsForStage, LoadingTip } from '@/lib/loading-tips';
 import { CognitiveCatalystAnimation } from './cognitive-catalyst-animation';
+import { NeuralNetworkAnimation } from './neural-network-animation';
+import { EnhancedProgressIndicator } from './enhanced-progress-indicator';
+import { AIThinkingVisualization } from './ai-thinking-visualization';
 
 interface LoadingOverlayProps {
   variant?: 'blocking' | 'inline';
@@ -99,6 +102,7 @@ export function LoadingOverlay({
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
   const [useCognitiveCatalyst, setUseCognitiveCatalyst] = useState(false);
   const [catalystStage, setCatalystStage] = useState('');
+  const [animationMode, setAnimationMode] = useState<'orbit' | 'catalyst' | 'neural' | 'thinking'>('orbit');
   
   // S0 phases definition - memoized to prevent re-creation
   const s0Phases = useMemo(() => [
@@ -157,11 +161,21 @@ export function LoadingOverlay({
     }
   }, [streaming.microLearningTip, currentTip?.text]);
 
-  // Decide whether to use Cognitive Catalyst animation
+  // Decide which animation mode to use
   useEffect(() => {
     if (stage === 'S0' && userContext.userGoal && userContext.userGoal.trim().length > 0) {
-      setUseCognitiveCatalyst(true);
+      // For S0 with user goal, randomly select between advanced animations
+      const modes: Array<'catalyst' | 'neural' | 'thinking'> = ['catalyst', 'neural', 'thinking'];
+      const selectedMode = modes[Math.floor(Math.random() * modes.length)];
+      setAnimationMode(selectedMode);
+      setUseCognitiveCatalyst(selectedMode === 'catalyst');
+    } else if (stage && stage !== 'S0') {
+      // For other stages, use neural or thinking animation
+      setAnimationMode(Math.random() > 0.5 ? 'neural' : 'thinking');
+      setUseCognitiveCatalyst(false);
     } else {
+      // Default orbit animation
+      setAnimationMode('orbit');
       setUseCognitiveCatalyst(false);
     }
   }, [stage, userContext.userGoal]);
@@ -313,11 +327,25 @@ export function LoadingOverlay({
 
   const LoadingContent = () => (
     <div className="flex flex-col items-center space-y-4">
-      {/* Cognitive Catalyst Animation for S0 with user goal */}
-      {stage === 'S0' && useCognitiveCatalyst && userContext.userGoal ? (
+      {/* Render animation based on mode */}
+      {animationMode === 'catalyst' && stage === 'S0' && userContext.userGoal ? (
         <CognitiveCatalystAnimation
           userGoal={userContext.userGoal}
           onStageChange={setCatalystStage}
+        />
+      ) : animationMode === 'neural' ? (
+        <div className="mb-4">
+          <NeuralNetworkAnimation
+            isActive={true}
+            message={finalMessage}
+            stage={stage === 'S0' ? 'parsing' : stage === 'S1' ? 'analyzing' : 'synthesizing'}
+          />
+        </div>
+      ) : animationMode === 'thinking' && stage ? (
+        <AIThinkingVisualization
+          stage={stage}
+          userGoal={userContext.userGoal}
+          isThinking={true}
         />
       ) : (
         <>
@@ -380,16 +408,15 @@ export function LoadingOverlay({
         </>
       )}
 
-      {/* Progress bar - only show if not using Cognitive Catalyst */}
-      {!(stage === 'S0' && useCognitiveCatalyst) && progress !== null && (
-        <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-          <div 
-            className="bg-blue-500 h-1.5 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${Math.round(progress)}%` }}
+      {/* Enhanced Progress Indicator */}
+      {progress !== null && (
+        <div className="w-full max-w-xs">
+          <EnhancedProgressIndicator
+            progress={progress}
+            stage={finalMessage}
+            variant={animationMode === 'neural' ? 'circular' : animationMode === 'thinking' ? 'wave' : 'linear'}
+            showMilestones={stage === 'S0'}
           />
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
-            {Math.round(progress)}%
-          </div>
         </div>
       )}
 

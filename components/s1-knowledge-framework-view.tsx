@@ -24,9 +24,27 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming, setError } = useCognitiveCoachStore();
   const framework = userContext.knowledgeFramework;
   const hasStartedStream = useRef(false);
+  const isMountedRef = useRef(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 监听userGoal变化，确保在目标设置后才启动流式处理
+  // 统一的 useEffect 处理所有流式相关逻辑和组件生命周期
   useEffect(() => {
+    console.log('🔧 S1KnowledgeFrameworkView: Effect triggered', {
+      isLoading,
+      currentStage: streaming.currentStage,
+      hasUserGoal: !!userContext.userGoal,
+      hasStarted: hasStartedStream.current,
+      isMounted: isMountedRef.current
+    });
+    
+    isMountedRef.current = true;
+    
+    // 清理之前的超时定时器
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
     // 如果正在S1阶段加载，有有效的userGoal，但还没有启动流式处理
     if (isLoading && 
         streaming.currentStage === 'S1' && 
@@ -34,46 +52,74 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         userContext.userGoal.trim().length > 0 && 
         !hasStartedStream.current) {
       
+      console.log('✅ S1: Starting stream processing for goal:', userContext.userGoal);
       hasStartedStream.current = true;
       // CognitiveStreamAnimator会自动处理流式请求
     }
     
     // 如果在S1阶段等待userGoal太长时间（超过5秒），显示错误
-    if (isLoading && 
-        streaming.currentStage === 'S1' && 
-        (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
+    else if (isLoading && 
+             streaming.currentStage === 'S1' && 
+             (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
       
-      const timeout = setTimeout(() => {
-        if (isLoading && streaming.currentStage === 'S1' && (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
+      console.log('⏱️ S1: Setting timeout for missing userGoal');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current && 
+            isLoading && 
+            streaming.currentStage === 'S1' && 
+            (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
+          console.log('❌ S1: Timeout - no userGoal found');
           setError('目标精炼失败，请重新开始');
           stopStreaming();
         }
       }, 5000); // 5秒超时
-      
-      return () => clearTimeout(timeout);
     }
-  }, [userContext.userGoal, isLoading, streaming.currentStage, setError, stopStreaming]);
-
-  // 重置流式处理状态当组件卸载时
-  useEffect(() => {
+    
+    // 清理函数
     return () => {
+      console.log('🧹 S1KnowledgeFrameworkView: Cleaning up');
+      isMountedRef.current = false;
+      
+      // 清理超时定时器
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      
+      // 重置流式处理状态
       hasStartedStream.current = false;
+      
+      // 如果组件卸载时还在流式处理中，停止流式处理
+      if (streaming.isStreaming && streaming.currentStage === 'S1') {
+        console.log('🛑 S1: Stopping stream due to unmount');
+        stopStreaming();
+      }
     };
-  }, []);
+  }, [userContext.userGoal, isLoading, streaming.currentStage, streaming.isStreaming, setError, stopStreaming]);
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
-    if ('framework' in data && data.framework) {
+    console.log('✅ S1: Stream completed successfully');
+    
+    if (isMountedRef.current && 'framework' in data && data.framework) {
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
       setQaIssues(null, []);
+    } else if (!isMountedRef.current) {
+      console.log('⚠️ S1: Component unmounted before stream completion');
     }
   };
 
   // 处理流式生成错误
   const handleStreamError = (error: string) => {
     const msg = typeof error === 'string' ? error : toText(error);
-    console.error('S1 streaming error:', msg);
+    console.error('❌ S1 streaming error:', msg);
+    
+    // 只在组件仍挂载时处理错误
+    if (!isMountedRef.current) {
+      console.log('⚠️ S1: Component unmounted before error handling');
+      return;
+    }
     
     // 报告错误
     reportError(new Error(msg), {
@@ -81,7 +127,8 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       userGoal: userContext.userGoal,
       component: 'S1KnowledgeFrameworkView',
       hasFramework: !!framework,
-      frameworkLength: framework?.length || 0
+      frameworkLength: framework?.length || 0,
+      isMounted: isMountedRef.current
     });
   };
 

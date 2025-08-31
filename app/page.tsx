@@ -14,6 +14,9 @@ import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { enhancedFetch, NetworkError } from '@/lib/network-utils';
 
 export default function Home() {
+  // 防止 hydration mismatch 的标志
+  const [isClientMounted, setIsClientMounted] = React.useState(false);
+  
   // 优化：分别获取状态，避免不必要的重渲染
   const currentState = useCognitiveCoachStore(state => state.currentState);
   const userContext = useCognitiveCoachStore(state => state.userContext);
@@ -38,10 +41,15 @@ export default function Home() {
     startIterativeRefinement
   } = useCognitiveCoachStore();
   
-  // Local state for S0 conversation
+  // Local state for S0 conversation (初始化为稳定状态以避免 hydration mismatch)
   const [s0ConversationMode, setS0ConversationMode] = React.useState(false);
-  const [s0AiQuestion, setS0AiQuestion] = React.useState<string | undefined>();
+  const [s0AiQuestion, setS0AiQuestion] = React.useState<string | undefined>(undefined);
   const [s0ForceClarification, setS0ForceClarification] = React.useState(false);
+
+  // 客户端挂载标志，避免 hydration mismatch
+  React.useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
 
   // 获取当前状态ID（S0, S1等） - 使用 useMemo 优化
   const currentStateId = React.useMemo(() => 
@@ -318,6 +326,18 @@ export default function Home() {
     }
   };
 
+  // 防止 hydration mismatch - 在客户端挂载前显示最小UI
+  if (!isClientMounted) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center" suppressHydrationWarning>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">正在加载 CognitiveCoach...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Iterative Navigator */}
@@ -407,8 +427,8 @@ export default function Home() {
       </main>
 
               {/* 调试信息（仅在开发环境显示） */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm">
+        {process.env.NODE_ENV === 'development' && isClientMounted && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm" suppressHydrationWarning>
             <div className="font-bold mb-2">Debug Info:</div>
             <div>Current State: {currentState}</div>
             <div>User Goal: {userContext.userGoal || 'Not set'}</div>
@@ -421,6 +441,7 @@ export default function Home() {
             <div>RunTier: {userContext.runTier}</div>
             <div>DecisionType: {userContext.decisionType}</div>
             <div>Seed: {userContext.seed ?? '-'}</div>
+            <div>Client Mounted: {isClientMounted ? 'Yes' : 'No'}</div>
           </div>
         )}
     </div>
