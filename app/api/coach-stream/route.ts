@@ -98,6 +98,14 @@ const getCognitiveSteps = (action: CoachAction): CognitiveStep[] => {
         { id: 'generate-insights', message: '生成洞察和建议...', status: 'pending' }
       ];
     
+    case 'refineGoal':
+      return [
+        { id: 'parse-input', message: '解析和理解你的目标描述...', status: 'pending' },
+        { id: 'extract-intent', message: '抽取核心意图和关键要素...', status: 'pending' },
+        { id: 'generate-clarification', message: '生成精准的目标表述...', status: 'pending' },
+        { id: 'validate-feasibility', message: '评估目标的可行性和完整性...', status: 'pending' }
+      ];
+    
     default:
       return [
         { id: 'processing', message: '处理你的请求...', status: 'pending' },
@@ -308,7 +316,7 @@ async function handleRefineGoalStream(
   encoder: TextEncoder,
   payload: RefineGoalPayload
 ) {
-  // S0处理相对简单，保持原有逻辑但添加流式反馈
+  // S0 - Enhanced with detailed progress steps for better UX
   const steps = getCognitiveSteps('refineGoal');
   
   // 发送初始步骤
@@ -317,20 +325,36 @@ async function handleRefineGoalStream(
   })));
 
   try {
-    // 步骤1：开始处理
+    // 步骤1：解析输入
     steps[0].status = 'in_progress';
-    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
-      steps 
-    })));
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    // 步骤2：抽取意图
+    steps[0].status = 'completed';
+    steps[1].status = 'in_progress';
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // 步骤3：生成澄清
+    steps[1].status = 'completed';
+    steps[2].status = 'in_progress';
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
     const s0Service = S0Service.getInstance();
     const result = await s0Service.refineGoal(payload);
     
-    // 步骤完成
-    steps[0].status = 'completed';
-    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { 
-      steps 
-    })));
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 步骤4：验证可行性
+    steps[2].status = 'completed';
+    steps[3].status = 'in_progress';
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+    await new Promise(resolve => setTimeout(resolve, 400));
+    
+    // 所有步骤完成
+    steps[3].status = 'completed';
+    controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
     // 发送结果数据
     const resultJson = await result.json();

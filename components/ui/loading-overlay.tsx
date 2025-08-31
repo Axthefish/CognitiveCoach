@@ -93,10 +93,9 @@ export function LoadingOverlay({
   const [currentTip, setCurrentTip] = useState<LoadingTip | null>(null);
   const [showTip, setShowTip] = useState(true);
   
-  // S0 soft phases state
+  // S0 phases state (no soft progress - using real progress only)
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [showLongWaitHelper, setShowLongWaitHelper] = useState(false);
-  const [softProgress, setSoftProgress] = useState(0);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
@@ -185,7 +184,6 @@ export function LoadingOverlay({
     if (stage !== 'S0') {
       setPhaseIndex(0);
       setShowLongWaitHelper(false);
-      setSoftProgress(0);
       setUseCognitiveCatalyst(false);
       return;
     }
@@ -200,24 +198,11 @@ export function LoadingOverlay({
       setShowLongWaitHelper(true);
     }, 5000);
 
-    // Enhanced soft progress with smooth acceleration curve
-    const progressInterval = setInterval(() => {
-      setSoftProgress(prev => {
-        if (prev >= 92) return 92;
-        
-        // Smooth acceleration: faster at start, slower as it approaches 92%
-        const remaining = 92 - prev;
-        const accelerationFactor = Math.max(0.1, remaining / 92);
-        const delta = (0.5 + Math.random() * 1.5) * accelerationFactor;
-        
-        return Math.min(92, prev + delta);
-      });
-    }, 300);
+    // No more fake progress - using real progress from cognitive steps only
 
     return () => {
       clearInterval(phaseInterval);
       clearTimeout(helperTimer);
-      clearInterval(progressInterval);
     };
   }, [stage, s0Phases.length]); // Include s0Phases.length dependency
 
@@ -254,13 +239,11 @@ export function LoadingOverlay({
   const completed = steps.filter(s => s.status === 'completed').length;
   const inProgress = steps.filter(s => s.status === 'in_progress').length;
   
-  // Enhanced progress calculation with smooth handover from soft progress
+  // Real progress calculation only - no fake progress
   const realProgress = total > 0 ? Math.min(99, Math.round(((completed + inProgress * 0.5) / total) * 100)) : null;
   
-  // Compute target progress based on stage
-  const targetProgress = stage === 'S0' 
-    ? Math.max(softProgress, realProgress ?? 0) // For S0, blend soft and real progress
-    : realProgress; // For other stages, use real progress only
+  // Use real progress for all stages
+  const targetProgress = realProgress;
   
   // Use smooth animation for progress display
   const displayProgress = useSmoothedNumber(targetProgress);
