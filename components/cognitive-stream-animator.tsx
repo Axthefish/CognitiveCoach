@@ -75,6 +75,17 @@ export function CognitiveStreamAnimator({
     renderCount.current += 1;
     console.log(`CognitiveStreamAnimator rendered ${renderCount.current} times for stage: ${stage}`);
   });
+  
+  // 测试：立即记录组件状态
+  console.log('🔍 Component render state:', {
+    stage,
+    isStreaming,
+    error,
+    hasError: !!error,
+    stepsLength: steps.length,
+    isMountedRef: isMountedRef.current,
+    hasStartedRef: hasStartedRef.current,
+  });
 
   const { 
     startStreaming: startStreamingInStore, 
@@ -594,16 +605,35 @@ export function CognitiveStreamAnimator({
     };
   }, [stage]);
   
-  // 组件挂载后启动流式请求
+  // 组件挂载后启动流式请求 - 直接内联调用避免闭包问题
   useEffect(() => {
     console.log(`📍 Starting stream effect for stage ${stage}`);
     
-    // 启动流式请求（startStreaming内部会处理防重复逻辑）
-    startStreaming();
+    const doStartStreaming = async () => {
+      console.log('🎯 Direct startStreaming called in useEffect', {
+        isMounted: isMountedRef.current,
+        hasStarted: hasStartedRef.current,
+        stage,
+      });
+      
+      // 直接调用避免任何闭包问题
+      try {
+        await startStreaming();
+      } catch (error) {
+        console.error('❌ Error calling startStreaming:', error);
+      }
+    };
+    
+    // 添加小延迟确保组件完全挂载
+    const timer = setTimeout(() => {
+      console.log('⏰ Timer fired, calling doStartStreaming...');
+      doStartStreaming();
+    }, 100);
     
     // 清理函数
     return () => {
       console.log('🧹 Cleaning up stream on effect cleanup');
+      clearTimeout(timer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 空依赖数组，只在组件挂载时运行一次
