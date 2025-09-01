@@ -1,10 +1,14 @@
 'use client';
 
 import React from 'react';
+import { useCognitiveCoachStore } from '@/lib/store';
 
 export default function Home() {
   const [mounted, setMounted] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  
+  // 始终调用hook，但只在mounted后使用值
+  const currentState = useCognitiveCoachStore(state => state.currentState);
   
   React.useEffect(() => {
     try {
@@ -42,7 +46,8 @@ export default function Home() {
         <h1 className="text-2xl font-bold mb-4">CognitiveCoach</h1>
         <p className="text-gray-600 dark:text-gray-400">应用已加载成功</p>
         <div className="mt-8 p-4 border rounded-lg">
-          <p>这是一个简化版本，用于测试应用是否能正常运行。</p>
+          <h2 className="font-semibold mb-2">测试 Store 功能</h2>
+          <p>当前状态: {currentState}</p>
         </div>
       </main>
     </div>
