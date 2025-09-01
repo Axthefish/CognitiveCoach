@@ -21,7 +21,7 @@ interface S1KnowledgeFrameworkViewProps {
 
 // 完全静态的S1组件 - 避免任何可能导致hydration问题的动态内容
 export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrameworkViewProps) {
-  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming, setError } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming } = useCognitiveCoachStore();
   const framework = userContext.knowledgeFramework;
   const hasStartedStream = useRef(false);
   const isMountedRef = useRef(true);
@@ -56,6 +56,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         stopStreaming();
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载/卸载时运行
 
   // 标记hydration完成

@@ -545,6 +545,7 @@ export function CognitiveStreamAnimator({
         console.log('🧹 Cleaning up stream on unmount');
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 空依赖数组，只在组件挂载时运行一次
 
   // 如果出现错误，显示错误状态
