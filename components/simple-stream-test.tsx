@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 
-export function SimpleStreamTest({ stage, requestPayload }: { stage: string; requestPayload: any }) {
+export function SimpleStreamTest({ stage, requestPayload }: { stage: string; requestPayload: Record<string, unknown> }) {
   const [messages, setMessages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

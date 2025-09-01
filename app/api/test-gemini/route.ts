@@ -8,7 +8,7 @@ export async function GET() {
     const apiKey = getApiKey();
     const client = createGeminiClient();
     
-    const diagnostics = {
+    const diagnostics: Record<string, unknown> = {
       hasGeminiKey: !!env.GEMINI_API_KEY,
       hasGoogleKey: !!env.GOOGLE_AI_API_KEY,
       apiKeyLength: apiKey?.length || 0,

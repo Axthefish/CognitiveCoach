@@ -75,17 +75,6 @@ export function CognitiveStreamAnimator({
     renderCount.current += 1;
     console.log(`CognitiveStreamAnimator rendered ${renderCount.current} times for stage: ${stage}`);
   });
-  
-  // 测试：立即记录组件状态
-  console.log('🔍 Component render state:', {
-    stage,
-    isStreaming,
-    error,
-    hasError: !!error,
-    stepsLength: steps.length,
-    isMountedRef: isMountedRef.current,
-    hasStartedRef: hasStartedRef.current,
-  });
 
   const { 
     startStreaming: startStreamingInStore, 
@@ -116,6 +105,19 @@ export function CognitiveStreamAnimator({
   useEffect(() => {
     stepsRef.current = steps;
   }, [steps]);
+  
+  // 测试：记录组件状态（放在 refs 声明之后）
+  useEffect(() => {
+    console.log('🔍 Component render state:', {
+      stage,
+      isStreaming,
+      error,
+      hasError: !!error,
+      stepsLength: steps.length,
+      isMountedRef: isMountedRef.current,
+      hasStartedRef: hasStartedRef.current,
+    });
+  });
   
   // 组件卸载时清理
   useEffect(() => {

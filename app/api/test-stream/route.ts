@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+// Stream API test endpoint
 
 export async function GET() {
   const encoder = new TextEncoder();
