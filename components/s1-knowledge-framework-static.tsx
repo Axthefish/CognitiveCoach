@@ -101,7 +101,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   };
 
   // 临时测试：使用模拟数据
-  const useMockData = true; // 临时标志，用于测试
+  const useMockData = false; // 禁用模拟数据，使用真实API
   
   // 如果正在加载，显示流式动画器（不需要检查 streaming.currentStage，因为它是由 CognitiveStreamAnimator 设置的）
   if (isLoading && !useMockData) {

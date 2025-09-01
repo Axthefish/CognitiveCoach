@@ -276,24 +276,36 @@ export function CognitiveStreamAnimator({
 
   // 启动流式请求
   const startStreaming = async () => {
+    console.log('🎯 startStreaming called', {
+      isMounted: isMountedRef.current,
+      hasStarted: hasStartedRef.current,
+      hasAbortController: !!abortControllerRef.current,
+      stage,
+      requestPayload
+    });
+    
     // 检查组件是否已卸载
     if (!isMountedRef.current) {
+      console.log('❌ Component not mounted, returning');
       return;
     }
     
     // 若已有进行中的请求，先主动中止以避免并发
     if (abortControllerRef.current) {
+      console.log('⚠️ Aborting previous request');
       try { abortControllerRef.current.abort(); } catch {}
       abortControllerRef.current = null;
     }
 
     // 防止重复启动：如果已经启动过，直接返回
     if (hasStartedRef.current) {
+      console.log('⚠️ Stream already started, returning');
       return;
     }
     
     // 标记已启动
     hasStartedRef.current = true;
+    console.log('✅ Marked as started');
     
     // 创建新的AbortController，并生成本次流的标识
     const abortController = new AbortController();
@@ -329,38 +341,74 @@ export function CognitiveStreamAnimator({
       
       console.log('📤 Sending request to /api/coach-stream:', requestBody);
 
-      const response = await fetch('/api/coach-stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: abortController.signal // 添加abort信号
+      // 添加超时处理
+      const fetchWithTimeout = async () => {
+        const timeoutId = setTimeout(() => abortController.abort(), 30000); // 30秒超时
+        
+        try {
+          const response = await fetch('/api/coach-stream', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            signal: abortController.signal // 添加abort信号
+          });
+          
+          clearTimeout(timeoutId);
+          return response;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      };
+      
+      console.log('🚀 Sending fetch request...');
+      const response = await fetchWithTimeout();
+      
+      console.log('📡 Response object:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        bodyUsed: response.bodyUsed,
+        url: response.url
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
       
       console.log('✅ Response received, status:', response.status);
 
       const reader = response.body?.getReader();
+      console.log('📚 Reader obtained:', !!reader, 'body exists:', !!response.body);
+      
       if (!reader) {
         throw new Error('Unable to read response stream');
       }
 
       const decoder = new TextDecoder();
       let buffer = '';
+      
+      console.log('📖 Starting to read stream...');
+      let messageCount = 0;
 
       try {
         while (true) {
           const { done, value } = await reader.read();
           
           if (done) {
+            console.log(`✅ Stream ended, received ${messageCount} messages`);
             break;
           }
 
-          buffer += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          console.log(`📦 Received chunk (length: ${chunk.length}): ${chunk.substring(0, 100)}...`);
+          
           const lines = buffer.split('\n');
           
           // 保留最后一行（可能不完整）
@@ -380,6 +428,8 @@ export function CognitiveStreamAnimator({
                 if (!jsonStr) continue;
                 
                 const message: StreamMessage = JSON.parse(jsonStr);
+                messageCount++;
+                console.log(`📨 Parsed message #${messageCount}:`, message.type, message);
                 
                 // 开发环境调试记录
                 if (process.env.NODE_ENV === 'development') {
@@ -534,20 +584,26 @@ export function CognitiveStreamAnimator({
     }
   };
 
-  // 组件挂载时启动流式请求（只运行一次）
+  // 重置 hasStartedRef 当组件重新挂载时
   useEffect(() => {
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      console.log(`🔄 Component mounted with stage ${stage}, initializing stream...`);
-    }
+    console.log(`🔄 Component mounted with stage ${stage}, resetting hasStartedRef`);
+    hasStartedRef.current = false; // 重置标志，确保能启动新的流
+    return () => {
+      console.log('🧹 Component unmounting, resetting hasStartedRef');
+      hasStartedRef.current = false;
+    };
+  }, [stage]);
+  
+  // 组件挂载后启动流式请求
+  useEffect(() => {
+    console.log(`📍 Starting stream effect for stage ${stage}`);
     
     // 启动流式请求（startStreaming内部会处理防重复逻辑）
     startStreaming();
     
     // 清理函数
     return () => {
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('🧹 Cleaning up stream on unmount');
-      }
+      console.log('🧹 Cleaning up stream on effect cleanup');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 空依赖数组，只在组件挂载时运行一次
