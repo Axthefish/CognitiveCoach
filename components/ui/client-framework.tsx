@@ -2,9 +2,9 @@
 
 import dynamic from 'next/dynamic';
 
-// 动态导入CollapsibleFramework，完全禁用SSR
+// 动态导入SimpleFramework，完全禁用SSR
 export const ClientFramework = dynamic(
-  () => import('./collapsible-framework').then(mod => mod.CollapsibleFramework),
+  () => import('./simple-framework').then(mod => mod.SimpleFramework),
   {
     ssr: false,
     loading: () => (

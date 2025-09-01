@@ -3,7 +3,25 @@
 import React from 'react';
 import { useCognitiveCoachStore } from '@/lib/store';
 import S0IntentView from '@/components/s0-intent-view';
-import S1KnowledgeFrameworkView from '@/components/s1-knowledge-framework-view';
+import dynamic from 'next/dynamic';
+
+const S1KnowledgeFrameworkView = dynamic(
+  () => import('@/components/s1-knowledge-framework-view'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="animate-fade-in">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">
+          正在加载知识框架模块...
+        </p>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    )
+  }
+);
 import S2SystemDynamicsView from '@/components/s2-system-dynamics-view';
 import S3ActionPlanView from '@/components/s3-action-plan-view';
 import S4AutonomousOperationView from '@/components/s4-autonomous-operation-view';
