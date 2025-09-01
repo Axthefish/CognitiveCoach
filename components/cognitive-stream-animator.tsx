@@ -86,6 +86,19 @@ export function CognitiveStreamAnimator({
   const currentStreamIdRef = useRef<string | null>(null);
   const isNavigatingRef = useRef(false); // 跟踪是否因导航而中止
   
+  // 存储当前状态的 refs，避免依赖循环
+  const isStreamingRef = useRef(isStreaming);
+  const stepsRef = useRef(steps);
+  
+  // 更新 refs 当状态改变时
+  useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+  
+  useEffect(() => {
+    stepsRef.current = steps;
+  }, [steps]);
+  
   // 组件卸载时清理
   useEffect(() => {
     isMountedRef.current = true;
@@ -469,8 +482,8 @@ export function CognitiveStreamAnimator({
         reportError(errorInstance, {
           stage,
           requestPayload,
-          isStreaming,
-          currentSteps: steps,
+          isStreaming: isStreamingRef.current,
+          currentSteps: stepsRef.current,
           component: 'CognitiveStreamAnimator',
           streamId,
           isNavigating: isNavigatingRef.current,
@@ -497,7 +510,7 @@ export function CognitiveStreamAnimator({
         stopStreaming();
       }
     }
-  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming, isStreaming, steps, setStreamError]);
+  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming, setStreamError]);
 
   // 组件挂载或 stage 改变时启动流式请求
   useEffect(() => {
