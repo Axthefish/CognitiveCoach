@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { enhancedFetch, NetworkError } from "@/lib/network-utils"
 
 export default function S4AutonomousOperationView() {
-  const { userContext, isLoading, setLoading, setError } = useCognitiveCoachStore()
+  const { userContext, isLoading, setLoading, setError, resetStore } = useCognitiveCoachStore()
   const [showConsultModal, setShowConsultModal] = useState(false)
   const [consultQuestion, setConsultQuestion] = useState("")
   const [consultResponse, setConsultResponse] = useState("")
@@ -179,7 +179,7 @@ export default function S4AutonomousOperationView() {
         setError(result.error || '分析进度时出错')
       }
     } catch (error) {
-      console.error('Error analyzing progress:', error)
+      // Error analyzing progress - 错误处理已在上面的条件中处理
       if (error instanceof Error && 'type' in error) {
         const networkError = error as NetworkError;
         if (networkError.type === 'timeout') {
@@ -236,7 +236,7 @@ export default function S4AutonomousOperationView() {
         setConsultResponse('抱歉，咨询服务暂时不可用。请稍后再试。')
       }
     } catch (error) {
-      console.error('Error consulting:', error)
+      // Error consulting - 错误处理已在上面的条件中处理
       if (error instanceof Error && 'type' in error) {
         const networkError = error as NetworkError;
         if (networkError.type === 'timeout') {
@@ -267,10 +267,22 @@ export default function S4AutonomousOperationView() {
             控制权现在属于你。更新你的进度并使用仪表板监控你的旅程。如果需要分析，我随时在这里。
           </p>
         </div>
-        <Button variant="outline" onClick={() => setShowConsultModal(true)}>
-          <MessageSquarePlus className="w-4 h-4 mr-2" />
-          咨询教练
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              if (confirm('确定要重新开始吗？这将清除所有当前进度。')) {
+                resetStore();
+              }
+            }}
+          >
+            🔄 重新开始
+          </Button>
+          <Button variant="outline" onClick={() => setShowConsultModal(true)}>
+            <MessageSquarePlus className="w-4 h-4 mr-2" />
+            咨询教练
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">

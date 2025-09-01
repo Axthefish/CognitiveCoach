@@ -68,13 +68,9 @@ export function CognitiveStreamAnimator({
   const [currentTip, setCurrentTip] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [finalData, setFinalData] = useState<StreamResponseData | null>(null);
-  const renderCount = useRef(0);
+
   
-  // 调试：记录渲染
-  useEffect(() => {
-    renderCount.current += 1;
-    console.log(`CognitiveStreamAnimator rendered ${renderCount.current} times for stage: ${stage}`);
-  });
+
 
   const { 
     startStreaming: startStreamingInStore, 
@@ -106,18 +102,7 @@ export function CognitiveStreamAnimator({
     stepsRef.current = steps;
   }, [steps]);
   
-  // 测试：记录组件状态（放在 refs 声明之后）
-  useEffect(() => {
-    console.log('🔍 Component render state:', {
-      stage,
-      isStreaming,
-      error,
-      hasError: !!error,
-      stepsLength: steps.length,
-      isMountedRef: isMountedRef.current,
-      hasStartedRef: hasStartedRef.current,
-    });
-  });
+
   
   // 组件卸载时清理
   useEffect(() => {
@@ -125,9 +110,7 @@ export function CognitiveStreamAnimator({
     isNavigatingRef.current = false;
     
     return () => {
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('🧹 CognitiveStreamAnimator unmounting, cleaning up...');
-      }
+
       isMountedRef.current = false;
       hasStartedRef.current = false;
       isNavigatingRef.current = true; // 标记为导航中止
@@ -151,18 +134,10 @@ export function CognitiveStreamAnimator({
 
   // 处理流式消息
   const processStreamMessage = useCallback((message: StreamMessage, streamId?: string) => {
-    console.log('🎯 processStreamMessage called:', { messageType: message.type, streamId });
-    
+
     // 检查组件是否已卸载或流ID不匹配
     if (!isMountedRef.current || (streamId && currentStreamIdRef.current !== streamId)) {
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('🚫 Ignoring stream message: component unmounted or stale stream', {
-          isMounted: isMountedRef.current,
-          expectedStreamId: currentStreamIdRef.current,
-          receivedStreamId: streamId,
-          messageType: message.type
-        });
-      }
+
       return;
     }
     

@@ -11,7 +11,7 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { reportError } from "@/lib/error-reporter"
 import { markHydrationComplete } from "@/lib/hydration-safe"
-import { SimpleStreamTest } from "@/components/simple-stream-test"
+
 
 // 辅助函数：将任何值安全转换为字符串
 const toText = (v: unknown): string => typeof v === 'string' ? v : v == null ? '' : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
@@ -22,18 +22,12 @@ interface S1KnowledgeFrameworkViewProps {
 
 // 完全静态的S1组件 - 避免任何可能导致hydration问题的动态内容
 export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrameworkViewProps) {
-  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming, setLoading } = useCognitiveCoachStore();
   const framework = userContext.knowledgeFramework;
   const hasStartedStream = useRef(false);
   const isMountedRef = useRef(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const renderCount = useRef(0);
-  
-  // 调试：记录渲染
-  useEffect(() => {
-    renderCount.current += 1;
-    console.log(`S1 component rendered ${renderCount.current} times, isLoading: ${isLoading}, framework: ${framework ? 'exists' : 'null'}`);
-  });
+
 
   // 组件挂载时的生命周期管理
   useEffect(() => {
@@ -57,8 +51,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         stopStreaming();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 只在组件挂载/卸载时运行
+  }, [streaming.currentStage, streaming.isStreaming, stopStreaming]); // 依赖清理相关状态
 
   // 标记hydration完成
   useEffect(() => {
@@ -67,20 +60,18 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
-    console.log('✅ Stream complete, received data:', data);
     if (isMountedRef.current && 'framework' in data && data.framework) {
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
       setQaIssues(null, []);
       // 完成后设置 loading 为 false
-      useCognitiveCoachStore.getState().setLoading(false);
+      setLoading(false);
     }
   };
 
   // 处理流式生成错误
   const handleStreamError = (error: string) => {
     const msg = typeof error === 'string' ? error : toText(error);
-    console.error('❌ Stream error in S1:', msg);
     
     // 只在组件仍挂载时处理错误
     if (!isMountedRef.current) {
@@ -98,7 +89,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     });
     
     // 错误时也设置 loading 为 false
-    useCognitiveCoachStore.getState().setLoading(false);
+    setLoading(false);
   };
 
   // 临时测试：使用模拟数据
@@ -126,31 +117,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       );
     }
 
-    // 临时测试：使用简单的流式测试组件
-    const useSimpleTest = false; // 切换回主组件
-    
-    if (useSimpleTest) {
-      return (
-        <div className="animate-fade-in">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
-            使用简化测试组件...
-          </p>
-          
-          <ErrorBoundary>
-            <SimpleStreamTest 
-              stage="S1"
-              requestPayload={{ 
-                userGoal: userContext.userGoal,
-                decisionType: userContext.decisionType,
-                runTier: userContext.runTier,
-                seed: userContext.seed
-              }}
-            />
-          </ErrorBoundary>
-        </div>
-      );
-    }
+
     
     return (
       <div className="animate-fade-in">
@@ -176,46 +143,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     );
   }
   
-  // 临时：如果使用模拟数据，立即设置框架
-  // 注释掉模拟数据代码，避免干扰真实流式生成
-  /*
-  if (isLoading && useMockData && !framework) {
-    console.log('📝 Using mock data for testing...');
-    setTimeout(() => {
-      const mockFramework = [
-        {
-          id: '1',
-          title: '减脂基础原理',
-          summary: '了解减脂的科学原理，包括热量赤字、基础代谢率等核心概念',
-          children: [
-            { id: '1-1', title: '能量平衡原理', summary: '摄入与消耗的关系' },
-            { id: '1-2', title: '基础代谢率(BMR)', summary: '身体静息状态下的能量消耗' }
-          ]
-        },
-        {
-          id: '2',
-          title: '营养策略',
-          summary: '合理的饮食计划和营养素分配',
-          children: [
-            { id: '2-1', title: '宏量营养素比例', summary: '蛋白质、碳水化合物、脂肪的合理配比' },
-            { id: '2-2', title: '微量营养素', summary: '维生素和矿物质的重要性' }
-          ]
-        },
-        {
-          id: '3',
-          title: '运动计划',
-          summary: '有效的运动组合策略',
-          children: [
-            { id: '3-1', title: '有氧运动', summary: '提高心肺功能，增加热量消耗' },
-            { id: '3-2', title: '力量训练', summary: '保持肌肉量，提高基础代谢' }
-          ]
-        }
-      ];
-      
-      handleStreamComplete({ framework: mockFramework });
-    }, 1000);
-  }
-  */
+
 
   // 静态展示框架内容 - 完全避免动态渲染
   return (

@@ -48,8 +48,8 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   };
 
   // 处理流式生成错误
-  const handleStreamError = (error: string) => {
-    console.error('S3 streaming error:', error);
+  const handleStreamError = (_error: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    // 可以在这里添加错误处理逻辑
   };
   
   // Get action plan and KPIs from store
@@ -101,8 +101,8 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
         ...prev,
         [taskId]: subTasks
       }))
-    } catch (error) {
-      console.error('Task breakdown failed:', error)
+    } catch (_error) { // eslint-disable-line @typescript-eslint/no-unused-vars
+      // Task breakdown failed - 可以在这里添加错误处理逻辑
     } finally {
       setIsExpanding(false)
       setExpandingTask(null)

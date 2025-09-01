@@ -35,8 +35,8 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
   };
 
   // 处理流式生成错误
-  const handleStreamError = (error: string) => {
-    console.error('S2 streaming error:', error);
+  const handleStreamError = (_error: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    // 可以在这里添加错误处理逻辑
   };
   // 如果正在加载且当前阶段是 S2，显示流式动画器
   if (isLoading && streaming.currentStage === 'S2') {
@@ -115,8 +115,8 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                 <InteractiveMermaid 
                   chart={dynamics.mermaidChart} 
                   nodes={dynamics.nodes}
-                  onNodeClick={(nodeId) => console.log('Node clicked:', nodeId)}
-                  onWhatIfSimulation={(nodeId) => console.log('What-if simulation for:', nodeId)}
+                  onNodeClick={(_nodeId) => {/* 可以在这里添加节点点击处理逻辑 */}} // eslint-disable-line @typescript-eslint/no-unused-vars
+                  onWhatIfSimulation={(_nodeId) => {/* 可以在这里添加模拟分析逻辑 */}} // eslint-disable-line @typescript-eslint/no-unused-vars
                 />
               </CardContent>
             </Card>
