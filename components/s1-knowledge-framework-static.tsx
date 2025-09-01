@@ -26,6 +26,13 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   const hasStartedStream = useRef(false);
   const isMountedRef = useRef(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const renderCount = useRef(0);
+  
+  // 调试：记录渲染
+  useEffect(() => {
+    renderCount.current += 1;
+    console.log(`S1 component rendered ${renderCount.current} times, isLoading: ${isLoading}, framework: ${framework ? 'exists' : 'null'}`);
+  });
 
   // 组件挂载时的生命周期管理
   useEffect(() => {

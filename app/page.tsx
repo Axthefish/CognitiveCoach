@@ -23,11 +23,18 @@ const S1KnowledgeFrameworkView = dynamic(
 export default function Home() {
   const [mounted, setMounted] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [renderCount, setRenderCount] = React.useState(0);
   
   // Store hooks
   const currentState = useCognitiveCoachStore(state => state.currentState);
   const setCurrentState = useCognitiveCoachStore(state => state.setCurrentState);
   const updateUserContext = useCognitiveCoachStore(state => state.updateUserContext);
+  
+  // 调试：记录渲染次数
+  React.useEffect(() => {
+    setRenderCount(prev => prev + 1);
+    console.log(`Home component rendered ${renderCount + 1} times, currentState: ${currentState}`);
+  });
   
   React.useEffect(() => {
     try {

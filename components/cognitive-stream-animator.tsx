@@ -68,6 +68,13 @@ export function CognitiveStreamAnimator({
   const [currentTip, setCurrentTip] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [finalData, setFinalData] = useState<StreamResponseData | null>(null);
+  const renderCount = useRef(0);
+  
+  // 调试：记录渲染
+  useEffect(() => {
+    renderCount.current += 1;
+    console.log(`CognitiveStreamAnimator rendered ${renderCount.current} times for stage: ${stage}`);
+  });
 
   const { 
     startStreaming: startStreamingInStore, 
