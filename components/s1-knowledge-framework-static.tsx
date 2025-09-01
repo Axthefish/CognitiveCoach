@@ -66,6 +66,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
+    console.log('✅ Stream complete, received data:', data);
     if (isMountedRef.current && 'framework' in data && data.framework) {
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
@@ -78,6 +79,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   // 处理流式生成错误
   const handleStreamError = (error: string) => {
     const msg = typeof error === 'string' ? error : toText(error);
+    console.error('❌ Stream error in S1:', msg);
     
     // 只在组件仍挂载时处理错误
     if (!isMountedRef.current) {
