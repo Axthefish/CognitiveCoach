@@ -3,16 +3,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { CollapsibleFramework } from "@/components/ui/collapsible-framework"
 import { Check } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
-import { FrameworkNode } from "@/lib/types"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { reportError } from "@/lib/error-reporter"
-import { getHydrationSafeTimestamp, markHydrationComplete } from "@/lib/hydration-safe"
+import { markHydrationComplete } from "@/lib/hydration-safe"
 
 // 辅助函数：将任何值安全转换为字符串
 const toText = (v: unknown): string => typeof v === 'string' ? v : v == null ? '' : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
@@ -153,8 +152,6 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     });
   };
 
-  // 全局节点计数器，确保每个节点都有唯一ID
-  const nodeCounterRef = useRef(0);
   const [isClient, setIsClient] = useState(false);
   
   // Hydration保护
@@ -162,87 +159,6 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     setIsClient(true);
     markHydrationComplete();
   }, []);
-  
-  // 递归渲染框架节点 - 修复ID冲突和深度限制
-  const renderFrameworkNode = (node: FrameworkNode, parentPath: string[] = [], depth: number = 0): React.ReactElement | null => {
-    // 防止深度过深的递归
-    if (depth > 8) {
-      console.warn('Framework node depth limit exceeded:', depth);
-      return (
-        <div className="p-2 text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 rounded">
-          <em>内容层级过深，已省略显示</em>
-        </div>
-      );
-    }
-    
-    // 防御性检查
-    if (!node || typeof node !== 'object') {
-      console.error('Invalid node:', node);
-      return null;
-    }
-    
-    // 确保必要的属性存在
-    if (!node.id || !node.title) {
-      console.error('Node missing required properties:', node);
-      return null;
-    }
-    
-    // 生成绝对唯一的ID - 使用路径、时间戳和计数器
-    const currentPath = [...parentPath, node.id];
-    const pathKey = currentPath.join('_');
-    const uniqueId = `node_${++nodeCounterRef.current}_${pathKey}_${depth}_${getHydrationSafeTimestamp().slice(-8)}`;
-    
-    // 对于嵌套子节点，使用递归渲染但不嵌套Accordion
-    const renderChildren = () => {
-      if (!Array.isArray(node.children) || node.children.length === 0) {
-        return null;
-      }
-      
-      return (
-        <div className="ml-4 mt-2 space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
-          {node.children.map((child, index) => {
-            const childElement = renderFrameworkNode(child, currentPath, depth + 1);
-            if (!childElement) return null;
-            
-            // 为子节点创建独立的小型accordion项目
-            const childId = `${uniqueId}_child_${index}`;
-            return (
-              <div key={childId} className="border rounded-md bg-gray-50 dark:bg-gray-800/30">
-                <details className="group">
-                  <summary className="cursor-pointer list-none p-3 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-md transition-colors">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{toText(child.title)}</span>
-                      <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </summary>
-                  <div className="px-3 pb-3 pt-1">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{toText(child.summary)}</p>
-                    {Array.isArray(child.children) && child.children.length > 0 && (
-                      renderChildren.call({ node: child, currentPath: [...currentPath, child.id] })
-                    )}
-                  </div>
-                </details>
-              </div>
-            );
-          })}
-        </div>
-      );
-    };
-    
-    return (
-      <AccordionItem key={uniqueId} value={uniqueId}>
-        <AccordionTrigger className="text-left">
-          <span className="font-medium">{toText(node.title)}</span>
-        </AccordionTrigger>
-        <AccordionContent>
-          <p className="text-gray-600 dark:text-gray-400 mb-3">{toText(node.summary)}</p>
-          {renderChildren()}
-        </AccordionContent>
-      </AccordionItem>
-    );
-  };
 
   // 如果正在加载且当前阶段是 S1，显示流式动画器
   if (isLoading && streaming.currentStage === 'S1') {
@@ -321,15 +237,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
           {framework && framework.length > 0 ? (
             <div suppressHydrationWarning>
               {isClient ? (
-                <Accordion type="single" collapsible className="w-full">
-                  {framework.map((node, index) => {
-                    // 重置计数器确保根节点从一致的状态开始
-                    if (index === 0) {
-                      nodeCounterRef.current = 0;
-                    }
-                    return renderFrameworkNode(node);
-                  })}
-                </Accordion>
+                <CollapsibleFramework framework={framework} />
               ) : (
                 <div className="space-y-4">
                   {framework.map((node, index) => (
