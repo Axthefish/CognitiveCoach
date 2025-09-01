@@ -512,34 +512,33 @@ export function CognitiveStreamAnimator({
     }
   };
 
-  // 组件挂载或 stage 改变时启动流式请求
+  // 组件挂载时启动流式请求（只运行一次）
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      console.log(`🔄 Stage changed to ${stage}, initializing new stream...`);
+      console.log(`🔄 Component mounted with stage ${stage}, initializing stream...`);
     }
     
-    // 阶段切换：主动中止旧流，重置所有状态标志
-    if (abortControllerRef.current) {
+    // 防止重复启动
+    if (hasStartedRef.current) {
       if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('🛑 Aborting previous stream due to stage change');
+        console.log('⚠️ Stream already started, skipping...');
       }
-      try { 
-        abortControllerRef.current.abort(); 
-      } catch {
-        // 忽略中止错误
-      }
-      abortControllerRef.current = null;
+      return;
     }
     
-    // 重置所有流状态标志
-    streamCompletedSuccessfully.current = false;
-    hasStartedRef.current = false;
-    currentStreamIdRef.current = null; // 清除旧流ID
-    isNavigatingRef.current = false; // 重置导航标志
+    // 标记已启动
+    hasStartedRef.current = true;
     
-    // 启动新的流式请求
+    // 启动流式请求
     startStreaming();
-  }, [stage]); // 只依赖 stage，不依赖 startStreaming
+    
+    // 清理函数
+    return () => {
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('🧹 Cleaning up stream on unmount');
+      }
+    };
+  }, []); // 空依赖数组，只在组件挂载时运行一次
 
   // 如果出现错误，显示错误状态
   if (error) {

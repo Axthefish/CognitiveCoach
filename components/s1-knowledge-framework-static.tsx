@@ -27,38 +27,9 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   const isMountedRef = useRef(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 统一的 useEffect 处理所有流式相关逻辑和组件生命周期
+  // 组件挂载时的生命周期管理
   useEffect(() => {
     isMountedRef.current = true;
-    
-    // 清理之前的超时定时器
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    
-    // 如果正在加载，有有效的userGoal，但还没有启动流式处理
-    if (isLoading && 
-        userContext.userGoal && 
-        userContext.userGoal.trim().length > 0 && 
-        !hasStartedStream.current) {
-      
-      hasStartedStream.current = true;
-    }
-    
-    // 如果正在加载但等待userGoal太长时间（超过5秒），显示错误
-    else if (isLoading && 
-             (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
-      
-      timeoutRef.current = setTimeout(() => {
-        if (isMountedRef.current && 
-            isLoading && 
-            (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
-          setError('目标精炼失败，请重新开始');
-          stopStreaming();
-        }
-      }, 5000); // 5秒超时
-    }
     
     // 清理函数
     return () => {
@@ -78,7 +49,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         stopStreaming();
       }
     };
-  }, [userContext.userGoal, isLoading, streaming.isStreaming, setError, stopStreaming]);
+  }, []); // 只在组件挂载/卸载时运行
 
   // 标记hydration完成
   useEffect(() => {
