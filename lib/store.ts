@@ -255,18 +255,23 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
 
   navigateToStage: (targetState) => {
     hydrationSafeLog(`🧭 Store: Navigating to stage ${targetState}, canceling active streams`);
+    
+    // 获取当前状态
+    const currentStreaming = get().streaming;
+    
+    // 如果当前正在流式处理，需要先停止
+    if (currentStreaming.isStreaming) {
+      hydrationSafeLog('🛑 Store: Stopping active streaming before navigation');
+    }
+    
     set((state) => ({
       currentState: targetState,
       isIterativeMode: state.completedStages.includes(targetState),
       isLoading: false,
       error: null,
-      // 导航时清除所有流状态，防止竞态条件
+      // 完全重置流状态，防止任何竞态条件
       streaming: {
-        ...initialStreamingState,
-        // 如果导航到新阶段，清除之前的内容
-        streamContent: '',
-        cognitiveSteps: [],
-        microLearningTip: null,
+        ...initialStreamingState
       },
     }));
   },
