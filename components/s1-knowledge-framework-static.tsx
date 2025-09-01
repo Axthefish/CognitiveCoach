@@ -11,6 +11,7 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { reportError } from "@/lib/error-reporter"
 import { markHydrationComplete } from "@/lib/hydration-safe"
+import { SimpleStreamTest } from "@/components/simple-stream-test"
 
 // 辅助函数：将任何值安全转换为字符串
 const toText = (v: unknown): string => typeof v === 'string' ? v : v == null ? '' : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
@@ -125,6 +126,32 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       );
     }
 
+    // 临时测试：使用简单的流式测试组件
+    const useSimpleTest = true;
+    
+    if (useSimpleTest) {
+      return (
+        <div className="animate-fade-in">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            使用简化测试组件...
+          </p>
+          
+          <ErrorBoundary>
+            <SimpleStreamTest 
+              stage="S1"
+              requestPayload={{ 
+                userGoal: userContext.userGoal,
+                decisionType: userContext.decisionType,
+                runTier: userContext.runTier,
+                seed: userContext.seed
+              }}
+            />
+          </ErrorBoundary>
+        </div>
+      );
+    }
+    
     return (
       <div className="animate-fade-in">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
@@ -150,6 +177,8 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   }
   
   // 临时：如果使用模拟数据，立即设置框架
+  // 注释掉模拟数据代码，避免干扰真实流式生成
+  /*
   if (isLoading && useMockData && !framework) {
     console.log('📝 Using mock data for testing...');
     setTimeout(() => {
@@ -186,6 +215,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       handleStreamComplete({ framework: mockFramework });
     }, 1000);
   }
+  */
 
   // 静态展示框架内容 - 完全避免动态渲染
   return (
