@@ -302,14 +302,16 @@ export function CognitiveStreamAnimator({
     currentStreamIdRef.current = streamId;
     
     try {
-             if (isMountedRef.current) {
-         startStreamingInStore(stage);
-         setIsStreaming(true);
-         setError(null);
-         setContent('');
-         setSteps([]);
-         setCurrentTip('');
-       }
+      console.log(`🚀 Starting stream for stage ${stage} with streamId ${streamId}`);
+      
+      if (isMountedRef.current) {
+        startStreamingInStore(stage);
+        setIsStreaming(true);
+        setError(null);
+        setContent('');
+        setSteps([]);
+        setCurrentTip('');
+      }
 
       // 构建请求体
       const actionMap = {
@@ -324,6 +326,8 @@ export function CognitiveStreamAnimator({
         action: actionMap[stage],
         payload: requestPayload
       };
+      
+      console.log('📤 Sending request to /api/coach-stream:', requestBody);
 
       const response = await fetch('/api/coach-stream', {
         method: 'POST',
@@ -337,6 +341,8 @@ export function CognitiveStreamAnimator({
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+      
+      console.log('✅ Response received, status:', response.status);
 
       const reader = response.body?.getReader();
       if (!reader) {
@@ -438,6 +444,15 @@ export function CognitiveStreamAnimator({
       }
 
     } catch (error) {
+      console.error('🔥 Stream error caught:', {
+        error: error instanceof Error ? error.message : toText(error),
+        streamId,
+        currentStreamId: currentStreamIdRef.current,
+        isMounted: isMountedRef.current,
+        isNavigating: isNavigatingRef.current,
+        streamCompleted: streamCompletedSuccessfully.current
+      });
+      
       if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
         console.log('🔥 Stream error caught:', {
           error: error instanceof Error ? error.message : toText(error),
@@ -525,18 +540,7 @@ export function CognitiveStreamAnimator({
       console.log(`🔄 Component mounted with stage ${stage}, initializing stream...`);
     }
     
-    // 防止重复启动
-    if (hasStartedRef.current) {
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-        console.log('⚠️ Stream already started, skipping...');
-      }
-      return;
-    }
-    
-    // 标记已启动
-    hasStartedRef.current = true;
-    
-    // 启动流式请求
+    // 启动流式请求（startStreaming内部会处理防重复逻辑）
     startStreaming();
     
     // 清理函数
