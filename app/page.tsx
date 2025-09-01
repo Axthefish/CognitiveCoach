@@ -1,9 +1,20 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { useCognitiveCoachStore } from '@/lib/store';
 import S0IntentView from '@/components/s0-intent-view';
 import { ErrorBoundary } from '@/components/error-boundary';
+
+// 动态导入 S1 组件，禁用 SSR
+const S1Simple = dynamic(() => import('@/components/s1-simple'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  ),
+});
 
 export default function Home() {
   const [mounted, setMounted] = React.useState(false);
@@ -13,6 +24,7 @@ export default function Home() {
   const currentState = useCognitiveCoachStore(state => state.currentState);
   const setCurrentState = useCognitiveCoachStore(state => state.setCurrentState);
   const updateUserContext = useCognitiveCoachStore(state => state.updateUserContext);
+  const userContext = useCognitiveCoachStore(state => state.userContext);
   
   React.useEffect(() => {
     try {
@@ -27,6 +39,18 @@ export default function Home() {
     console.log('Goal received:', goal);
     updateUserContext({ userGoal: goal });
     setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
+  };
+  
+  // 处理从S1进入下一阶段
+  const handleProceedFromS1 = () => {
+    console.log('Proceeding from S1 to S2');
+    setCurrentState('S2_SYSTEM_DYNAMICS');
+  };
+  
+  // 处理返回到上一阶段
+  const handleBackToS0 = () => {
+    console.log('Going back to S0');
+    setCurrentState('S0_INTENT_CALIBRATION');
   };
   
   if (error) {
@@ -60,12 +84,22 @@ export default function Home() {
           </ErrorBoundary>
         )}
         
-        {currentState !== 'S0_INTENT_CALIBRATION' && (
+        {currentState === 'S1_KNOWLEDGE_FRAMEWORK' && (
+          <ErrorBoundary>
+            <S1Simple 
+              userGoal={userContext.userGoal}
+              onProceed={handleProceedFromS1}
+              onBack={handleBackToS0}
+            />
+          </ErrorBoundary>
+        )}
+        
+        {currentState !== 'S0_INTENT_CALIBRATION' && currentState !== 'S1_KNOWLEDGE_FRAMEWORK' && (
           <div>
             <h1 className="text-2xl font-bold mb-4">CognitiveCoach</h1>
             <p className="text-gray-600 dark:text-gray-400 mb-4">当前状态: {currentState}</p>
             <div className="mt-8 p-4 border rounded-lg">
-              <p>S1 及后续组件将在下一步添加</p>
+              <p>S2、S3、S4 组件将在后续步骤中添加</p>
             </div>
           </div>
         )}
