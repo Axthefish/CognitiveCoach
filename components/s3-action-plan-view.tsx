@@ -112,7 +112,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   // Export functions
   const exportToCalendar = () => {
     const calendarData = actionPlan.map((task, index) => {
-      const date = new Date()
+      const date = typeof window !== 'undefined' ? new Date() : new Date('2024-01-01')
       date.setDate(date.getDate() + index * 2) // Space tasks 2 days apart
       
       return {
