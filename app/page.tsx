@@ -6,7 +6,7 @@ import S0IntentView from '@/components/s0-intent-view';
 import dynamic from 'next/dynamic';
 
 const S1KnowledgeFrameworkView = dynamic(
-  () => import('@/components/s1-knowledge-framework-view'),
+  () => import('@/components/s1-knowledge-framework-static'),
   { 
     ssr: false,
     loading: () => (
