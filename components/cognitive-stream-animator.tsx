@@ -268,7 +268,7 @@ export function CognitiveStreamAnimator({
   }, [onComplete, onError, stopStreaming, updateCognitiveSteps, setMicroLearningTip, appendStreamContent, setStreamError]);
 
   // 启动流式请求
-  const startStreaming = useCallback(async () => {
+  const startStreaming = async () => {
     // 检查组件是否已卸载
     if (!isMountedRef.current) {
       return;
@@ -510,7 +510,7 @@ export function CognitiveStreamAnimator({
         stopStreaming();
       }
     }
-  }, [stage, requestPayload, processStreamMessage, onError, startStreamingInStore, stopStreaming, setStreamError]);
+  };
 
   // 组件挂载或 stage 改变时启动流式请求
   useEffect(() => {
@@ -539,7 +539,7 @@ export function CognitiveStreamAnimator({
     
     // 启动新的流式请求
     startStreaming();
-  }, [stage, startStreaming]);
+  }, [stage]); // 只依赖 stage，不依赖 startStreaming
 
   // 如果出现错误，显示错误状态
   if (error) {
