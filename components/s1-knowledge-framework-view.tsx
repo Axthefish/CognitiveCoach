@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { CollapsibleFramework } from "@/components/ui/collapsible-framework"
+import { ClientFramework } from "@/components/ui/client-framework"
 import { Check } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
@@ -152,11 +152,8 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     });
   };
 
-  const [isClient, setIsClient] = useState(false);
-  
-  // Hydration保护
+  // 标记hydration完成
   useEffect(() => {
-    setIsClient(true);
     markHydrationComplete();
   }, []);
 
@@ -235,20 +232,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         </CardHeader>
         <CardContent>
           {framework && framework.length > 0 ? (
-            <div suppressHydrationWarning>
-              {isClient ? (
-                <CollapsibleFramework framework={framework} />
-              ) : (
-                <div className="space-y-4">
-                  {framework.map((node, index) => (
-                    <div key={`loading-${index}`} className="border rounded-md p-4 bg-gray-50 dark:bg-gray-800/30">
-                      <div className="font-medium">{toText(node.title)}</div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{toText(node.summary)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ClientFramework framework={framework} />
           ) : (
             <div className="text-center py-8 text-gray-500">
               <p>正在生成知识框架...</p>
