@@ -100,8 +100,11 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     useCognitiveCoachStore.getState().setLoading(false);
   };
 
+  // 临时测试：使用模拟数据
+  const useMockData = true; // 临时标志，用于测试
+  
   // 如果正在加载，显示流式动画器（不需要检查 streaming.currentStage，因为它是由 CognitiveStreamAnimator 设置的）
-  if (isLoading) {
+  if (isLoading && !useMockData) {
     // 确保 userGoal 存在且有效再启动流式处理
     if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {
       return (
@@ -144,6 +147,44 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         </ErrorBoundary>
       </div>
     );
+  }
+  
+  // 临时：如果使用模拟数据，立即设置框架
+  if (isLoading && useMockData && !framework) {
+    console.log('📝 Using mock data for testing...');
+    setTimeout(() => {
+      const mockFramework = [
+        {
+          id: '1',
+          title: '减脂基础原理',
+          summary: '了解减脂的科学原理，包括热量赤字、基础代谢率等核心概念',
+          children: [
+            { id: '1-1', title: '能量平衡原理', summary: '摄入与消耗的关系' },
+            { id: '1-2', title: '基础代谢率(BMR)', summary: '身体静息状态下的能量消耗' }
+          ]
+        },
+        {
+          id: '2',
+          title: '营养策略',
+          summary: '合理的饮食计划和营养素分配',
+          children: [
+            { id: '2-1', title: '宏量营养素比例', summary: '蛋白质、碳水化合物、脂肪的合理配比' },
+            { id: '2-2', title: '微量营养素', summary: '维生素和矿物质的重要性' }
+          ]
+        },
+        {
+          id: '3',
+          title: '运动计划',
+          summary: '有效的运动组合策略',
+          children: [
+            { id: '3-1', title: '有氧运动', summary: '提高心肺功能，增加热量消耗' },
+            { id: '3-2', title: '力量训练', summary: '保持肌肉量，提高基础代谢' }
+          ]
+        }
+      ];
+      
+      handleStreamComplete({ framework: mockFramework });
+    }, 1000);
   }
 
   // 静态展示框架内容 - 完全避免动态渲染
