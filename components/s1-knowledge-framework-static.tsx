@@ -37,9 +37,8 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       timeoutRef.current = null;
     }
     
-    // 如果正在S1阶段加载，有有效的userGoal，但还没有启动流式处理
+    // 如果正在加载，有有效的userGoal，但还没有启动流式处理
     if (isLoading && 
-        streaming.currentStage === 'S1' && 
         userContext.userGoal && 
         userContext.userGoal.trim().length > 0 && 
         !hasStartedStream.current) {
@@ -47,15 +46,13 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       hasStartedStream.current = true;
     }
     
-    // 如果在S1阶段等待userGoal太长时间（超过5秒），显示错误
+    // 如果正在加载但等待userGoal太长时间（超过5秒），显示错误
     else if (isLoading && 
-             streaming.currentStage === 'S1' && 
              (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
       
       timeoutRef.current = setTimeout(() => {
         if (isMountedRef.current && 
             isLoading && 
-            streaming.currentStage === 'S1' && 
             (!userContext.userGoal || userContext.userGoal.trim().length === 0)) {
           setError('目标精炼失败，请重新开始');
           stopStreaming();
@@ -81,7 +78,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
         stopStreaming();
       }
     };
-  }, [userContext.userGoal, isLoading, streaming.currentStage, streaming.isStreaming, setError, stopStreaming]);
+  }, [userContext.userGoal, isLoading, streaming.isStreaming, setError, stopStreaming]);
 
   // 标记hydration完成
   useEffect(() => {
@@ -94,6 +91,8 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
       setQaIssues(null, []);
+      // 完成后设置 loading 为 false
+      useCognitiveCoachStore.getState().setLoading(false);
     }
   };
 
@@ -115,10 +114,13 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       frameworkLength: framework?.length || 0,
       isMounted: isMountedRef.current
     });
+    
+    // 错误时也设置 loading 为 false
+    useCognitiveCoachStore.getState().setLoading(false);
   };
 
-  // 如果正在加载且当前阶段是 S1，显示流式动画器
-  if (isLoading && streaming.currentStage === 'S1') {
+  // 如果正在加载，显示流式动画器（不需要检查 streaming.currentStage，因为它是由 CognitiveStreamAnimator 设置的）
+  if (isLoading) {
     // 确保 userGoal 存在且有效再启动流式处理
     if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {
       return (

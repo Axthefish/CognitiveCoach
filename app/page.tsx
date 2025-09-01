@@ -42,6 +42,8 @@ export default function Home() {
     console.log('Goal received:', goal);
     updateUserContext({ userGoal: goal });
     setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
+    // 设置 loading 状态以触发 S1 的流式生成
+    useCognitiveCoachStore.getState().setLoading(true);
   };
   
   // 处理从S1进入下一阶段
