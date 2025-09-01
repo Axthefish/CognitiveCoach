@@ -16,19 +16,11 @@ interface CollapsibleNodeProps {
   pathPrefix?: string;
 }
 
-// 全局唯一ID生成器 - 使用闭包确保唯一性
-const createIdGenerator = () => {
-  let counter = 0;
-  const sessionId = typeof window !== 'undefined' 
-    ? `${Date.now()}_${Math.random().toString(36).slice(2)}`
-    : 'ssr';
-  
-  return (prefix: string) => {
-    return `${prefix}_${sessionId}_${++counter}`;
-  };
+// 全局唯一ID生成器 - 使用计数器确保唯一性且避免hydration问题
+let globalIdCounter = 0;
+const generateId = (prefix: string) => {
+  return `${prefix}_${++globalIdCounter}`;
 };
-
-const generateId = createIdGenerator();
 
 // 单个可折叠节点组件 - 不使用任何Accordion组件
 const CollapsibleNode: React.FC<CollapsibleNodeProps> = ({ 

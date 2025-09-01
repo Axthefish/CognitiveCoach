@@ -166,14 +166,16 @@ export function LoadingOverlay({
   // Decide which animation mode to use
   useEffect(() => {
     if (stage === 'S0' && userContext.userGoal && userContext.userGoal.trim().length > 0) {
-      // For S0 with user goal, randomly select between advanced animations
-      const modes: Array<'catalyst' | 'neural' | 'thinking'> = ['catalyst', 'neural', 'thinking'];
-      const selectedMode = modes[Math.floor(Math.random() * modes.length)];
-      setAnimationMode(selectedMode);
-      setUseCognitiveCatalyst(selectedMode === 'catalyst');
-    } else if (stage && stage !== 'S0') {
-      // For other stages, use neural or thinking animation
-      setAnimationMode(Math.random() > 0.5 ? 'neural' : 'thinking');
+      // For S0 with user goal, use a deterministic selection based on stage
+      setAnimationMode('catalyst');
+      setUseCognitiveCatalyst(true);
+    } else if (stage === 'S1' || stage === 'S2') {
+      // For S1 and S2, use neural animation
+      setAnimationMode('neural');
+      setUseCognitiveCatalyst(false);
+    } else if (stage === 'S3' || stage === 'S4') {
+      // For S3 and S4, use thinking animation
+      setAnimationMode('thinking');
       setUseCognitiveCatalyst(false);
     } else {
       // Default orbit animation
@@ -215,7 +217,7 @@ export function LoadingOverlay({
       }
       
       setPhaseIndex(prevIndex => (prevIndex + 1) % s0Phases.length);
-    }, 1400 + Math.random() * 600);
+    }, 1700); // Fixed interval instead of random
 
     phaseIntervalRef.current = phaseInterval;
 
