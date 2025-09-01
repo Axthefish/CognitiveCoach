@@ -151,6 +151,8 @@ export function CognitiveStreamAnimator({
 
   // 处理流式消息
   const processStreamMessage = useCallback((message: StreamMessage, streamId?: string) => {
+    console.log('🎯 processStreamMessage called:', { messageType: message.type, streamId });
+    
     // 检查组件是否已卸载或流ID不匹配
     if (!isMountedRef.current || (streamId && currentStreamIdRef.current !== streamId)) {
       if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -201,10 +203,13 @@ export function CognitiveStreamAnimator({
         break;
       
       case 'data_structure':
+        console.log('📊 Processing data_structure message:', message.payload);
         // 提取最终数据：兼容 { status, data } 包装或直接数据
         if (message.payload && typeof message.payload === 'object' && 'status' in message.payload) {
           const wrapped = message.payload as { status: string; data?: StreamResponseData; error?: string };
+          console.log('📦 Wrapped data structure:', wrapped);
           if (wrapped.status === 'success' && wrapped.data) {
+            console.log('✅ Setting final data and calling onComplete');
             safeSetState(setFinalData, wrapped.data);
             if (isMountedRef.current) {
               onComplete(wrapped.data);
@@ -289,6 +294,7 @@ export function CognitiveStreamAnimator({
 
   // 启动流式请求
   const startStreaming = async () => {
+    console.log('🔥🔥🔥 startStreaming ACTUALLY CALLED! 🔥🔥🔥');
     console.log('🎯 startStreaming called', {
       isMounted: isMountedRef.current,
       hasStarted: hasStartedRef.current,
@@ -457,6 +463,7 @@ export function CognitiveStreamAnimator({
                   });
                 }
                 
+                console.log(`🔄 Calling processStreamMessage for message type: ${message.type}`);
                 processStreamMessage(message, streamId);
               } catch (parseError) {
                 // 增强错误日志记录
@@ -597,48 +604,45 @@ export function CognitiveStreamAnimator({
     }
   };
 
-  // 重置 hasStartedRef 当组件重新挂载时
+  // 简化的启动逻辑 - 参考SimpleStreamTest的成功模式
   useEffect(() => {
-    console.log(`🔄 Component mounted with stage ${stage}, resetting hasStartedRef`);
-    hasStartedRef.current = false; // 重置标志，确保能启动新的流
-    return () => {
-      console.log('🧹 Component unmounting, resetting hasStartedRef');
-      hasStartedRef.current = false;
-    };
-  }, [stage]);
-  
-  // 组件挂载后启动流式请求 - 直接内联调用避免闭包问题
-  useEffect(() => {
-    console.log(`📍 Starting stream effect for stage ${stage}`);
+    console.log(`🚀 CognitiveStreamAnimator effect starting for stage ${stage}`);
+    console.log('📊 Current state:', {
+      isStreaming,
+      steps: steps.length,
+      error,
+      isMounted: isMountedRef.current,
+      hasStarted: hasStartedRef.current,
+      requestPayload
+    });
     
-    const doStartStreaming = async () => {
-      console.log('🎯 Direct startStreaming called in useEffect', {
-        isMounted: isMountedRef.current,
-        hasStarted: hasStartedRef.current,
-        stage,
-      });
+    // 直接调用，不检查hasStartedRef
+    const doStart = async () => {
+      console.log('📡 About to call startStreaming directly');
       
-      // 直接调用避免任何闭包问题
+      // 重置hasStartedRef以允许启动
+      hasStartedRef.current = false;
+      
       try {
+        console.log('🎯 Calling startStreaming now...');
         await startStreaming();
+        console.log('✅ startStreaming completed');
       } catch (error) {
-        console.error('❌ Error calling startStreaming:', error);
+        console.error('❌ Error in startStreaming:', error);
       }
     };
     
-    // 添加小延迟确保组件完全挂载
-    const timer = setTimeout(() => {
-      console.log('⏰ Timer fired, calling doStartStreaming...');
-      doStartStreaming();
-    }, 100);
+    // 立即启动，不延迟
+    doStart();
     
-    // 清理函数
     return () => {
-      console.log('🧹 Cleaning up stream on effect cleanup');
-      clearTimeout(timer);
+      console.log('🧹 Cleaning up CognitiveStreamAnimator');
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空依赖数组，只在组件挂载时运行一次
+  }, []); // 只在挂载时运行一次
 
   // 如果出现错误，显示错误状态
   if (error) {

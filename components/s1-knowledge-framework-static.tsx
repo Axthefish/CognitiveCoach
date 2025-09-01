@@ -127,7 +127,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     }
 
     // 临时测试：使用简单的流式测试组件
-    const useSimpleTest = true;
+    const useSimpleTest = false; // 切换回主组件
     
     if (useSimpleTest) {
       return (
