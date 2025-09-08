@@ -126,7 +126,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     }
   };
 
-  // 处理流式生成错误
+  // 处理流式生成错误 - 改进版：保持流处理状态，避免UI重置
   const handleStreamError = (error: string) => {
     const msg = typeof error === 'string' ? error : toText(error);
     if (typeof window !== 'undefined') {
@@ -141,15 +141,23 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       return;
     }
     
-    // 报告错误
+    // 报告错误用于监控
     reportError(new Error(msg), {
       stage: 'S1',
       userGoal: userContext.userGoal,
       component: 'S1KnowledgeFrameworkView',
       hasFramework: !!framework,
       frameworkLength: framework?.length || 0,
-      isMounted: isMountedRef.current
+      isMounted: isMountedRef.current,
+      errorType: 'stream_processing_error'
     });
+    
+    // 💡 关键修复：不要设置全局错误状态，这会导致UI重置
+    // 流错误应该在CognitiveStreamAnimator内部处理，保持加载状态
+    // 只记录错误但不触发组件状态重置
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('⚠️ S1: Stream error handled gracefully, maintaining UI state');
+    }
   };
 
   // 标记hydration完成

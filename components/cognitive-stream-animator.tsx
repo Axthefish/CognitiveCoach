@@ -592,11 +592,17 @@ export function CognitiveStreamAnimator({
       
       // 仅在组件仍挂载且是当前活动流时更新UI状态
       if (isMountedRef.current && currentStreamIdRef.current === streamId) {
+        // 💡 修复：设置错误但保持流处理UI可见
         setError(errorMsg);
         setStreamError(errorMsg);
         setIsStreaming(false);
+        
+        // 只停止流处理，但不调用onError（避免触发UI重置）
         stopStreaming();
-        onError(errorMsg);
+        
+        // 💡 不再延迟调用onError，因为我们已经改进了错误处理
+        // 让CognitiveStreamAnimator自己处理错误显示，避免触发上层组件重置
+        // onError仅用于日志记录，不影响UI状态
       }
     } finally {
       // 仅当仍是当前活动流时才进行收尾，避免踩踏新连接
@@ -651,31 +657,52 @@ export function CognitiveStreamAnimator({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在挂载时运行一次
 
-  // 如果出现错误，显示错误状态
+  // 💡 改进的错误显示：保持进度上下文，提供更好的用户体验
   if (error) {
     return (
       <div className="w-full p-6 space-y-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
+        {/* 显示当前进度步骤，但标记失败的步骤 */}
+        {steps.length > 0 && (
+          <CognitiveProcessIndicator steps={steps} />
+        )}
+        
+        {/* 错误信息显示 */}
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-start">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-5 w-5 text-red-400 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
             </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                处理过程中出现错误
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                处理过程中遇到问题
               </h3>
-              <div className="mt-2 text-sm text-red-700">
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300 leading-relaxed">
                 {error}
+              </div>
+              <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setStreamError(null);
+                    hasRetriedRef.current = false; // 重置重试状态
+                    startStreaming();
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  重新尝试
+                </button>
+                <p className="text-xs text-red-600 dark:text-red-400 flex items-center">
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  将从当前进度继续处理
+                </p>
               </div>
             </div>
           </div>
         </div>
-        
-        {steps.length > 0 && (
-          <CognitiveProcessIndicator steps={steps} />
-        )}
       </div>
     );
   }

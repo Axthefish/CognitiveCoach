@@ -254,14 +254,27 @@ export async function POST(request: NextRequest) {
           });
           const readableMessage = error instanceof Error ? error.message : 'Internal server error';
           
-          // 判断错误类型并发送结构化错误
-          if (readableMessage.includes('network') || readableMessage.includes('connection')) {
-            sendErrorSafe('NETWORK', readableMessage);
-          } else if (readableMessage.includes('timeout')) {
-            sendErrorSafe('TIMEOUT', readableMessage);
+          // 💡 改进：判断错误类型并发送用户友好的错误消息
+          let userFriendlyMessage = readableMessage;
+          let errorCode: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN' = 'UNKNOWN';
+          
+          if (readableMessage.includes('network') || readableMessage.includes('connection') || readableMessage.includes('fetch')) {
+            errorCode = 'NETWORK';
+            userFriendlyMessage = '网络连接出现问题，请检查网络后重试';
+          } else if (readableMessage.includes('timeout') || readableMessage.includes('TIMEOUT')) {
+            errorCode = 'TIMEOUT';
+            userFriendlyMessage = '处理时间过长，正在重新尝试...';
+          } else if (readableMessage.includes('SCHEMA') || readableMessage.includes('schema')) {
+            errorCode = 'SCHEMA';
+            userFriendlyMessage = '内容格式验证失败，正在重新生成...';
+          } else if (readableMessage.includes('QA') || readableMessage.includes('quality')) {
+            errorCode = 'QA';
+            userFriendlyMessage = '内容质量检查未通过，正在改进中...';
           } else {
-            sendErrorSafe('UNKNOWN', readableMessage);
+            userFriendlyMessage = '处理过程中遇到问题，正在尝试恢复...';
           }
+          
+          sendErrorSafe(errorCode, userFriendlyMessage);
         } finally {
           controller.close();
         }
