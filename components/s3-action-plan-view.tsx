@@ -380,7 +380,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                       <CardContent>
                         <div className="text-2xl font-bold">{completionRate}%</div>
                         <p className="text-xs text-muted-foreground">
-                          {completedTasks.size} / {actionPlan.length} 任务已完成
+                          {completedSteps.length} / {actionPlan.length} 任务已完成
                         </p>
                       </CardContent>
                     </Card>

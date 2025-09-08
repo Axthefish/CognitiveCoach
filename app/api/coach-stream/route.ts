@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 import { CoachRequestSchema, StreamPayload } from '@/lib/schemas';
-import { handleOptions, withCors } from '@/lib/cors';
+import { handleOptions, buildCorsHeaders } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { KnowledgeFramework, ActionPlan, FrameworkNode } from '@/lib/types';
@@ -166,17 +166,18 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     const encoder = new TextEncoder();
     const errorStream = createStreamMessage('error', 'Too Many Requests');
-    const response = new Response(encoder.encode(errorStream), {
+    const corsHeaders = buildCorsHeaders(origin);
+    return new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
         'Retry-After': String(rl.retryAfter ?? 60),
+        ...corsHeaders,
       },
       status: 429,
     });
-    return withCors(response, origin);
   }
 
   let body: CoachRequest | undefined;
@@ -188,16 +189,17 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       const encoder = new TextEncoder();
       const errorStream = createStreamMessage('error', '请求格式不正确，请检查您的输入并重试');
-      const response = new Response(encoder.encode(errorStream), {
+      const corsHeaders = buildCorsHeaders(origin);
+      return new Response(encoder.encode(errorStream), {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no',
+          ...corsHeaders,
         },
         status: 400,
       });
-      return withCors(response, origin);
     }
     
     body = parsed.data as unknown as CoachRequest;
@@ -266,15 +268,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const response = new Response(stream, {
+    const corsHeaders = buildCorsHeaders(origin);
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
+        ...corsHeaders,
       },
     });
-    return withCors(response, origin);
   } catch (error) {
     logger.error('API Error:', { 
       error: error instanceof Error ? error.message : String(error) 
@@ -291,16 +294,17 @@ export async function POST(request: NextRequest) {
     }
     
     const errorStream = createStreamMessage('error', { code: errorCode, message: readableMessage });
-    const response = new Response(encoder.encode(errorStream), {
+    const corsHeaders = buildCorsHeaders(origin);
+    return new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
+        ...corsHeaders,
       },
       status: 500,
     });
-    return withCors(response, origin);
   }
 }
 
@@ -370,7 +374,7 @@ async function handleGenerateFrameworkStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
   payload: GenerateFrameworkPayload,
-  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string, traceId?: string) => void
 ) {
   // 生成 traceId
   const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -597,7 +601,7 @@ async function handleGenerateSystemDynamicsStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
   payload: GenerateSystemDynamicsPayload,
-  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string, traceId?: string) => void
 ) {
   // 生成 traceId
   const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -896,7 +900,7 @@ async function handleGenerateActionPlanStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
   payload: GenerateActionPlanPayload,
-  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string, traceId?: string) => void
 ) {
   // 生成 traceId
   const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -1226,7 +1230,7 @@ async function handleAnalyzeProgressStream(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
   payload: AnalyzeProgressPayload,
-  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string) => void
+  sendErrorSafe: (code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN', message: string, traceId?: string) => void
 ) {
   // 生成 traceId
   const traceId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
