@@ -53,9 +53,7 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
           onError={handleStreamError}
           requestPayload={{ 
             framework: userContext.knowledgeFramework,
-            decisionType: userContext.decisionType,
-            runTier: userContext.runTier,
-            seed: userContext.seed
+            decisionType: userContext.decisionType
           }}
         />
       </div>

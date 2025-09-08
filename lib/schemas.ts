@@ -168,7 +168,7 @@ export const AnalyzeProgressSchema = z.object({
   analysis: z.string(),
   suggestions: z.array(z.string()),
   encouragement: z.string().optional(),
-  referencedMetricIds: z.array(z.string()).optional().default([]),
+  referencedMetricIds: z.array(z.string()).max(20).optional().default([]), // T8: 添加最大长度限制
   evidence: EvidenceArraySchema.optional().default([]),
   confidence: ConfidenceSchema.optional().default(0.6),
   applicability: ApplicabilitySchema.optional().default(""),

@@ -114,7 +114,7 @@ export function LoadingOverlay({
   ], []);
   
   const s0PhaseMessages = [
-    "AI 正在理解你的目标与上下文…",
+    "正在为你理解目标与上下文…",
     "正在抽取目标中的关键要素与边界…",
     "正在生成更明确、可执行的目标候选…"
   ];
@@ -297,8 +297,8 @@ export function LoadingOverlay({
 
   // Default message based on stage
   const defaultMessage = stage 
-    ? `AI 正在进行${STAGE_LABELS[stage]}分析...`
-    : 'AI 正在准备中...';
+    ? `正在为你进行${STAGE_LABELS[stage]}分析...`
+    : '正在为你准备中...';
 
   // Determine final message with priority order
   let finalMessage: string;
@@ -316,40 +316,35 @@ export function LoadingOverlay({
     finalMessage = message || defaultMessage;
   }
 
-  // 错误态组件
-  const ErrorContent = () => (
-    <div className="flex flex-col items-center space-y-4">
-      {/* 错误图标 */}
-      <div className="relative">
-        <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-          <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
+  // 错误态组件 - 改为浮层式，保留进度显示
+  const ErrorOverlay = () => streaming.streamError ? (
+    <div className="absolute inset-x-0 top-0 z-10 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 m-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <div className="w-5 h-5 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
+            <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="text-sm text-red-800 dark:text-red-200">
+            {streaming.streamError}
+          </div>
         </div>
-      </div>
-
-      {/* 错误消息 */}
-      <div className="text-center max-w-xs">
-        <div className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
-          处理过程中出现错误
-        </div>
-        <div className="text-xs text-red-600 dark:text-red-300 mb-4">
-          {streaming.streamError}
-        </div>
-        
-        {/* 重试按钮 */}
         <button
           onClick={() => onRetry ? onRetry() : window.location.reload()}
-          className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-md transition-colors"
+          className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded transition-colors"
         >
           重试
         </button>
       </div>
     </div>
-  );
+  ) : null;
 
   const LoadingContent = () => (
-    <div className="flex flex-col items-center space-y-4">
+    <div className="relative flex flex-col items-center space-y-4 max-w-xs mx-auto">
+      {/* 错误浮层 */}
+      <ErrorOverlay />
+      
       {/* Render animation based on mode */}
       {animationMode === 'catalyst' && stage === 'S0' && userContext.userGoal ? (
         <CognitiveCatalystAnimation
@@ -431,9 +426,9 @@ export function LoadingOverlay({
         </>
       )}
 
-      {/* Enhanced Progress Indicator */}
+      {/* Enhanced Progress Indicator - 包裹在固定宽度容器中 */}
       {progress !== null && (
-        <div className="w-full max-w-xs">
+        <div className="w-full max-w-xs mx-auto">
           <EnhancedProgressIndicator
             progress={progress}
             stage={finalMessage}
@@ -489,8 +484,8 @@ export function LoadingOverlay({
     </div>
   );
 
-  // 根据是否有错误选择显示内容
-  const ContentComponent = streaming.streamError ? ErrorContent : LoadingContent;
+  // 现在总是显示LoadingContent，错误以浮层形式显示
+  const ContentComponent = LoadingContent;
 
   if (variant === 'blocking') {
     return (

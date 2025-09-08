@@ -313,25 +313,27 @@ export const S2_TEMPLATE: PromptTemplate = {
     'Use Chinese labels for nodes in the chart',
     'Metaphor should be vivid, relatable, and 50-100 characters',
     'Ensure chart and metaphor complement each other',
-    'Include realistic learning progression and dependencies'
+    'Include realistic learning progression and dependencies',
+    '选一个用户日常熟悉的场景（如通勤/做饭/健身/搬家等）进行映射；比喻长度 50–80 字；避免空泛术语；需与 S1 节点主路径与反馈环一一对应。'
   ],
-  outputFormat: {
-    type: 'json',
-    schema: {
-      mermaidChart: 'string (Mermaid syntax starting with "graph TD")',
-      metaphor: 'string (50-100 characters vivid comparison)',
-      nodes: 'array (optional, list of key nodes with id and title)',
-      evidence: 'array (empty for now)',
-      confidence: 'number (0.1-1.0)',
-      applicability: 'string (context description)'
-    },
-    constraints: [
-      'Mermaid chart must be syntactically valid',
-      'Do not use <br/> tags in node labels',
-      'Metaphor should use everyday objects or experiences',
-      'Nodes array should match the main components in the chart'
-    ]
-  }
+      outputFormat: {
+        type: 'json',
+        schema: {
+          mermaidChart: 'string (Mermaid syntax starting with "graph TD")',
+          metaphor: 'string (50-80 characters vivid comparison from daily life)',
+          nodes: 'array (optional, list of key nodes with id and title)',
+          evidence: 'array (empty for now)',
+          confidence: 'number (0.1-1.0)',
+          applicability: 'string (context description)'
+        },
+        constraints: [
+          'Mermaid chart must be syntactically valid',
+          'Do not use <br/> tags in node labels',
+          'Metaphor should use everyday objects or experiences (commuting, cooking, fitness, moving, etc.)',
+          'Nodes array should match the main components in the chart',
+          'Metaphor must correspond one-to-one with S1 node main paths and feedback loops'
+        ]
+      }
 };
 
 // S3 阶段的 prompt 模板 - 行动计划
@@ -397,28 +399,33 @@ export const S3_TEMPLATE: PromptTemplate = {
     'Use first person perspective ("我将..." in Chinese)',
     'Steps should directly relate to the knowledge framework',
     'Design 3-5 quantifiable KPIs for progress tracking',
-    'KPIs should be measurable and time-bound where possible'
+    'KPIs should be measurable and time-bound where possible',
+    '行动语句采用"微承诺 + 时间窗"（如"今天/本周内…"），总时长≤30 分钟；',
+    '追加 1 条"抗阻力替代方案"；',
+    'KPIs 保持 3–5 条、10–20 字。'
   ],
-  outputFormat: {
-    type: 'json',
-    schema: {
-      actionPlan: 'array of objects with id, text, isCompleted fields',
-      kpis: 'array of strings describing measurable metrics',
-      strategySpec: 'object (optional, for advanced configurations)',
-      missingEvidenceTop3: 'array (optional)',
-      reviewWindow: 'string (optional, default "P14D")',
-      evidence: 'array (empty for now)',
-      confidence: 'number (0.1-1.0)',
-      applicability: 'string (context description)'
-    },
-    constraints: [
-      'All action plan IDs should follow "step-N" format',
-      'Action text should be 20-50 characters in Chinese',
-      'All isCompleted should be false initially',
-      'KPIs should be concise and clear (10-20 characters)',
-      'Include both process and outcome metrics in KPIs'
-    ]
-  }
+      outputFormat: {
+        type: 'json',
+        schema: {
+          actionPlan: 'array of objects with id, text, isCompleted fields',
+          kpis: 'array of strings describing measurable metrics (3-5 items, 10-20 characters each)',
+          resistanceAlternative: 'string (one alternative action when facing resistance)',
+          strategySpec: 'object (optional, for advanced configurations)',
+          missingEvidenceTop3: 'array (optional)',
+          reviewWindow: 'string (optional, default "P14D")',
+          evidence: 'array (empty for now)',
+          confidence: 'number (0.1-1.0)',
+          applicability: 'string (context description)'
+        },
+        constraints: [
+          'All action plan IDs should follow "step-N" format',
+          'Action text should use micro-commitment with time window (e.g., "今天内/本周内"), total duration ≤30 minutes',
+          'All isCompleted should be false initially',
+          'KPIs should be concise and clear (10-20 characters), exactly 3-5 items',
+          'Include both process and outcome metrics in KPIs',
+          'Include one resistance alternative action plan'
+        ]
+      }
 };
 
 // S4 阶段的 prompt 模板 - 进度分析

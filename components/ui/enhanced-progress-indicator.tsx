@@ -47,7 +47,7 @@ export function EnhancedProgressIndicator({
     const strokeDashoffset = circumference - (displayProgress / 100) * circumference;
 
     return (
-      <div className="relative w-32 h-32">
+      <div className="relative w-32 h-32 mx-auto">
         <svg className="transform -rotate-90 w-32 h-32">
           {/* Background circle */}
           <circle
@@ -94,7 +94,7 @@ export function EnhancedProgressIndicator({
 
   if (variant === 'wave') {
     return (
-      <div className="relative w-full">
+      <div className="relative w-full text-center">
         {/* Wave container */}
         <div className="relative h-20 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
           {/* Animated wave */}
@@ -201,7 +201,7 @@ export function EnhancedProgressIndicator({
 
   // Default linear variant
   return (
-    <div className="relative w-full">
+    <div className="relative w-full text-center">
       {/* Progress bar background */}
       <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         {/* Animated stripes background */}

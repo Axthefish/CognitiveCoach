@@ -69,8 +69,10 @@ export function CognitiveStreamAnimator({
   const [error, setError] = useState<string | null>(null);
   const [finalData, setFinalData] = useState<StreamResponseData | null>(null);
 
-  
+  // T4: 添加重试状态跟踪
+  const hasRetriedRef = useRef(false);
 
+  
 
   const { 
     startStreaming: startStreamingInStore, 
@@ -528,24 +530,54 @@ export function CognitiveStreamAnimator({
         return;
       }
 
-      // 检查是否是导航/卸载引起的中止
-      const isAbortError = errorInstance.name === 'AbortError' || 
-                          errorInstance.message.includes('BodyStreamBuffer was aborted') ||
-                          errorInstance.message.includes('The user aborted a request');
+      // T4: 增强网络错误判断和自动重试逻辑
+      const isNetworkError = errorInstance.name === 'AbortError' || 
+                            errorInstance.message.includes('BodyStreamBuffer was aborted') ||
+                            errorInstance.message.includes('The user aborted a request') ||
+                            errorInstance.message.includes('ERR_NETWORK_CHANGED') ||
+                            errorInstance.message.includes('NetworkError when attempting to fetch resource') ||
+                            errorInstance.message.includes('TypeError: Failed to fetch');
 
-      if (isAbortError) {
+      if (isNetworkError) {
+        // 如果是导航中断，忽略
         if (!isMountedRef.current || isNavigatingRef.current) {
           if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
             console.log('🧭 Stream aborted due to unmount/navigation - this is expected');
           }
           return;
         }
-        // 如果是挂载状态下的中止，可能是网络问题
-        errorMsg = '连接中断或被浏览器终止，可重试一次或切换 Lite 档位';
+        
+        // 检查是否可以自动重试
+        const canRetry = !hasRetriedRef.current && 
+                        !finalData && 
+                        !streamCompletedSuccessfully.current &&
+                        currentStreamIdRef.current === streamId &&
+                        isMountedRef.current;
+        
+        if (canRetry) {
+          console.log('🔄 Network error detected, attempting automatic retry...');
+          hasRetriedRef.current = true;
+          
+          // 重置状态但保持进度
+          streamCompletedSuccessfully.current = false;
+          hasStartedRef.current = false;
+          
+          // 延迟重试，给网络恢复时间
+          setTimeout(() => {
+            if (isMountedRef.current && currentStreamIdRef.current === streamId) {
+              startStreaming();
+            }
+          }, 1000);
+          
+          return; // 退出，不显示错误
+        }
+        
+        // 不能重试，显示友好错误信息
+        errorMsg = '网络连接中断，已自动重试但仍失败，请检查网络后手动重试';
       }
 
       // 报告错误（除了预期的导航中止）
-      if (!isAbortError || isMountedRef.current) {
+      if (!isNetworkError || isMountedRef.current) {
         reportError(errorInstance, {
           stage,
           requestPayload,

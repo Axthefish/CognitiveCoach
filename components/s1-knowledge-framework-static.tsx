@@ -133,9 +133,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
             onError={handleStreamError}
             requestPayload={{ 
               userGoal: userContext.userGoal,
-              decisionType: userContext.decisionType,
-              runTier: userContext.runTier,
-              seed: userContext.seed
+              decisionType: userContext.decisionType
             }}
           />
         </ErrorBoundary>

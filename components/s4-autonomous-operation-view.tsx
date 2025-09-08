@@ -17,17 +17,14 @@ export default function S4AutonomousOperationView() {
   const [consultResponse, setConsultResponse] = useState("")
   const [isConsulting, setIsConsulting] = useState(false)
   
-  // Progress tracking state
-  const [progressData, setProgressData] = useState({
-    confidenceScore: "",
-    hoursSpent: "",
-    challenges: ""
+  // T7: Check-in 轻表单状态
+  const [checkInData, setCheckInData] = useState({
+    whatDid: "",
+    challenges: "",
+    nextStep: ""
   })
-  const [analysisResult, setAnalysisResult] = useState<{
-    analysis: string;
-    suggestions: string[];
-    encouragement?: string;
-  } | null>(null)
+  const [microSuggestions, setMicroSuggestions] = useState<string[]>([])
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   
   // Proactive coaching state
   const [proactiveSuggestions, setProactiveSuggestions] = useState<Array<{
@@ -139,10 +136,14 @@ export default function S4AutonomousOperationView() {
     }
   }
   
-  // Handle progress analysis
-  const handleAnalyzeProgress = async () => {
-    setLoading(true)
-    setError(null)
+  // T7: Handle check-in analysis
+  const handleCheckIn = async () => {
+    if (!checkInData.whatDid.trim() && !checkInData.challenges.trim() && !checkInData.nextStep.trim()) {
+      return
+    }
+    
+    setIsAnalyzing(true)
+    setMicroSuggestions([])
     
     try {
       const response = await enhancedFetch('/api/coach', {
@@ -155,9 +156,7 @@ export default function S4AutonomousOperationView() {
           payload: {
             progressData: {
               completedTasks: completedTasks.map(t => t.id),
-              confidenceScore: progressData.confidenceScore ? parseInt(progressData.confidenceScore) : undefined,
-              hoursSpent: progressData.hoursSpent ? parseInt(progressData.hoursSpent) : undefined,
-              challenges: progressData.challenges || undefined
+              challenges: `${checkInData.challenges} | 最近完成: ${checkInData.whatDid} | 下一步计划: ${checkInData.nextStep}`
             },
             userContext: {
               userGoal: userContext.userGoal,
@@ -173,29 +172,17 @@ export default function S4AutonomousOperationView() {
 
       const result = await response.json()
 
-      if (result.status === 'success') {
-        setAnalysisResult(result.data)
+      if (result.status === 'success' && result.data.suggestions) {
+        // T7: 只取前2条建议作为微矫正
+        setMicroSuggestions(result.data.suggestions.slice(0, 2))
       } else {
-        setError(result.error || '分析进度时出错')
+        setMicroSuggestions(['保持当前学习节奏，继续专注于主要目标'])
       }
     } catch (error) {
-      // Error analyzing progress - 错误处理已在上面的条件中处理
-      if (error instanceof Error && 'type' in error) {
-        const networkError = error as NetworkError;
-        if (networkError.type === 'timeout') {
-          setError('分析请求超时，请稍后重试');
-        } else if (networkError.type === 'network') {
-          setError('网络连接失败，请检查您的网络连接');
-        } else if (networkError.type === 'server') {
-          setError('服务器暂时不可用，请稍后重试');
-        } else {
-          setError(networkError.message || '分析失败，请重试');
-        }
-      } else {
-        setError('网络错误，请检查连接后重试');
-      }
+      // 简化错误处理，提供友好的默认建议
+      setMicroSuggestions(['网络暂时不可用，建议继续当前学习计划'])
     } finally {
-      setLoading(false)
+      setIsAnalyzing(false)
     }
   }
   
@@ -285,225 +272,161 @@ export default function S4AutonomousOperationView() {
         </div>
       </div>
 
-      <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="dashboard">监控仪表板</TabsTrigger>
-          <TabsTrigger value="progress">进度记录</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="dashboard" className="space-y-6">
-          {/* Proactive Coach Suggestions */}
-          {proactiveSuggestions.length > 0 && (
-            <Card className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Zap className="w-5 h-5 text-orange-600" />
-                  <span>智能教练建议</span>
-                </CardTitle>
-                <CardDescription>
-                  基于你的学习进度，AI教练为你提供个性化建议
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {proactiveSuggestions.map((suggestion) => (
-                    <div
-                      key={suggestion.id}
-                      className={`p-3 rounded-lg border ${getSuggestionColor(suggestion.type)}`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-2 flex-1">
-                          {getSuggestionIcon(suggestion.type)}
-                          <div className="flex-1">
-                            <h4 className="font-medium text-sm">{suggestion.title}</h4>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                              {suggestion.description}
-                            </p>
-                            {suggestion.action && (
-                              <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mt-2">
-                                💡 {suggestion.action}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => dismissSuggestion(suggestion.id)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* KPI Widgets */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">任务完成率</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{completionRate}%</div>
-                <p className="text-xs text-muted-foreground">
-                  {completedTasks.length} / {totalTasks} 任务已完成
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">自评信心</CardTitle>
-                <Gauge className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {progressData.confidenceScore || "待评估"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  满分10分
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">学习时长</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {progressData.hoursSpent || "0"} 小时
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  累计投入时间
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* Custom KPIs */}
-          {userContext.kpis && userContext.kpis.length > 0 && (
-            <Card className="bg-white dark:bg-gray-950/50">
-              <CardHeader>
-                <CardTitle>个性化指标</CardTitle>
-                <CardDescription>基于你的学习目标定制的关键绩效指标</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {userContext.kpis.map((kpi, index) => (
-                    <div key={index} className="flex items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                      <BarChart3 className="w-5 h-5 mr-3 text-blue-600 dark:text-blue-400" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{kpi}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {/* Analysis Results */}
-          {analysisResult && (
-            <Card className="bg-blue-50 dark:bg-blue-900/20">
-              <CardHeader>
-                <CardTitle>进度分析结果</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-semibold mb-2">分析：</h4>
-                  <p className="text-gray-700 dark:text-gray-300">{analysisResult.analysis}</p>
-                </div>
-                
-                {analysisResult.suggestions && analysisResult.suggestions.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold mb-2">建议：</h4>
-                    <ul className="space-y-2">
-                      {analysisResult.suggestions.map((suggestion, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="text-blue-600 dark:text-blue-400 mr-2">•</span>
-                          <span className="text-gray-700 dark:text-gray-300">{suggestion}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {analysisResult.encouragement && (
-                  <div className="pt-2 border-t">
-                    <p className="text-green-700 dark:text-green-400 font-medium">
-                      💪 {analysisResult.encouragement}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="progress">
-          <Card className="bg-white dark:bg-gray-950/50">
-            <CardHeader>
-              <CardTitle>记录你的进度</CardTitle>
-              <CardDescription>
-                输入你的最新数据点。仪表板将实时更新。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="confidence-score">当前信心评分 (1-10)</Label>
-                  <Input 
-                    id="confidence-score" 
-                    type="number" 
-                    min="1"
-                    max="10"
-                    placeholder="例如：7" 
-                    value={progressData.confidenceScore}
-                    onChange={(e) => setProgressData({...progressData, confidenceScore: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hours-spent">本周学习时长（小时）</Label>
-                  <Input 
-                    id="hours-spent" 
-                    type="number" 
-                    min="0"
-                    placeholder="例如：5" 
-                    value={progressData.hoursSpent}
-                    onChange={(e) => setProgressData({...progressData, hoursSpent: e.target.value})}
-                  />
-                </div>
-              </div>
-              
+      {/* T7: 简化为单一界面，移除标签页 */}
+      <div className="space-y-6">
+        {/* T7: Check-in 轻表单 */}
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-200 dark:border-blue-800">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <MessageSquarePlus className="w-5 h-5 text-blue-600" />
+              <span>学习 Check-in</span>
+            </CardTitle>
+            <CardDescription>
+              简单三问，获得精准的微矫正建议
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="challenges">遇到的挑战或问题（可选）</Label>
+                <Label htmlFor="what-did" className="text-sm font-medium">
+                  1. 今天/最近做了什么？
+                </Label>
                 <textarea 
-                  id="challenges"
-                  className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-input bg-background"
-                  placeholder="描述你在学习过程中遇到的任何困难或挑战..."
-                  value={progressData.challenges}
-                  onChange={(e) => setProgressData({...progressData, challenges: e.target.value})}
+                  id="what-did"
+                  className="w-full h-16 px-3 py-2 text-sm rounded-md border border-input bg-background resize-none"
+                  placeholder="简单描述你完成的学习活动..."
+                  value={checkInData.whatDid}
+                  onChange={(e) => setCheckInData({...checkInData, whatDid: e.target.value})}
                 />
               </div>
               
-              <div className="flex justify-end">
-                <Button 
-                  onClick={handleAnalyzeProgress}
-                  disabled={isLoading || (!progressData.confidenceScore && !progressData.hoursSpent && !progressData.challenges)}
-                >
-                  {isLoading ? "分析中..." : "提交并获取分析"}
-                </Button>
+              <div className="space-y-2">
+                <Label htmlFor="challenges" className="text-sm font-medium">
+                  2. 遇到了什么困难或疑问？
+                </Label>
+                <textarea 
+                  id="challenges"
+                  className="w-full h-16 px-3 py-2 text-sm rounded-md border border-input bg-background resize-none"
+                  placeholder="描述遇到的挑战或疑问..."
+                  value={checkInData.challenges}
+                  onChange={(e) => setCheckInData({...checkInData, challenges: e.target.value})}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="next-step" className="text-sm font-medium">
+                  3. 下一步计划做什么？
+                </Label>
+                <textarea 
+                  id="next-step"
+                  className="w-full h-16 px-3 py-2 text-sm rounded-md border border-input bg-background resize-none"
+                  placeholder="你的下一步学习计划..."
+                  value={checkInData.nextStep}
+                  onChange={(e) => setCheckInData({...checkInData, nextStep: e.target.value})}
+                />
+              </div>
+            </div>
+            
+            <Button 
+              onClick={handleCheckIn}
+              disabled={isAnalyzing || (!checkInData.whatDid.trim() && !checkInData.challenges.trim() && !checkInData.nextStep.trim())}
+              className="w-full"
+            >
+              {isAnalyzing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  正在分析...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  提交并获取建议
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* T7: 微矫正建议显示 */}
+        {microSuggestions.length > 0 && (
+          <Card className="border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-green-800 dark:text-green-200">
+                <Zap className="w-5 h-5" />
+                <span>微矫正建议</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {microSuggestions.map((suggestion, index) => (
+                  <div key={index} className="flex items-start space-x-2 p-3 bg-white dark:bg-gray-800 rounded-lg border">
+                    <span className="w-6 h-6 bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300 rounded-full flex items-center justify-center text-sm font-medium">
+                      {index + 1}
+                    </span>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 flex-1">
+                      {suggestion}
+                    </p>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        )}
+          
+        {/* T7: 简化的趋势火花线 */}
+        <Card className="bg-white dark:bg-gray-950/50">
+          <CardHeader>
+            <CardTitle className="text-lg">学习趋势</CardTitle>
+            <CardDescription>简化的进度概览</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{completionRate}%</div>
+                <div className="text-xs text-gray-500">任务完成率</div>
+                <div className="w-full h-1 bg-gray-200 rounded-full mt-2">
+                  <div 
+                    className="h-1 bg-blue-600 rounded-full transition-all duration-300"
+                    style={{ width: `${completionRate}%` }}
+                  />
+                </div>
+              </div>
+              
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{completedTasks.length}</div>
+                <div className="text-xs text-gray-500">已完成任务</div>
+                <TrendingUp className="w-4 h-4 mx-auto mt-1 text-green-600" />
+              </div>
+              
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{totalTasks - completedTasks.length}</div>
+                <div className="text-xs text-gray-500">剩余任务</div>
+                <Target className="w-4 h-4 mx-auto mt-1 text-purple-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+          
+        {/* T7: 保留简化的个性化指标 */}
+        {userContext.kpis && userContext.kpis.length > 0 && (
+          <Card className="bg-white dark:bg-gray-950/50">
+            <CardHeader>
+              <CardTitle>个性化指标</CardTitle>
+              <CardDescription>基于你的学习目标定制的关键绩效指标</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {userContext.kpis.map((kpi, index) => (
+                  <div key={index} className="flex items-center p-2 bg-gray-50 dark:bg-gray-900 rounded text-sm">
+                    <BarChart3 className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
+                    <span className="text-gray-700 dark:text-gray-300">{kpi}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Consultation Modal */}
       {showConsultModal && (

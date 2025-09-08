@@ -25,10 +25,10 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     addVersionSnapshot, 
     setQaIssues 
   } = useCognitiveCoachStore()
-  const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
-  const [expandingTask, setExpandingTask] = useState<string | null>(null)
-  const [expandedTasks, setExpandedTasks] = useState<Record<string, string[]>>({})
-  const [isExpanding, setIsExpanding] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [completedSteps, setCompletedSteps] = useState<string[]>([])
+  const [alternativeOptions, setAlternativeOptions] = useState<string[]>([])
+  const [showHistory, setShowHistory] = useState(false)
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
@@ -60,25 +60,41 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   const povTags = userContext.povTags as string[] | undefined
   const requiresHumanReview = userContext.requiresHumanReview as boolean | undefined
   
-  const handleTaskToggle = (taskId: string) => {
-    const newCompletedTasks = new Set(completedTasks)
-    if (newCompletedTasks.has(taskId)) {
-      newCompletedTasks.delete(taskId)
-    } else {
-      newCompletedTasks.add(taskId)
+  // T7: 简化为下一步/备选步骤的处理
+  const currentAction = actionPlan[currentStep] || null
+  const nextAction = actionPlan[currentStep + 1] || null
+  
+  const handleCompleteStep = () => {
+    if (currentAction) {
+      const newCompleted = [...completedSteps, currentAction.id]
+      setCompletedSteps(newCompleted)
+      
+      // 移动到下一步
+      if (currentStep < actionPlan.length - 1) {
+        setCurrentStep(currentStep + 1)
+      }
+      
+      // 更新store中的完成状态
+      const updatedPlan = actionPlan.map(item => ({
+        ...item,
+        isCompleted: newCompleted.includes(item.id)
+      }))
+      updateUserContext({ actionPlan: updatedPlan })
     }
-    setCompletedTasks(newCompletedTasks)
-    
-    // Update the action plan in the store
-    const updatedPlan = actionPlan.map(item => ({
-      ...item,
-      isCompleted: newCompletedTasks.has(item.id)
-    }))
-    updateUserContext({ actionPlan: updatedPlan })
+  }
+  
+  const handleGetAlternative = () => {
+    // 模拟获取替代建议
+    const alternatives = [
+      `尝试更简化的方式：${currentAction?.text.slice(0, 15)}...的基础版本`,
+      `分解为更小步骤：将${currentAction?.text.slice(0, 15)}...拆分成2-3个子任务`,
+      `寻找辅助资源：为${currentAction?.text.slice(0, 15)}...找到相关教程或工具`
+    ]
+    setAlternativeOptions(alternatives)
   }
   
   const completionRate = actionPlan.length > 0 
-    ? Math.round((completedTasks.size / actionPlan.length) * 100)
+    ? Math.round((completedSteps.length / actionPlan.length) * 100)
     : 0
 
   // AI-assisted task breakdown
@@ -181,9 +197,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
             userGoal: userContext.userGoal,
             framework: userContext.knowledgeFramework,
             systemNodes: userContext.systemDynamics?.nodes || [],
-            decisionType: userContext.decisionType,
-            runTier: userContext.runTier,
-            seed: userContext.seed
+            decisionType: userContext.decisionType
           }}
         />
       </div>
@@ -226,77 +240,129 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-6">
               {actionPlan.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   正在生成你的个性化行动计划...
                 </div>
               ) : (
-                actionPlan.map((item) => (
-                  <div key={item.id} className="space-y-2">
-                    <div className="flex items-center p-3 rounded-lg border bg-gray-50 dark:bg-gray-900 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                      <GripVertical className="w-5 h-5 text-gray-400 mr-2 cursor-grab" />
-                      <Checkbox 
-                        id={`task-${item.id}`} 
-                        className="mr-3" 
-                        checked={completedTasks.has(item.id)}
-                        onCheckedChange={() => handleTaskToggle(item.id)}
-                      />
-                      <label
-                        htmlFor={`task-${item.id}`}
-                        className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 cursor-pointer"
-                      >
-                        {item.text}
-                      </label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleTaskBreakdown(item.id, item.text)}
-                        disabled={isExpanding || !!expandedTasks[item.id]}
-                        className="ml-2"
-                      >
-                        {expandingTask === item.id ? (
-                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Brain className="w-4 h-4" />
-                        )}
-                      </Button>
+                <>
+                  {/* T7: 下一步卡片 */}
+                  {currentAction && (
+                    <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                          🎯 下一步行动
+                        </h3>
+                        <span className="text-sm text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded">
+                          步骤 {currentStep + 1}/{actionPlan.length}
+                        </span>
+                      </div>
+                      <p className="text-gray-800 dark:text-gray-200 mb-4 text-base">
+                        {currentAction.text}
+                      </p>
+                      <div className="flex gap-3">
+                        <Button 
+                          onClick={handleCompleteStep}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          ✓ 完成
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={handleGetAlternative}
+                        >
+                          🔄 换一个建议
+                        </Button>
+                      </div>
                     </div>
-                    
-                    {/* Expanded subtasks */}
-                    {expandedTasks[item.id] && (
-                      <div className="ml-8 space-y-1">
-                        {expandedTasks[item.id].map((subTask, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center p-2 text-xs bg-blue-50 dark:bg-blue-900/20 rounded border-l-2 border-blue-200 dark:border-blue-800"
-                          >
-                            <span className="w-2 h-2 bg-blue-400 rounded-full mr-2 flex-shrink-0"></span>
-                            <span className="text-gray-700 dark:text-gray-300">{subTask}</span>
+                  )}
+
+                  {/* 备选一步 */}
+                  {nextAction && (
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50">
+                      <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                        📋 接下来
+                      </h4>
+                      <p className="text-gray-700 dark:text-gray-300 text-sm">
+                        {nextAction.text}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 替代选项 */}
+                  {alternativeOptions.length > 0 && (
+                    <div className="border border-orange-200 dark:border-orange-800 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
+                      <h4 className="text-sm font-medium text-orange-800 dark:text-orange-200 mb-3">
+                        💡 抗阻力替代方案
+                      </h4>
+                      <div className="space-y-2">
+                        {alternativeOptions.map((option, index) => (
+                          <div key={index} className="text-sm text-gray-700 dark:text-gray-300 p-2 bg-white dark:bg-gray-800 rounded border">
+                            {option}
                           </div>
                         ))}
                       </div>
-                    )}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setAlternativeOptions([])}
+                        className="mt-2 text-xs"
+                      >
+                        关闭建议
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* 进度条 */}
+                  <div className="pt-4 border-t">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        总体进度
+                      </span>
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        {completedSteps.length} / {actionPlan.length} 已完成 ({completionRate}%)
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-300"
+                        style={{ width: `${completionRate}%` }}
+                      />
+                    </div>
                   </div>
-                ))
-              )}
-              {actionPlan.length > 0 && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      总体进度
-                    </span>
-                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                      {completedTasks.size} / {actionPlan.length} 已完成 ({completionRate}%)
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-600 transition-all duration-300"
-                      style={{ width: `${completionRate}%` }}
-                    />
-                  </div>
-                </div>
+
+                  {/* T7: 历史记录折叠区 */}
+                  {completedSteps.length > 0 && (
+                    <div className="pt-4 border-t">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="mb-3"
+                      >
+                        📚 完成历史 ({completedSteps.length})
+                        {showHistory ? ' 收起' : ' 展开'}
+                      </Button>
+                      
+                      {showHistory && (
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {actionPlan
+                            .filter(item => completedSteps.includes(item.id))
+                            .map((item, index) => (
+                            <div key={item.id} className="flex items-center text-sm text-gray-600 dark:text-gray-400 p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                              <span className="w-4 h-4 bg-green-500 rounded-full mr-2 flex-shrink-0 flex items-center justify-center">
+                                <span className="text-white text-xs">✓</span>
+                              </span>
+                              <span className="line-through">{item.text}</span>
+                              <span className="ml-auto text-xs">#{index + 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
               {/* VOI & Review Window */}
               {(userContext.missingEvidenceTop3?.length || userContext.reviewWindow) && (
@@ -449,9 +515,13 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
           </Card>
         </TabsContent>
       </Tabs>
-      <div className="flex justify-end mt-8">
-        <Button onClick={onProceed} disabled={actionPlan.length === 0}>
-          移交控制权并开始 S4
+        <div className="flex justify-end mt-8">
+        <Button 
+          onClick={onProceed} 
+          disabled={actionPlan.length === 0 || completedSteps.length === 0}
+          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+        >
+          开始 S4：自主运营 🚀
         </Button>
       </div>
     </div>

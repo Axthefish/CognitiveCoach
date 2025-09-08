@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 import { CoachRequestSchema, StreamPayload } from '@/lib/schemas';
-import { handleOptions } from '@/lib/cors';
+import { handleOptions, withCors } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { KnowledgeFramework, ActionPlan, FrameworkNode } from '@/lib/types';
@@ -166,17 +166,17 @@ export async function POST(request: NextRequest) {
   if (!rl.allowed) {
     const encoder = new TextEncoder();
     const errorStream = createStreamMessage('error', 'Too Many Requests');
-    return new Response(encoder.encode(errorStream), {
+    const response = new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': origin || '*',
         'Retry-After': String(rl.retryAfter ?? 60),
       },
       status: 429,
     });
+    return withCors(response, origin);
   }
 
   let body: CoachRequest | undefined;
@@ -188,16 +188,16 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       const encoder = new TextEncoder();
       const errorStream = createStreamMessage('error', '请求格式不正确，请检查您的输入并重试');
-      return new Response(encoder.encode(errorStream), {
+      const response = new Response(encoder.encode(errorStream), {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no',
-          'Access-Control-Allow-Origin': origin || '*',
         },
         status: 400,
       });
+      return withCors(response, origin);
     }
     
     body = parsed.data as unknown as CoachRequest;
@@ -211,10 +211,11 @@ export async function POST(request: NextRequest) {
         const errorState = { sent: false };
         const sendErrorSafe = (
           code: 'TIMEOUT' | 'NETWORK' | 'SCHEMA' | 'QA' | 'UNKNOWN',
-          message: string
+          message: string,
+          traceId?: string
         ) => {
           if (errorState.sent) return;
-          controller.enqueue(encoder.encode(createStreamMessage('error', { code, message })));
+          controller.enqueue(encoder.encode(createStreamMessage('error', { code, message, traceId })));
           errorState.sent = true;
         };
         
@@ -265,17 +266,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return new Response(stream, {
+    const response = new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': origin || '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
+    return withCors(response, origin);
   } catch (error) {
     logger.error('API Error:', { 
       error: error instanceof Error ? error.message : String(error) 
@@ -292,16 +291,16 @@ export async function POST(request: NextRequest) {
     }
     
     const errorStream = createStreamMessage('error', { code: errorCode, message: readableMessage });
-    return new Response(encoder.encode(errorStream), {
+    const response = new Response(encoder.encode(errorStream), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, max-age=0, must-revalidate',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': origin || '*',
       },
       status: 500,
     });
+    return withCors(response, origin);
   }
 }
 
@@ -474,11 +473,11 @@ async function handleGenerateFrameworkStream(
     steps[2].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
-    // 调用AI
+    // 调用AI - T3: 默认使用 Lite 档位
     let g = await generateJson<KnowledgeFramework>(prompt, { 
       maxOutputTokens: 65536,
       temperature: 0.8
-    }, payload.runTier);
+    }, 'Lite');
 
     // 检查是否超时，如果是则降级重试
     if (!g.ok && g.error === 'TIMEOUT') {
@@ -511,23 +510,58 @@ async function handleGenerateFrameworkStream(
       throw new Error('AI响应解析失败');
     }
 
-    const framework = g.data;
+    let framework = g.data;
     const s1 = KnowledgeFrameworkSchema.safeParse(framework);
     
     if (!s1.success) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('SCHEMA', 'Schema validation failed for S1 output');
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S1 output', traceId);
       throw new Error('SCHEMA');
     }
 
     // QA gate
     const qa = runQualityGates('S1', framework);
     if (!qa.passed) {
-      steps[3].status = 'error';
+      // T3: QA failed - Pro 复算
+      steps[3].status = 'in_progress';
+      steps[3].message = 'QA检查未通过，正在使用 Pro 档位复算...';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('QA', 'Quality gates failed');
-      throw new Error('QA');
+      
+      // Pro 复算
+      const gPro = await generateJson<KnowledgeFramework>(prompt, { 
+        maxOutputTokens: 65536,
+        temperature: 0.4
+      }, 'Pro');
+      
+      if (!gPro.ok) {
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('QA', 'Pro复算后仍无法通过质量检查');
+        throw new Error('QA');
+      }
+      
+      const frameworkPro = gPro.data;
+      const s1Pro = KnowledgeFrameworkSchema.safeParse(frameworkPro);
+      
+      if (!s1Pro.success) {
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('SCHEMA', 'Pro复算后Schema验证仍失败', traceId);
+        throw new Error('SCHEMA');
+      }
+      
+      // 使用Pro结果更新framework
+      const qaPro = runQualityGates('S1', frameworkPro);
+      if (!qaPro.passed) {
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('QA', 'Pro复算后仍无法通过质量检查');
+        throw new Error('QA');
+      }
+      
+      // 更新为Pro结果
+      framework = frameworkPro;
     }
 
     // 步骤4：优化完成
@@ -535,10 +569,19 @@ async function handleGenerateFrameworkStream(
     steps[3].status = 'completed';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
+    // T8: 记录可观测性信息
+    logger.info('S1 Generation completed', {
+      traceId,
+      tier_used: qa.passed ? 'Lite' : 'Pro',
+      qa_passed: qa.passed,
+      auto_repair_applied: !qa.passed
+    });
+
     // 发送最终结果
     controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
       status: 'success',
-      data: { framework }
+      data: { framework },
+      traceId
     })));
     
   } catch (error) {
@@ -684,10 +727,11 @@ Mermaid图表要求：
     steps[2].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
+    // T3: 默认使用 Lite 档位
     let g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
       prompt,
-      { maxOutputTokens: 65536, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 },
-      payload.runTier
+      { maxOutputTokens: 65536, temperature: 0.5 },
+      'Lite'
     );
 
     // 检查是否超时，如果是则降级重试
@@ -726,7 +770,7 @@ Mermaid图表要求：
     if (!s2.success) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('SCHEMA', 'Schema validation failed for S2 output');
+        sendErrorSafe('SCHEMA', 'Schema validation failed for S2 output', traceId);
       throw new Error('SCHEMA');
     }
 
@@ -734,7 +778,7 @@ Mermaid图表要求：
     if (typeof dynamics.mermaidChart !== 'string' || !dynamics.mermaidChart.trim().startsWith('graph TD')) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('SCHEMA', 'Invalid Mermaid chart: must start with "graph TD"');
+        sendErrorSafe('SCHEMA', 'Invalid Mermaid chart: must start with "graph TD"', traceId);
       throw new Error('SCHEMA');
     }
 
@@ -759,7 +803,7 @@ Mermaid图表要求：
         // Keep current behavior for schema errors
         steps[3].status = 'error';
         controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-        sendErrorSafe('SCHEMA', 'Schema validation failed');
+        sendErrorSafe('SCHEMA', 'Schema validation failed', traceId);
         throw new Error('SCHEMA');
       }
       
@@ -826,7 +870,18 @@ Mermaid图表要求：
       }
     };
 
-    controller.enqueue(encoder.encode(createStreamMessage('data_structure', finalResponse)));
+    // T8: 记录S2可观测性信息  
+    logger.info('S2 Generation completed', {
+      traceId,
+      tier_used: 'Lite',
+      qa_passed: qa.passed,
+      auto_repair_applied: !qa.passed
+    });
+
+    controller.enqueue(encoder.encode(createStreamMessage('data_structure', { 
+      ...finalResponse, 
+      traceId 
+    })));
     
   } catch (error) {
     steps.forEach(s => { if (s.status === 'in_progress') s.status = 'error'; });
@@ -967,15 +1022,15 @@ ${frameworkDescription}
     steps[2].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
-    // n-best generation
+    // T3: 先用 Lite 生成 1 个方案
     const variants = [] as Array<{ text: string; qaScore: number; issues: string[] }>;
-    const n = payload.runTier === 'Pro' ? 2 : 1;
+    const n = 1; // 固定为1，如需要会在后续添加Pro方案
     
     for (let i = 0; i < n; i++) {
       const r = await generateJson<Record<string, unknown>>(prompt, { 
         maxOutputTokens: 65536, 
-        temperature: i === 0 ? (payload.runTier === 'Lite' ? 0.5 : 0.8) : 0.6 
-      }, payload.runTier);
+        temperature: 0.5 
+      }, 'Lite');
       
       if (!r.ok && r.error === 'TIMEOUT') {
         // 推送降级重试状态
@@ -1034,6 +1089,48 @@ ${frameworkDescription}
       }
     }
 
+    // T3: 如果Lite没有找到合适的方案，尝试Pro复算
+    if (!best) {
+      steps[3].status = 'in_progress';
+      steps[3].message = 'Lite方案质量不足，正在使用 Pro 档位生成对照方案...';
+      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+      
+      // 用Pro生成一个对照方案
+      const rPro = await generateJson<Record<string, unknown>>(prompt, { 
+        maxOutputTokens: 65536, 
+        temperature: 0.8 
+      }, 'Pro');
+      
+      if (rPro.ok) {
+        const textPro = JSON.stringify(rPro.data);
+        variants.push({ text: textPro, qaScore: 0, issues: [] });
+        
+        // 重新评估包括Pro方案的所有变体
+        for (const v of variants) {
+          try {
+            const planData = JSON.parse(v.text);
+            const s3 = ActionPlanResponseSchema.safeParse(planData);
+            if (!s3.success) {
+              v.issues = ['schema'];
+              continue;
+            }
+            const qa = runQualityGates('S3', planData, { nodes: (payload.systemNodes || []).map(n => ({ id: n.id })) });
+            v.issues = qa.issues.map(issue => issue.hint || 'Quality issue');
+            if (qa.passed) {
+              const issueCount = qa.issues.length;
+              if (!best || issueCount < bestIssuesCount) {
+                best = planData;
+                bestIssuesCount = issueCount;
+              }
+            }
+          } catch (parseError) {
+            logger.error('JSON parsing failed during Pro recalc:', parseError);
+            v.issues = ['parse'];
+          }
+        }
+      }
+    }
+
     if (best) {
       await new Promise(resolve => setTimeout(resolve, 500));
       steps[3].status = 'completed';
@@ -1043,19 +1140,29 @@ ${frameworkDescription}
       const requiresHumanReview = Array.isArray((best as { strategySpec?: { metrics?: Array<{ confidence?: number; evidence?: unknown[] }> } }).strategySpec?.metrics)
         && ((((best as { strategySpec?: { metrics?: Array<{ confidence?: number; evidence?: unknown[] }> } }).strategySpec)?.metrics) || [])
           .some((m) => ((m.confidence ?? 1) < 0.4) || !m.evidence || ((m.evidence as unknown[])?.length ?? 0) === 0);
-      const telemetry = { n_best_count: n };
+      const telemetry = { n_best_count: variants.length };
       
+      // T8: 记录S3可观测性信息
+      logger.info('S3 Generation completed', {
+        traceId,
+        tier_used: variants.length > 1 ? 'Lite+Pro' : 'Lite',
+        qa_passed: true,
+        auto_repair_applied: false,
+        n_best_count: variants.length
+      });
+
       controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
         status: 'success', 
-        data: { ...(best as object), povTags, requiresHumanReview, telemetry }
+        data: { ...(best as object), povTags, requiresHumanReview, telemetry },
+        traceId
       })));
       return;
     }
 
-    // Final attempt with lower temperature
+    // Final attempt with lower temperature using Lite first
     const retryR = await generateJson<Record<string, unknown>>(prompt, { 
       temperature: 0.4, topK: 40, topP: 0.9, maxOutputTokens: 65536 
-    }, payload.runTier);
+    }, 'Lite');
     const retryText = retryR.ok ? JSON.stringify(retryR.data) : '';
     
     const planData = JSON.parse(retryText);
@@ -1071,13 +1178,13 @@ ${frameworkDescription}
     
     const s3 = ActionPlanResponseSchema.safeParse(enrichedPlanData);
     if (!s3.success) {
-      sendErrorSafe('SCHEMA', 'Schema validation failed for S3 output');
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S3 output', traceId);
       throw new Error('SCHEMA');
     }
     
     const qa = runQualityGates('S3', planData, { nodes: (payload.systemNodes || []).map(n => ({ id: n.id })) });
     if (!qa.passed) {
-      sendErrorSafe('QA', 'Quality gates failed');
+      sendErrorSafe('QA', 'Quality gates failed', traceId);
       throw new Error('QA');
     }
     
@@ -1091,9 +1198,19 @@ ${frameworkDescription}
         .some((m: { confidence?: number; evidence?: unknown[] }) => ((m.confidence ?? 1) < 0.4) || !m.evidence || ((m.evidence as unknown[])?.length ?? 0) === 0);
     const telemetry = { n_best_count: 1, retry: true };
     
+    // T8: 记录S3 fallback可观测性信息
+    logger.info('S3 Fallback Generation completed', {
+      traceId,
+      tier_used: 'Lite',
+      qa_passed: true,
+      auto_repair_applied: false,
+      retry: true
+    });
+
     controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
       status: 'success', 
-      data: { ...planData, povTags, requiresHumanReview, telemetry }
+      data: { ...planData, povTags, requiresHumanReview, telemetry },
+      traceId
     })));
     
   } catch (error) {
@@ -1214,7 +1331,8 @@ ${payload.userContext.kpis?.join('\n') || '无'}
     steps[2].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
-    let g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 65536 }, 'Pro');
+    // T3: S4默认使用 Lite
+    let g = await generateJson<Record<string, unknown>>(prompt, { maxOutputTokens: 65536 }, 'Lite');
 
     // 检查是否超时，如果是则降级重试
     if (!g.ok && g.error === 'TIMEOUT') {
@@ -1249,31 +1367,75 @@ ${payload.userContext.kpis?.join('\n') || '无'}
       throw new Error(errorMessage);
     }
 
-    const analysisData = g.data;
+    let analysisData = g.data;
     const s4 = AnalyzeProgressSchema.safeParse(analysisData);
     if (!s4.success) {
       steps[3].status = 'error';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('SCHEMA', 'Schema validation failed for S4 output');
+      sendErrorSafe('SCHEMA', 'Schema validation failed for S4 output', traceId);
       throw new Error('SCHEMA');
     }
 
     // QA S3->S4 linkage
     const s4qa = runQualityGates('S4', analysisData, { strategyMetrics: payload.userContext.strategySpec?.metrics || [] });
     if (!s4qa.passed) {
-      steps[3].status = 'error';
+      // T3: S4 QA失败时，使用Pro进行深度跨策略分析
+      steps[3].status = 'in_progress';
+      steps[3].message = '需要深度分析，正在使用 Pro 档位重新分析...';
       controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      sendErrorSafe('QA', 'Quality gates failed');
-      throw new Error('QA');
+      
+      // Pro复算
+      const gPro = await generateJson<Record<string, unknown>>(prompt, { 
+        maxOutputTokens: 65536, 
+        temperature: 0.4 
+      }, 'Pro');
+      
+      if (!gPro.ok) {
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('QA', 'Pro深度分析后仍无法通过质量检查');
+        throw new Error('QA');
+      }
+      
+      const analysisDataPro = gPro.data;
+      const s4Pro = AnalyzeProgressSchema.safeParse(analysisDataPro);
+      if (!s4Pro.success) {
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('SCHEMA', 'Pro深度分析后Schema验证失败', traceId);
+        throw new Error('SCHEMA');
+      }
+      
+      // 重新检查Pro结果的QA
+      const s4qaPro = runQualityGates('S4', analysisDataPro, { strategyMetrics: payload.userContext.strategySpec?.metrics || [] });
+      if (!s4qaPro.passed) {
+        steps[3].status = 'error';
+        controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
+        sendErrorSafe('QA', 'Pro深度分析后仍无法通过质量检查');
+        throw new Error('QA');
+      }
+      
+      // 使用Pro分析结果
+      analysisData = analysisDataPro;
     }
 
     await new Promise(resolve => setTimeout(resolve, 500));
     steps[3].status = 'completed';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
 
+    // T8: 记录S4可观测性信息
+    const wasProUsed = !s4qa.passed; // 如果QA失败，说明使用了Pro
+    logger.info('S4 Analysis completed', {
+      traceId,
+      tier_used: wasProUsed ? 'Pro' : 'Lite',
+      qa_passed: s4qa.passed,
+      auto_repair_applied: wasProUsed
+    });
+
     controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
       status: 'success',
-      data: analysisData
+      data: analysisData,
+      traceId
     })));
     
   } catch (error) {
