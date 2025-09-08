@@ -3,15 +3,13 @@
 import React, { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Gauge, TrendingUp, Target, MessageSquarePlus, Send, X, BarChart3, AlertTriangle, CheckCircle, Zap } from "lucide-react"
+import { TrendingUp, Target, MessageSquarePlus, Send, X, BarChart3, Zap } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { enhancedFetch, NetworkError } from "@/lib/network-utils"
 
 export default function S4AutonomousOperationView() {
-  const { userContext, isLoading, setLoading, setError, resetStore } = useCognitiveCoachStore()
+  const { userContext, resetStore } = useCognitiveCoachStore()
   const [showConsultModal, setShowConsultModal] = useState(false)
   const [consultQuestion, setConsultQuestion] = useState("")
   const [consultResponse, setConsultResponse] = useState("")
@@ -26,115 +24,11 @@ export default function S4AutonomousOperationView() {
   const [microSuggestions, setMicroSuggestions] = useState<string[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   
-  // Proactive coaching state
-  const [proactiveSuggestions, setProactiveSuggestions] = useState<Array<{
-    id: string;
-    type: 'risk' | 'opportunity' | 'milestone';
-    title: string;
-    description: string;
-    action?: string;
-    priority: 'high' | 'medium' | 'low';
-    timestamp: number;
-  }>>([])
-  const [lastActivityCheck] = useState<number>(Date.now())
-  
   // Calculate metrics
   const completedTasks = userContext.actionPlan?.filter(item => item.isCompleted) || []
   const totalTasks = userContext.actionPlan?.length || 0
   const completionRate = totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0
   
-  // Proactive coaching logic
-  const generateProactiveSuggestions = React.useCallback(() => {
-    const suggestions = []
-    const now = Date.now()
-    
-    // Risk detection: Low completion rate
-    if (completionRate < 30 && totalTasks > 0) {
-      suggestions.push({
-        id: 'low-completion',
-        type: 'risk' as const,
-        title: '完成率偏低',
-        description: '当前任务完成率较低，可能需要调整学习策略或时间安排。',
-        action: '考虑重新评估任务优先级，或将大任务分解为更小的步骤。',
-        priority: 'high' as const,
-        timestamp: now
-      })
-    }
-    
-    // Opportunity: High completion rate
-    if (completionRate > 80 && totalTasks > 0) {
-      suggestions.push({
-        id: 'high-completion',
-        type: 'opportunity' as const,
-        title: '进展优秀',
-        description: '你的学习进度非常好！可以考虑挑战更高级的内容。',
-        action: '尝试深入学习或探索相关的高级主题。',
-        priority: 'medium' as const,
-        timestamp: now
-      })
-    }
-    
-    // Milestone: 50% completion
-    if (completionRate >= 50 && completionRate < 55 && !proactiveSuggestions.some(s => s.id === 'milestone-50')) {
-      suggestions.push({
-        id: 'milestone-50',
-        type: 'milestone' as const,
-        title: '里程碑达成',
-        description: '恭喜！你已经完成了一半的学习任务。',
-        action: '这是一个很好的时机来回顾已学内容并为下一阶段做准备。',
-        priority: 'medium' as const,
-        timestamp: now
-      })
-    }
-    
-    // Risk: No recent activity (simulated)
-    const daysSinceLastActivity = Math.floor((now - lastActivityCheck) / (1000 * 60 * 60 * 24))
-    if (daysSinceLastActivity > 3) {
-      suggestions.push({
-        id: 'inactive',
-        type: 'risk' as const,
-        title: '学习活动不足',
-        description: '最近几天没有学习活动，保持连续性对学习效果很重要。',
-        action: '尝试每天安排至少15分钟的学习时间。',
-        priority: 'high' as const,
-        timestamp: now
-      })
-    }
-    
-    return suggestions
-  }, [completionRate, totalTasks, lastActivityCheck, proactiveSuggestions])
-  
-  // Update proactive suggestions periodically
-  React.useEffect(() => {
-    const newSuggestions = generateProactiveSuggestions()
-    if (newSuggestions.length > 0) {
-      setProactiveSuggestions(prev => {
-        const existingIds = new Set(prev.map(s => s.id))
-        const uniqueNew = newSuggestions.filter(s => !existingIds.has(s.id))
-        return [...prev, ...uniqueNew].slice(-5) // Keep only latest 5 suggestions
-      })
-    }
-  }, [completionRate, totalTasks, lastActivityCheck, generateProactiveSuggestions])
-  
-  const dismissSuggestion = (suggestionId: string) => {
-    setProactiveSuggestions(prev => prev.filter(s => s.id !== suggestionId))
-  }
-  
-  const getSuggestionIcon = (type: 'risk' | 'opportunity' | 'milestone') => {
-    switch (type) {
-      case 'risk': return <AlertTriangle className="w-4 h-4 text-red-500" />
-      case 'opportunity': return <Zap className="w-4 h-4 text-green-500" />
-      case 'milestone': return <CheckCircle className="w-4 h-4 text-blue-500" />
-    }
-  }
-  
-  const getSuggestionColor = (type: 'risk' | 'opportunity' | 'milestone') => {
-    switch (type) {
-      case 'risk': return 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-      case 'opportunity': return 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-      case 'milestone': return 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20'
-    }
-  }
   
   // T7: Handle check-in analysis
   const handleCheckIn = async () => {
@@ -178,7 +72,7 @@ export default function S4AutonomousOperationView() {
       } else {
         setMicroSuggestions(['保持当前学习节奏，继续专注于主要目标'])
       }
-    } catch (error) {
+    } catch {
       // 简化错误处理，提供友好的默认建议
       setMicroSuggestions(['网络暂时不可用，建议继续当前学习计划'])
     } finally {

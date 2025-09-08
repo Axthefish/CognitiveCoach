@@ -4,8 +4,7 @@ import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
-import { GripVertical, Gauge, TrendingUp, Target, BarChart3, Brain, Download, Calendar } from "lucide-react"
+import { Gauge, TrendingUp, Target, BarChart3, Download, Calendar } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { Badge } from "@/components/ui/badge"
 import { normalizeId } from "@/lib/qa"
@@ -97,33 +96,6 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     ? Math.round((completedSteps.length / actionPlan.length) * 100)
     : 0
 
-  // AI-assisted task breakdown
-  const handleTaskBreakdown = async (taskId: string, taskText: string) => {
-    setIsExpanding(true)
-    setExpandingTask(taskId)
-    
-    try {
-      // Simulate AI breakdown (in real implementation, this would call the AI API)
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      const subTasks = [
-        `准备阶段: ${taskText.slice(0, 20)}...的前期准备工作`,
-        `执行阶段: 开始实际${taskText.slice(0, 15)}...的核心操作`,
-        `验证阶段: 检查${taskText.slice(0, 15)}...的完成质量`,
-        `总结阶段: 记录${taskText.slice(0, 15)}...的学习收获`
-      ]
-      
-      setExpandedTasks(prev => ({
-        ...prev,
-        [taskId]: subTasks
-      }))
-    } catch (_error) { // eslint-disable-line @typescript-eslint/no-unused-vars
-      // Task breakdown failed - 可以在这里添加错误处理逻辑
-    } finally {
-      setIsExpanding(false)
-      setExpandingTask(null)
-    }
-  }
 
   // Export functions
   const exportToCalendar = () => {
