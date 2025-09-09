@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb, AlertTriangle } from "lucide-react"
 import { InteractiveMermaid } from "@/components/ui/interactive-mermaid"
+import EchartsSystemGraph from "@/components/ui/echarts-system-graph"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
@@ -121,13 +122,25 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                 <CardTitle>系统地图</CardTitle>
               </CardHeader>
               <CardContent>
-                <InteractiveMermaid 
-                  chart={dynamics.mermaidChart} 
-                  nodes={dynamics.nodes}
-                  nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
-                  onNodeClick={(_nodeId) => {/* 可以在这里添加节点点击处理逻辑 */}} // eslint-disable-line @typescript-eslint/no-unused-vars
-                  onWhatIfSimulation={(_nodeId) => {/* 可以在这里添加模拟分析逻辑 */}} // eslint-disable-line @typescript-eslint/no-unused-vars
-                />
+                <div className="hidden lg:block">
+                  <EchartsSystemGraph 
+                    chart={dynamics.mermaidChart}
+                    nodes={dynamics.nodes}
+                    nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
+                    onNodeClick={(nodeId) => {
+                      try { useCognitiveCoachStore.getState().setSelectedNodeId(nodeId) } catch {}
+                    }}
+                  />
+                </div>
+                <div className="lg:hidden">
+                  <InteractiveMermaid 
+                    chart={dynamics.mermaidChart} 
+                    nodes={dynamics.nodes}
+                    nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
+                    onNodeClick={(_nodeId) => {}}
+                    onWhatIfSimulation={(_nodeId) => {}}
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>
