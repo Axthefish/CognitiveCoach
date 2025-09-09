@@ -147,7 +147,7 @@ export function InteractiveMermaid({
       }
     }
     renderMermaid()
-  }, [chart, whatIfMode, removedNodes])
+  }, [chart, whatIfMode, removedNodes, density])
 
   // Add click handlers to SVG elements
   useEffect(() => {
@@ -203,7 +203,7 @@ export function InteractiveMermaid({
         nodeElement.replaceWith(nodeElement.cloneNode(true))
       })
     }
-  }, [svg, onNodeClick, whatIfMode, removedNodes])
+  }, [svg, onNodeClick, whatIfMode, removedNodes, selectedNode, setSelectedNodeId])
 
   const handleWhatIfSimulation = (nodeId: string) => {
     setWhatIfMode(true)

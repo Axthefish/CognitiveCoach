@@ -87,7 +87,7 @@ export function LoadingOverlay({
   stage,
   showTips = true,
   estimatedSteps, // eslint-disable-line @typescript-eslint/no-unused-vars
-  onRetry,
+  onRetry, // eslint-disable-line @typescript-eslint/no-unused-vars
 }: LoadingOverlayProps) {
   const { streaming, userContext } = useCognitiveCoachStore();
   

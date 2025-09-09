@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -54,7 +54,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   };
   
   // Get action plan and KPIs from store
-  const actionPlan = userContext.actionPlan || []
+  const actionPlan = useMemo(() => userContext.actionPlan || [], [userContext.actionPlan])
   const kpis = userContext.kpis || []
   const nodes = userContext.systemDynamics?.nodes || []
   const strategySpec = userContext.strategySpec
