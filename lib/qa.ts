@@ -126,17 +126,17 @@ export function runQualityGates(
 // Helper function to classify S2 coverage severity with tolerance
 function classifyS2CoverageSeverity(totalIds: number, missing: string[]): IssueSeverity {
   const missingCount = missing.length;
-  
-  if (missingCount === 0) {
-    return 'warn'; // This shouldn't be called, but for safety
-  }
-  
-  // Tolerance: if missing <= 3 OR missing percentage <= 40%, downgrade to warn
-  if (missingCount <= 3 || (missingCount / totalIds) <= 0.4) {
+  if (missingCount === 0) return 'warn';
+
+  // Raise coverage threshold to 90%: if missing > 10% → blocker
+  const missingRatio = totalIds > 0 ? missingCount / totalIds : 1;
+
+  // Small frameworks tolerance: allow up to 1 missing without blocking
+  if (totalIds <= 8 && missingCount <= 1) {
     return 'warn';
   }
-  
-  return 'blocker';
+
+  return missingRatio > 0.10 ? 'blocker' : 'warn';
 }
 
 export function normalizeId(id: string): string {

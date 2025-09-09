@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,6 +37,7 @@ export default function S0IntentView({
   const [isLoading, setIsLoading] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const goalInputRef = useRef<HTMLInputElement | null>(null)
 
   // Reset loading state when component receives new props
   useEffect(() => {
@@ -151,11 +152,11 @@ export default function S0IntentView({
             )}
             
             <div className="space-y-2">
-              <Label htmlFor="primary-goal">
+              <Label htmlFor="goal-input">
                 {isConversationMode ? '你的回答' : '你的目标'}
               </Label>
               <Input 
-                id="primary-goal" 
+                id="goal-input" 
                 placeholder={isConversationMode 
                   ? "请回答教练的问题..." 
                   : "例如：'学习使用 Next.js 构建可扩展的 Web 应用'"}
@@ -163,6 +164,7 @@ export default function S0IntentView({
                 onChange={(e) => setUserInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 disabled={isLoading}
+                ref={goalInputRef}
               />
               {!isConversationMode && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -253,7 +255,23 @@ export default function S0IntentView({
                 <GoalTemplates 
                   onSelectGoal={(goal) => {
                     setUserInput(goal)
+                    if (goal && goal.trim()) {
+                      updateUserContext({ userGoal: goal })
+                    }
                     setShowTemplates(false)
+                    // 聚焦到输入框并滚动到视图中，给出明确的视觉确认
+                    setTimeout(() => {
+                      try {
+                        goalInputRef.current?.focus()
+                        goalInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        // 轻量提示
+                        const el = document.getElementById('goal-input')
+                        if (el) {
+                          el.classList.add('ring-2','ring-blue-400')
+                          setTimeout(() => el.classList.remove('ring-2','ring-blue-400'), 800)
+                        }
+                      } catch {}
+                    }, 0)
                   }}
                 />
               </div>

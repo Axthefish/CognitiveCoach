@@ -216,7 +216,7 @@ export default function GoalTemplates({ onSelectGoal }: GoalTemplatesProps) {
               
               {hoveredTemplate === template.id && (
                 <div className="mt-4 pt-4 border-t">
-                  <Button className="w-full" size="sm">
+                  <Button className="w-full" size="sm" onClick={(e) => { e.stopPropagation(); onSelectGoal(template.goal); }}>
                     使用这个模板开始学习
                   </Button>
                 </div>

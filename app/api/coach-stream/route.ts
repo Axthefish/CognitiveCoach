@@ -412,33 +412,9 @@ async function handleGenerateFrameworkStream(
   }, 9000);
 
   const genAI = createGeminiClient();
-  
   if (!genAI) {
-    // 模拟数据流式返回
-    for (let i = 0; i < steps.length; i++) {
-      steps[i].status = 'in_progress';
-      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-      
-      steps[i].status = 'completed';
-      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-    }
-
-    const mockFramework: KnowledgeFramework = [
-      {
-        id: 'core-concepts',
-        title: '核心概念',
-        summary: '理解基础概念和术语',
-        children: []
-      }
-    ];
-    
-    controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
-      status: 'success',
-      data: { framework: mockFramework }
-    })));
-    return;
+    sendErrorSafe('UNKNOWN', 'Gemini API key not configured', traceId);
+    throw new Error('NO_API_KEY');
   }
 
   try {
@@ -638,33 +614,9 @@ async function handleGenerateSystemDynamicsStream(
   }, 9000);
 
   const genAI = createGeminiClient();
-  
   if (!genAI) {
-    // 模拟处理流程
-    for (let i = 0; i < steps.length; i++) {
-      steps[i].status = 'in_progress';
-      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-      steps[i].status = 'completed';
-      controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
-    }
-
-    const mockMermaidChart = `graph TD
-    A[开始学习] --> B[理解概念]
-    B --> C[实践应用]
-    C --> D[获得反馈]
-    D --> B`;
-    
-    const mockMetaphor = '学习就像建造房屋：先打地基（基础概念），再搭建框架（核心技能），最后装修完善（实践应用）。';
-    
-    controller.enqueue(encoder.encode(createStreamMessage('data_structure', {
-      status: 'success',
-      data: {
-        mermaidChart: mockMermaidChart,
-        metaphor: mockMetaphor
-      }
-    })));
-    return;
+    sendErrorSafe('UNKNOWN', 'Gemini API key not configured');
+    throw new Error('NO_API_KEY');
   }
 
   try {
@@ -698,16 +650,17 @@ async function handleGenerateSystemDynamicsStream(
     const s1Ids = extractFrameworkIds(payload.framework);
     const s1IdsExample = s1Ids.slice(0, 2).map(id => `    { "id": "${id}", "title": "<中文名称或与 S1 同步>" }`).join(',\n');
 
-    const prompt = `基于以下知识框架，创建一个系统动力学图表和一个生动的比喻：
+    const prompt = `基于以下知识框架，创建一个系统动力学图表和一个生动的比喻，并补充“主路径/关键回路/节点类比”：
 
 知识框架：
 ${frameworkDescription}
 
-请完成三个关键任务：
+请完成关键任务：
 
 1. 创建一个Mermaid流程图，展示这些知识点之间的关系和学习流程。
-2. 创建一个生动形象的比喻，帮助理解整个学习过程。
+2. 创建一个生动形象的比喻（全局类比）。
 3. **MUST包含nodes数组**：必须包含所有S1框架中的ID，不能遗漏任何一个。
+4. 提取 mainPath（S1的id顺序）、loops（Top3，含id/title/nodes/summary≤20字）、nodeAnalogies（nodeId/1句类比/1句日常示例）。
 
 **CRITICAL REQUIREMENT**: nodes数组必须完全覆盖所有S1框架ID。
 - ID集合必须完全等同于S1框架的id集合（原样使用，不要标准化）
@@ -721,6 +674,9 @@ ${frameworkDescription}
   "nodes": [
 ${s1IdsExample}
   ],
+  "mainPath": ["<id1>", "<id2>"],
+  "loops": [ { "id": "loop-1", "title": "<中文>", "nodes": ["<idA>","<idB>"], "summary": "<≤20字>" } ],
+  "nodeAnalogies": [ { "nodeId": "<id>", "analogy": "<1句类比>", "example": "<1句日常示例>" } ],
   "evidence": [],
   "confidence": 0.6,
   "applicability": ""

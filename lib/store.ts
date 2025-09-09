@@ -51,6 +51,10 @@ export interface UserContext {
     mermaidChart: string;
     metaphor: string;
     nodes?: Array<{ id: string; title: string }>;
+    // S2 clarity extensions
+    mainPath?: string[];
+    loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }>;
+    nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }>;
     requiresHumanReview?: boolean;
     qaIssues?: Array<{ severity: string; area: string; hint: string; targetPath: string }>;
   } | null;

@@ -230,8 +230,8 @@ export default function ClientPage() {
           />
         )}
 
-        {/* 根据上下文显示不同的全局加载覆盖 */}
-        {isLoading && error === null && (
+        {/* 根据上下文显示不同的全局加载覆盖（错误优先，避免与加载并存） */}
+        {isLoading && !error && (
           <LoadingOverlay 
             stage={streaming.currentStage || 'S0'} 
             variant={

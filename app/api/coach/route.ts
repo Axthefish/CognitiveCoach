@@ -167,25 +167,8 @@ async function handleRefineGoal(payload: {
 // S1: 知识框架生成
 async function handleGenerateFramework(payload: GenerateFrameworkPayload) {
   const genAI = createGeminiClient();
-  
   if (!genAI) {
-    // 如果没有配置 API key，返回模拟数据
-    logger.warn('Using mock data: Gemini API key not configured');
-    const mockFramework: KnowledgeFramework = [
-      {
-        id: 'core-concepts',
-        title: '核心概念',
-        summary: '理解基础概念和术语',
-        children: []
-      }
-    ];
-    
-    return NextResponse.json({
-      status: 'success',
-      data: {
-        framework: mockFramework
-      }
-    } as CoachResponse);
+    return NextResponse.json({ status: 'error', error: 'Gemini API key not configured' } as CoachResponse, { status: 500 });
   }
 
   try {
@@ -256,25 +239,8 @@ async function handleGenerateFramework(payload: GenerateFrameworkPayload) {
 // S2: 系统动力学生成
 async function handleGenerateSystemDynamics(payload: { framework: KnowledgeFramework; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number; }) {
   const genAI = createGeminiClient();
-  
   if (!genAI) {
-    // 如果没有配置 API key，返回模拟数据
-    logger.warn('Using mock data: Gemini API key not configured');
-    const mockMermaidChart = `graph TD
-    A[开始学习] --> B[理解概念]
-    B --> C[实践应用]
-    C --> D[获得反馈]
-    D --> B`;
-    
-    const mockMetaphor = '学习就像建造房屋：先打地基（基础概念），再搭建框架（核心技能），最后装修完善（实践应用）。';
-    
-    return NextResponse.json({
-      status: 'success',
-      data: {
-        mermaidChart: mockMermaidChart,
-        metaphor: mockMetaphor
-      }
-    } as CoachResponse);
+    return NextResponse.json({ status: 'error', error: 'Gemini API key not configured' } as CoachResponse, { status: 500 });
   }
 
   try {
@@ -285,21 +251,31 @@ async function handleGenerateSystemDynamics(payload: { framework: KnowledgeFrame
       return `${node.title}: ${node.summary}\n${childrenDesc}`;
     }).join('\n\n');
     
-    const prompt = `基于以下知识框架，创建一个系统动力学图表和一个生动的比喻：
+    const prompt = `基于以下知识框架，创建一个系统动力学图表和一个生动的比喻，并补充“主路径/关键回路/节点类比”用于快速理解：
 
 知识框架：
 ${frameworkDescription}
 
-请完成两个任务：
+请完成以下任务：
 
 1. 创建一个Mermaid流程图，展示这些知识点之间的关系和学习流程。
-2. 创建一个生动形象的比喻，帮助理解整个学习过程。
+2. 创建一个生动形象的比喻，帮助理解整个学习过程（全局类比）。
+3. 提取“主路径”（从入门到目标的最短可行路线，列出S1的id顺序）。
+4. 提取“关键回路（Top 3）”：每个包含id、nodes（涉及的S1 id列表）与一句summary（≤20字）。
+5. 为关键节点补充“节点类比”：nodeAnalogies（每条含 nodeId、1句 analogy、1句日常 example）。
 
 请严格按照以下JSON格式返回（不要包含任何其他文字）：
 {
   "mermaidChart": "以 graph TD 开头的 Mermaid 图，不要添加 <br/>",
   "metaphor": "一个生动的比喻（50-100字）",
   "nodes": [{ "id": "<与框架一致>", "title": "<中文>" }],
+  "mainPath": ["<id1>", "<id2>", "<id3>"],
+  "loops": [
+    { "id": "loop-1", "title": "<中文>", "nodes": ["<idA>","<idB>"], "summary": "<≤20字>" }
+  ],
+  "nodeAnalogies": [
+    { "nodeId": "<id>", "analogy": "<1句类比>", "example": "<1句日常示例>" }
+  ],
   "evidence": [],
   "confidence": 0.6,
   "applicability": ""
@@ -316,12 +292,12 @@ ${frameworkDescription}
 - 能够形象地说明学习过程
 - 与知识框架内容相关`;
 
-    const g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }> }>(
+    const g = await generateJson<{ mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }>; mainPath?: string[]; loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }>; nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> }>(
       prompt,
       { maxOutputTokens: 65536, temperature: payload.runTier === 'Lite' ? 0.5 : 0.8 },
       payload.runTier
     );
-    if (!g.ok) return NextResponse.json({ status: 'error', error: 'AI响应解析失败，请重试' } as CoachResponse, { status: 400 });
+    if (!g.ok) return NextResponse.json({ status: 'error', error: 'AI响应解析失败，请重试', details: g.error } as CoachResponse, { status: 400 });
     try {
       const dynamics = g.data;
       const s2 = SystemDynamicsSchema.safeParse(dynamics);
@@ -381,33 +357,7 @@ async function handleGenerateActionPlan(payload: { userGoal: string; framework: 
   const genAI = createGeminiClient();
   
   if (!genAI) {
-    // Fallback to mock data if no API key
-    logger.warn('Using mock data: Gemini API key not configured');
-    const mockActionPlan: ActionPlan = [
-      {
-        id: 'action-1',
-        text: '完成基础概念学习：阅读推荐资料，做笔记总结',
-        isCompleted: false
-      },
-      {
-        id: 'action-2',
-        text: '搭建开发环境：安装必要工具和配置',
-        isCompleted: false
-      }
-    ];
-    
-    const mockKPIs = [
-      '每周学习时间（小时）',
-      '完成的练习项目数'
-    ];
-    
-    return NextResponse.json({
-      status: 'success',
-      data: {
-        actionPlan: mockActionPlan,
-        kpis: mockKPIs
-      }
-    } as CoachResponse);
+    return NextResponse.json({ status: 'error', error: 'Gemini API key not configured' } as CoachResponse, { status: 500 });
   }
 
   try {

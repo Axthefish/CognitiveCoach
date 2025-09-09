@@ -79,6 +79,19 @@ export const SystemDynamicsSchema = z.object({
   mermaidChart: z.string(),
   metaphor: z.string(),
   nodes: z.array(SystemNodeSchema).optional(),
+  // S2 extensions for clarity and applicability
+  mainPath: z.array(z.string()).optional().default([]), // ordered list of node ids
+  loops: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    nodes: z.array(z.string()),
+    summary: z.string().optional().default("")
+  })).optional().default([]),
+  nodeAnalogies: z.array(z.object({
+    nodeId: z.string(),
+    analogy: z.string(),
+    example: z.string().optional().default("")
+  })).optional().default([]),
   evidence: EvidenceArraySchema.optional().default([]),
   confidence: ConfidenceSchema.optional().default(0.6),
   applicability: ApplicabilitySchema.optional().default(""),
@@ -193,7 +206,7 @@ export type Telemetry = z.infer<typeof TelemetrySchema>;
 // Streaming response data types
 export type StreamResponseData = 
   | { framework: KnowledgeFramework }
-  | { mermaidChart: string; metaphor: string }
+  | { mermaidChart: string; metaphor: string; nodes?: Array<{ id: string; title: string }>; mainPath?: string[]; loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }>; nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> }
   | ActionPlanResponse
   | AnalyzeProgress
   | { response: string };

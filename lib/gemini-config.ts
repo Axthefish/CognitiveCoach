@@ -96,7 +96,9 @@ export async function generateJson<T>(
       if (error instanceof Error && error.message.includes('Request timeout')) {
         return { ok: false as const, error: 'TIMEOUT' };
       }
-      throw error;
+      // Convert unknown API errors into a recoverable object instead of throwing
+      logger.warn('Gemini API error during JSON generation', { error: error instanceof Error ? error.message : String(error) });
+      return { ok: false as const, error: 'API_ERROR' };
     }
   };
 

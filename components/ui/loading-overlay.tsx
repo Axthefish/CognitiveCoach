@@ -318,29 +318,8 @@ export function LoadingOverlay({
     finalMessage = message || defaultMessage;
   }
 
-  // 错误态组件 - 改为浮层式，保留进度显示
-  const ErrorOverlay = () => streaming.streamError ? (
-    <div className="absolute inset-x-0 top-0 z-10 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 m-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="w-5 h-5 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
-            <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="text-sm text-red-800 dark:text-red-200">
-            {streaming.streamError}
-          </div>
-        </div>
-        <button
-          onClick={() => onRetry ? onRetry() : window.location.reload()}
-          className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded transition-colors"
-        >
-          重试
-        </button>
-      </div>
-    </div>
-  ) : null;
+  // 移除内部错误浮层，错误交给上层统一显示，避免与加载态冲突
+  const ErrorOverlay = () => null;
 
   const LoadingContent = () => (
     <div className="relative flex flex-col items-center space-y-4 max-w-xs mx-auto">

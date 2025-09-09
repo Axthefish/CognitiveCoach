@@ -72,9 +72,26 @@ export default function S4AutonomousOperationView() {
       } else {
         setMicroSuggestions(['保持当前学习节奏，继续专注于主要目标'])
       }
-    } catch {
-      // 简化错误处理，提供友好的默认建议
-      setMicroSuggestions(['网络暂时不可用，建议继续当前学习计划'])
+    } catch (error) {
+      // 区分 4xx 与网络/服务器错误，给出准确的用户文案
+      if (error && typeof error === 'object' && 'type' in error) {
+        const networkError = error as NetworkError
+        if (networkError.type === 'timeout') {
+          setMicroSuggestions(['请求超时，请稍后重试。'])
+        } else if (networkError.type === 'network') {
+          setMicroSuggestions(['网络连接不可用，请检查网络后重试。'])
+        } else if (networkError.type === 'server') {
+          if (networkError.status && networkError.status >= 400 && networkError.status < 500) {
+            setMicroSuggestions(['AI无法处理您的输入，请尝试调整后重新提交。'])
+          } else {
+            setMicroSuggestions(['服务暂时出现问题，请稍后重试。'])
+          }
+        } else {
+          setMicroSuggestions([networkError.message || '发生未知错误，请稍后重试。'])
+        }
+      } else {
+        setMicroSuggestions(['出现错误，请稍后重试。'])
+      }
     } finally {
       setIsAnalyzing(false)
     }
@@ -322,50 +339,60 @@ export default function S4AutonomousOperationView() {
         )}
       </div>
 
-      {/* Consultation Modal */}
+      {/* Consultation Drawer (Right Side) */}
       {showConsultModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>咨询认知教练</CardTitle>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => {
-                  setShowConsultModal(false)
-                  setConsultQuestion("")
-                  setConsultResponse("")
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="question">你的问题</Label>
-                <textarea 
-                  id="question"
-                  className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-input bg-background"
-                  placeholder="请输入你想咨询的问题..."
-                  value={consultQuestion}
-                  onChange={(e) => setConsultQuestion(e.target.value)}
-                  disabled={isConsulting}
-                />
+        <div className="fixed inset-0 z-50">
+          {/* subtle overlay to preserve context visibility */}
+          <div 
+            className="absolute inset-0 bg-black/20 backdrop-blur-[1px] transition-opacity"
+            onClick={() => {
+              setShowConsultModal(false)
+              setConsultQuestion("")
+              setConsultResponse("")
+            }}
+          />
+          {/* right panel */}
+          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl">
+            <div className="h-full flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+                <CardTitle>咨询认知教练</CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowConsultModal(false)
+                    setConsultQuestion("")
+                    setConsultResponse("")
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              
-              {consultResponse && (
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <h4 className="font-semibold mb-2 flex items-center">
-                    <MessageSquarePlus className="w-4 h-4 mr-2" />
-                    教练回复：
-                  </h4>
-                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                    {consultResponse}
-                  </p>
+              <div className="flex-1 overflow-auto p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="question">你的问题</Label>
+                  <textarea 
+                    id="question"
+                    className="w-full min-h-[120px] px-3 py-2 text-sm rounded-md border border-input bg-background"
+                    placeholder="请输入你想咨询的问题...（右侧保持可见，方便参考页面内容）"
+                    value={consultQuestion}
+                    onChange={(e) => setConsultQuestion(e.target.value)}
+                    disabled={isConsulting}
+                  />
                 </div>
-              )}
-              
-              <div className="flex justify-end gap-2">
+                {consultResponse && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <h4 className="font-semibold mb-2 flex items-center">
+                      <MessageSquarePlus className="w-4 h-4 mr-2" />
+                      教练回复：
+                    </h4>
+                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {consultResponse}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2">
                 <Button 
                   variant="outline" 
                   onClick={() => {
@@ -391,8 +418,8 @@ export default function S4AutonomousOperationView() {
                   )}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
     </div>

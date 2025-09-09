@@ -15,6 +15,16 @@ interface S2SystemDynamicsViewProps {
 export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsViewProps) {
   const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues } = useCognitiveCoachStore();
   const dynamics = userContext.systemDynamics;
+  const mainPath: string[] = (dynamics as unknown as { mainPath?: string[] })?.mainPath || [];
+  const loops: Array<{ id: string; title: string; nodes: string[]; summary?: string }> = (dynamics as unknown as { loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }> })?.loops || [];
+
+  // 将技术性 QA 提示映射为用户友好文案
+  const getFriendlyIssueText = (hint: string): string => {
+    if (/Framework ids not found/i.test(hint)) {
+      return '为了确保学习计划的连贯性，我们自动为您调整了几个知识点的关联。';
+    }
+    return hint;
+  };
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
@@ -26,7 +36,11 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
           nodes: ('nodes' in data ? data.nodes : undefined) as Array<{ id: string; title: string }> | undefined,
           // Persist warning flags if present
           requiresHumanReview: ('requiresHumanReview' in data ? data.requiresHumanReview : undefined) as boolean | undefined,
-          qaIssues: ('qaIssues' in data ? data.qaIssues : undefined) as Array<{ severity: string; area: string; hint: string; targetPath: string }> | undefined
+          qaIssues: ('qaIssues' in data ? data.qaIssues : undefined) as Array<{ severity: string; area: string; hint: string; targetPath: string }> | undefined,
+          // New clarity fields
+          ...(('mainPath' in data) ? { mainPath: (data as { mainPath?: string[] }).mainPath } : {}),
+          ...(('loops' in data) ? { loops: (data as { loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }> }).loops } : {}),
+          ...(('nodeAnalogies' in data) ? { nodeAnalogies: (data as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> }).nodeAnalogies } : {}),
         }
       });
       addVersionSnapshot();
@@ -86,7 +100,7 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                       <li key={index} className="flex items-start space-x-2">
                         <span className="text-yellow-600 dark:text-yellow-400">•</span>
                         <span>
-                          {issue.hint.length > 100 ? `${issue.hint.substring(0, 100)}...` : issue.hint}
+                          {getFriendlyIssueText(issue.hint)}
                           <span className="text-xs text-yellow-600 dark:text-yellow-400 ml-1">({issue.severity}, {issue.area})</span>
                         </span>
                       </li>
@@ -110,6 +124,7 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                 <InteractiveMermaid 
                   chart={dynamics.mermaidChart} 
                   nodes={dynamics.nodes}
+                  nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
                   onNodeClick={(_nodeId) => {/* 可以在这里添加节点点击处理逻辑 */}} // eslint-disable-line @typescript-eslint/no-unused-vars
                   onWhatIfSimulation={(_nodeId) => {/* 可以在这里添加模拟分析逻辑 */}} // eslint-disable-line @typescript-eslint/no-unused-vars
                 />
@@ -117,6 +132,45 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
             </Card>
           </div>
           <div className="lg:col-span-1">
+            {/* Gist Panel: 主路径 + 回路Top3 */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-base">快速总览</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {mainPath.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-sm font-medium mb-1">主路径</div>
+                    <div className="text-xs text-gray-700 dark:text-gray-300">
+                      {mainPath.join(' → ')}
+                    </div>
+                  </div>
+                )}
+                {loops.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">关键回路 Top 3</div>
+                    {loops.slice(0,3).map(l => (
+                      <div key={l.id} className="text-xs text-gray-700 dark:text-gray-300 border rounded p-2">
+                        <div className="font-medium mb-1">{l.title}</div>
+                        <div className="mb-1">{l.nodes.join(' → ')}</div>
+                        {l.summary && <div className="text-gray-600 dark:text-gray-400">{l.summary}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            {/* Reading helper card */}
+            <Card className="mb-6 bg-gray-50 dark:bg-gray-900/40">
+              <CardHeader>
+                <CardTitle className="text-base">如何阅读此图（15秒）</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                <div>1. 从颜色看关系：绿色=促进，红色=抑制，蓝色=依赖</div>
+                <div>2. 点击节点查看详情与示例；再次点击其它节点可比较路径</div>
+                <div>3. 用“细节”滑杆控制复杂度；开启模拟查看移除影响</div>
+              </CardContent>
+            </Card>
             <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 h-full">
               <CardHeader>
                 <div className="flex items-center space-x-3">
