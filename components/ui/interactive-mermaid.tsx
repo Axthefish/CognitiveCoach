@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import mermaid from "mermaid"
 import { Button } from "@/components/ui/button"
+import { useCognitiveCoachStore } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Lightbulb, Eye, EyeOff, HelpCircle, Zap } from "lucide-react"
@@ -40,12 +41,13 @@ export function InteractiveMermaid({
   onNodeClick,
   onWhatIfSimulation 
 }: InteractiveMermaidProps) {
+  const setSelectedNodeId = useCognitiveCoachStore(state => state.setSelectedNodeId)
   const [svg, setSvg] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [nodeDetails, setNodeDetails] = useState<Record<string, NodeDetail>>({})
   const [whatIfMode, setWhatIfMode] = useState(false)
   const [removedNode, setRemovedNode] = useState<string | null>(null)
-  const [showNodeList, setShowNodeList] = useState(true)
+  const [showNodeList, setShowNodeList] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Generate mock node details based on available nodes
@@ -133,6 +135,7 @@ export function InteractiveMermaid({
         nodeElement.addEventListener('click', () => {
           setSelectedNode(nodeId)
           onNodeClick?.(nodeId)
+          try { setSelectedNodeId(nodeId) } catch {}
         })
         
         // Add hover effects

@@ -42,10 +42,8 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
   if (isLoading && streaming.currentStage === 'S2') {
     return (
       <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2: System Dynamics & Metaphor</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-8">
-          AI 正在分析知识点之间的关系，并创建生动的学习比喻...
-        </p>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2：系统动力学与核心比喻</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">AI 正在分析知识点之间的关系，并创建生动的学习比喻...</p>
         
         <CognitiveStreamAnimator 
           stage="S2"
@@ -62,44 +60,43 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
 
   return (
     <div className="animate-fade-in">
-      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2: System Dynamics & Metaphor</h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-8">
-        Let&apos;s visualize how the components of the system interact and establish a core metaphor to guide your
-        understanding.
-      </p>
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2：系统动力学与核心比喻</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">我们将可视化系统组件的相互作用，并提炼指导理解的核心比喻。</p>
       
       {dynamics && (dynamics.requiresHumanReview || (dynamics.qaIssues && dynamics.qaIssues.length > 0)) && (
-        <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800 mb-6">
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-              <CardTitle className="text-yellow-900 dark:text-yellow-200">Quality check warnings</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-yellow-800 dark:text-yellow-300 mb-3">
-              Auto-repaired nodes were applied to keep your flow uninterrupted. Please review before proceeding.
-            </p>
-            {dynamics.qaIssues && dynamics.qaIssues.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">Issues found:</p>
-                <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
-                  {dynamics.qaIssues.map((issue, index) => (
-                    <li key={index} className="flex items-start space-x-2">
-                      <span className="text-yellow-600 dark:text-yellow-400">•</span>
-                      <span>
-                        {issue.hint.length > 100 ? `${issue.hint.substring(0, 100)}...` : issue.hint}
-                        <span className="text-xs text-yellow-600 dark:text-yellow-400 ml-1">
-                          ({issue.severity}, {issue.area})
+        <details className="mb-6">
+          <summary className="cursor-pointer">
+            <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800">
+              <CardHeader>
+                <div className="flex items-center space-x-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                  <CardTitle className="text-yellow-900 dark:text-yellow-200">已自动优化若干节点（点击展开查看详情）</CardTitle>
+                </div>
+              </CardHeader>
+            </Card>
+          </summary>
+          <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800">
+            <CardContent>
+              <p className="text-yellow-800 dark:text-yellow-300 mb-3">为保证流程不中断，我们自动进行了小幅修复，你可在此复核关键项目。</p>
+              {dynamics.qaIssues && dynamics.qaIssues.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">发现的问题：</p>
+                  <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                    {dynamics.qaIssues.map((issue, index) => (
+                      <li key={index} className="flex items-start space-x-2">
+                        <span className="text-yellow-600 dark:text-yellow-400">•</span>
+                        <span>
+                          {issue.hint.length > 100 ? `${issue.hint.substring(0, 100)}...` : issue.hint}
+                          <span className="text-xs text-yellow-600 dark:text-yellow-400 ml-1">({issue.severity}, {issue.area})</span>
                         </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </details>
       )}
       
       {dynamics ? (
@@ -107,7 +104,7 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
           <div className="lg:col-span-2">
             <Card className="bg-white dark:bg-gray-950/50 h-full">
               <CardHeader>
-                <CardTitle>System Map</CardTitle>
+                <CardTitle>系统地图</CardTitle>
               </CardHeader>
               <CardContent>
                 <InteractiveMermaid 
@@ -165,7 +162,7 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
       
       {dynamics && (
         <div className="flex justify-end mt-8">
-          <Button onClick={onProceed}>Finalize System Model & Proceed to S3</Button>
+          <Button onClick={onProceed}>完成系统模型，进入 S3</Button>
         </div>
       )}
     </div>

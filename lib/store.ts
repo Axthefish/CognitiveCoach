@@ -96,6 +96,7 @@ interface CognitiveCoachStore {
   // 状态
   currentState: FSMState;
   userContext: UserContext;
+  selectedNodeId?: string | null;
   versions: Array<{ id: string; timestamp: string; state: UserContext }>;
   currentVersion: string | null;
   qaIssues: Array<{ severity: 'blocker' | 'warn'; area: 'schema' | 'coverage' | 'consistency' | 'evidence' | 'actionability'; hint: string; targetPath: string }>; 
@@ -114,6 +115,7 @@ interface CognitiveCoachStore {
   // Actions
   setCurrentState: (state: FSMState) => void;
   updateUserContext: (updates: Partial<UserContext>) => void;
+  setSelectedNodeId: (id: string | null) => void;
   batchUpdate: (updates: Partial<CognitiveCoachStore>) => void;
   addVersionSnapshot: () => void;
   setQaIssues: (stage: 'S1' | 'S2' | 'S3' | null, issues: CognitiveCoachStore['qaIssues']) => void;
@@ -171,6 +173,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   // 初始状态
   currentState: 'S0_INTENT_CALIBRATION',
   userContext: initialUserContext,
+  selectedNodeId: null,
   versions: [],
   currentVersion: null,
   qaIssues: [],
@@ -187,6 +190,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   
   // Actions
   setCurrentState: (state) => set({ currentState: state }),
+  setSelectedNodeId: (id) => set({ selectedNodeId: id }),
   
   updateUserContext: (updates) => 
     set((state) => ({

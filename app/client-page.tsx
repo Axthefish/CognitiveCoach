@@ -11,7 +11,7 @@ const S1KnowledgeFrameworkView = dynamic(
     ssr: false,
     loading: () => (
       <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1：知识框架构建</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-8">
           正在加载知识框架模块...
         </p>
@@ -96,6 +96,8 @@ export default function ClientPage() {
     // 使用 setTimeout 确保状态更新后再启动流式处理
     setTimeout(() => {
       startStreaming('S1');
+      // 为空状态策略生成按钮提供一个轻量触发通道
+      (window as unknown as { __cc_restartS3?: () => void }).__cc_restartS3 = () => startStreaming('S3');
     }, 0);
   }, [startStreaming, updateUserContext, userContext.userGoal]);
 
@@ -123,7 +125,11 @@ export default function ClientPage() {
       'S3_ACTION_PLAN': 'S4_AUTONOMOUS_OPERATION'
     };
 
-    const nextState = transitions[currentState];
+    // 如果在 S1 阶段已经生成了系统模型，则直接进入 S3，避免重复的二次等待
+    let nextState = transitions[currentState];
+    if (currentState === 'S1_KNOWLEDGE_FRAMEWORK') {
+      nextState = userContext.systemDynamics ? 'S3_ACTION_PLAN' : 'S2_SYSTEM_DYNAMICS';
+    }
     
     if (!nextState) {
       console.error('No next state for:', currentState);
@@ -145,7 +151,7 @@ export default function ClientPage() {
       // S4 doesn't use streaming but might need setup
       setLoading(false);
     }
-  }, [currentState, isLoading, setCurrentState, setLoading, startStreaming, markStageCompleted]);
+  }, [currentState, isLoading, setCurrentState, setLoading, startStreaming, markStageCompleted, userContext.systemDynamics]);
 
   // 渲染当前状态对应的视图
   const renderCurrentStateView = () => {

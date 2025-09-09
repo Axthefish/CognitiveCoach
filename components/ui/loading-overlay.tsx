@@ -295,9 +295,11 @@ export function LoadingOverlay({
   // Use streaming tip if available, otherwise use rotating tips
   const displayTip = streaming.microLearningTip || currentTip?.text;
 
-  // Default message based on stage
-  const defaultMessage = stage 
-    ? `正在为你进行${STAGE_LABELS[stage]}分析...`
+  // Default message based on stage（S1→S2 合并体验的友好文案）
+  const defaultMessage = stage
+    ? (stage === 'S1' && !userContext.systemDynamics
+        ? '正在为你构建完整学习蓝图（知识框架 + 系统动力学）…'
+        : `正在为你进行${STAGE_LABELS[stage]}分析...`)
     : '正在为你准备中...';
 
   // Determine final message with priority order
@@ -438,17 +440,29 @@ export function LoadingOverlay({
         </div>
       )}
 
-      {/* Tips carousel */}
-      {showTips && displayTip && (
-        <div className="max-w-xs text-center">
-          <div 
-            className="text-xs text-gray-500 dark:text-gray-400 transition-opacity duration-300 ease-out"
-            style={{opacity: showTip ? 1 : 0}}
-          >
-            💡 {displayTip}
-          </div>
+      {/* Tips carousel + goal-based micro-learning */}
+      {(showTips && displayTip) || (userContext.userGoal && userContext.userGoal.length > 8) ? (
+        <div className="max-w-xs text-center space-y-2">
+          {showTips && displayTip && (
+            <div 
+              className="text-xs text-gray-500 dark:text-gray-400 transition-opacity duration-300 ease-out"
+              style={{opacity: showTip ? 1 : 0}}
+            >
+              💡 {displayTip}
+            </div>
+          )}
+          {userContext.userGoal && (
+            <div className="text-[11px] text-gray-400 dark:text-gray-500">
+              <div className="mb-1">与“{userContext.userGoal.slice(0, 18)}{userContext.userGoal.length > 18 ? '…' : ''}”相关的思考：</div>
+              <ul className="space-y-1">
+                <li>• 用一句话定义成功：你怎么判断已达到目标？</li>
+                <li>• 识别一个关键障碍：它出现在哪个环节？</li>
+                <li>• 找到一个可立即执行的小步骤：今天能做什么？</li>
+              </ul>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
 
       {/* S0 long wait helper */}
       {stage === 'S0' && progress === null && showLongWaitHelper && (

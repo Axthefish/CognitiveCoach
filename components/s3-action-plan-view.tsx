@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+// 移除标签页，改为单页滚动结构
 import { Gauge, TrendingUp, Target, BarChart3, Download, Calendar } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { Badge } from "@/components/ui/badge"
@@ -22,11 +22,13 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     streaming, 
     isLoading, 
     addVersionSnapshot, 
-    setQaIssues 
+    setQaIssues,
+    selectedNodeId,
   } = useCognitiveCoachStore()
   const [currentStep, setCurrentStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<string[]>([])
   const [alternativeOptions, setAlternativeOptions] = useState<string[]>([])
+  const [showCelebrate, setShowCelebrate] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
   // 处理流式生成完成
@@ -62,23 +64,42 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
   // T7: 简化为下一步/备选步骤的处理
   const currentAction = actionPlan[currentStep] || null
   const nextAction = actionPlan[currentStep + 1] || null
+
+  // 若从 S2 点击节点，自动滚动并高亮策略表中相关指标
+  const strategyTableRef = React.useRef<HTMLDivElement | null>(null)
+  React.useEffect(() => {
+    if (!selectedNodeId || !strategySpec) return
+    const metricIndex = strategySpec.metrics?.findIndex(m => normalizeId(m.metricId) === normalizeId(selectedNodeId)) ?? -1
+    if (metricIndex >= 0 && strategyTableRef.current) {
+      strategyTableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [selectedNodeId, strategySpec])
   
   const handleCompleteStep = () => {
-    if (currentAction) {
-      const newCompleted = [...completedSteps, currentAction.id]
-      setCompletedSteps(newCompleted)
-      
-      // 移动到下一步
-      if (currentStep < actionPlan.length - 1) {
-        setCurrentStep(currentStep + 1)
-      }
-      
-      // 更新store中的完成状态
-      const updatedPlan = actionPlan.map(item => ({
-        ...item,
-        isCompleted: newCompleted.includes(item.id)
-      }))
-      updateUserContext({ actionPlan: updatedPlan })
+    if (!currentAction) return
+    // 去重并校验 id 合法性
+    const next = new Set(completedSteps)
+    next.add(currentAction.id)
+    const validIds = new Set(actionPlan.map(a => a.id))
+    const newCompleted = Array.from(next).filter(id => validIds.has(id))
+    setCompletedSteps(newCompleted)
+
+    // 移动到下一步
+    if (currentStep < actionPlan.length - 1) {
+      setCurrentStep(currentStep + 1)
+    }
+
+    // 更新 store 中的完成状态
+    const updatedPlan = actionPlan.map(item => ({
+      ...item,
+      isCompleted: newCompleted.includes(item.id)
+    }))
+    updateUserContext({ actionPlan: updatedPlan })
+
+    // 完成后简短庆祝，并提供“回顾与分享”
+    if (newCompleted.length === actionPlan.length) {
+      setShowCelebrate(true)
+      setTimeout(() => setShowCelebrate(false), 1600)
     }
   }
   
@@ -92,8 +113,14 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     setAlternativeOptions(alternatives)
   }
   
+  const uniqueCompleted = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const id of completedSteps) ids.add(id)
+    return Array.from(ids).filter(id => actionPlan.some(a => a.id === id))
+  }, [completedSteps, actionPlan])
+
   const completionRate = actionPlan.length > 0 
-    ? Math.round((completedSteps.length / actionPlan.length) * 100)
+    ? Math.min(100, Math.round((uniqueCompleted.length / actionPlan.length) * 100))
     : 0
 
 
@@ -240,12 +267,22 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                         >
                           ✓ 完成
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          onClick={handleGetAlternative}
-                        >
-                          🔄 换一个建议
-                        </Button>
+                        {currentAction && !uniqueCompleted.includes(currentAction.id) && (
+                          <Button 
+                            variant="outline" 
+                            onClick={handleGetAlternative}
+                          >
+                            🔄 换一个建议
+                          </Button>
+                        )}
+                        {currentAction && uniqueCompleted.includes(currentAction.id) && (
+                          <Button 
+                            variant="outline"
+                            onClick={() => setShowHistory(true)}
+                          >
+                            📚 回顾与总结
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -293,7 +330,7 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                         总体进度
                       </span>
                       <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                        {completedSteps.length} / {actionPlan.length} 已完成 ({completionRate}%)
+                        {uniqueCompleted.length} / {actionPlan.length} 已完成 ({completionRate}%)
                       </span>
                     </div>
                     <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -302,10 +339,13 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                         style={{ width: `${completionRate}%` }}
                       />
                     </div>
+                    {showCelebrate && (
+                      <div className="mt-2 text-center text-green-700 dark:text-green-300 text-sm">🎉 太棒了！你已完成全部行动。</div>
+                    )}
                   </div>
 
                   {/* T7: 历史记录折叠区 */}
-                  {completedSteps.length > 0 && (
+                  {uniqueCompleted.length > 0 && (
                     <div className="pt-4 border-t">
                       <Button 
                         variant="ghost" 
@@ -313,14 +353,14 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                         onClick={() => setShowHistory(!showHistory)}
                         className="mb-3"
                       >
-                        📚 完成历史 ({completedSteps.length})
+                        📚 完成历史 ({uniqueCompleted.length})
                         {showHistory ? ' 收起' : ' 展开'}
                       </Button>
                       
                       {showHistory && (
                         <div className="space-y-2 max-h-40 overflow-y-auto">
                           {actionPlan
-                            .filter(item => completedSteps.includes(item.id))
+                            .filter(item => uniqueCompleted.includes(item.id))
                             .map((item, index) => (
                             <div key={item.id} className="flex items-center text-sm text-gray-600 dark:text-gray-400 p-2 bg-gray-50 dark:bg-gray-800 rounded">
                               <span className="w-4 h-4 bg-green-500 rounded-full mr-2 flex-shrink-0 flex items-center justify-center">
@@ -424,36 +464,52 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
           </Card>
         </TabsContent>
         <TabsContent value="strategy-spec">
-          <Card className="bg-white dark:bg-gray-950/50">
+          <Card className="bg-white dark:bg-gray-950/50" ref={strategyTableRef as unknown as React.RefObject<HTMLDivElement>}>
             <CardHeader>
               <CardTitle>策略表（覆盖映射）</CardTitle>
               <CardDescription>将 S2 节点映射为可执行指标与策略。未覆盖的节点会标红。</CardDescription>
               <div className="mt-2 flex items-center gap-2">
                 {povTags?.map((tag) => (
-                  <Badge key={tag} variant="secondary">POV: {tag}</Badge>
+                  <Badge key={tag} variant="secondary">视角：{tag}</Badge>
                 ))}
                 {requiresHumanReview && (
-                  <Badge variant="destructive">需人审</Badge>
+                  <Badge variant="destructive">需人工复核</Badge>
                 )}
               </div>
             </CardHeader>
             <CardContent>
               {!strategySpec ? (
-                <div className="text-center py-8 text-gray-500">暂无策略表。</div>
+                <div className="text-center py-8 text-gray-500">
+                  <div className="mb-2">暂无策略表。</div>
+                  <div className="text-sm text-gray-400 mb-4">当你在行动中遇到挑战时，AI 会在这里为你生成应对策略。</div>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      // 触发策略生成的流式请求（复用 S3 流）
+                      // 使用现有的流通道：systemNodes + framework + goal
+                      if (!isLoading) {
+                        // 轻量触发：重启 S3 流，期望返回 strategySpec
+                        (window as unknown as { __cc_restartS3?: () => void }).__cc_restartS3?.()
+                      }
+                    }}
+                  >
+                    遇到困难？一键生成策略
+                  </Button>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-left border-b border-gray-200 dark:border-gray-800">
-                        <th className="py-2 pr-4">metricId</th>
-                        <th className="py-2 pr-4">what</th>
-                        <th className="py-2 pr-4">triggers</th>
-                        <th className="py-2 pr-4">diagnosis</th>
-                        <th className="py-2 pr-4">options A/B/C</th>
-                        <th className="py-2 pr-4">recovery</th>
-                        <th className="py-2 pr-4">stopLoss</th>
-                        <th className="py-2 pr-4">evidence</th>
-                        <th className="py-2 pr-4">confidence</th>
+                        <th className="py-2 pr-4">指标ID</th>
+                        <th className="py-2 pr-4">指标含义</th>
+                        <th className="py-2 pr-4">触发条件</th>
+                        <th className="py-2 pr-4">诊断线索</th>
+                        <th className="py-2 pr-4">策略选项 A/B/C</th>
+                        <th className="py-2 pr-4">恢复窗口</th>
+                        <th className="py-2 pr-4">止损</th>
+                        <th className="py-2 pr-4">证据数量</th>
+                        <th className="py-2 pr-4">置信度</th>
                       </tr>
                     </thead>
                     <tbody>

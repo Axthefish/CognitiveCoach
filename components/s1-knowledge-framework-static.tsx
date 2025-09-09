@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Check } from "lucide-react"
+import { InteractiveMermaid } from "@/components/ui/interactive-mermaid"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
@@ -22,7 +23,7 @@ interface S1KnowledgeFrameworkViewProps {
 
 // 完全静态的S1组件 - 避免任何可能导致hydration问题的动态内容
 export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrameworkViewProps) {
-  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming, setLoading } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues, stopStreaming, setLoading, startStreaming, navigateToStage } = useCognitiveCoachStore();
   const framework = userContext.knowledgeFramework;
   const hasStartedStream = useRef(false);
   const isMountedRef = useRef(true);
@@ -64,8 +65,10 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
       updateUserContext({ knowledgeFramework: data.framework });
       addVersionSnapshot();
       setQaIssues(null, []);
-      // 完成后设置 loading 为 false
-      setLoading(false);
+      // S1 完成后，预启动 S2 流式处理，避免用户感知的二次等待
+      if (!userContext.systemDynamics && !streaming.isStreaming) {
+        startStreaming('S2');
+      }
     }
   };
 
@@ -101,7 +104,7 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     if (!userContext.userGoal || userContext.userGoal.trim().length === 0) {
       return (
         <div className="animate-fade-in">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1：知识框架构建</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
             正在准备学习目标...
           </p>
@@ -121,9 +124,9 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
     
     return (
       <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1：知识框架构建</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-8">
-          AI 正在为您构建结构化的知识框架，这将成为后续学习的基础...
+          AI 正在为你构建完整学习蓝图（知识框架 + 系统动力学），内容将逐步流入页面。
         </p>
         
         <ErrorBoundary>
@@ -146,18 +149,16 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
   // 静态展示框架内容 - 完全避免动态渲染
   return (
     <div className="animate-fade-in">
-      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1: Knowledge Framework Construction</h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-8">
-        Here is the foundational knowledge structure for your goal, retrieved from our verified sources.
-      </p>
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1：知识框架构建</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">这是为你的目标定制的核心知识结构。</p>
       <Card className="bg-white dark:bg-gray-950/50 mb-8">
         <CardHeader>
-          <CardTitle>Objective Knowledge Framework</CardTitle>
+          <CardTitle>知识框架</CardTitle>
           <CardDescription>
             {userContext.userGoal ? (
-              <>Goal: {userContext.userGoal}</>
+              <>目标：{userContext.userGoal}</>
             ) : (
-              <>An interactive outline of key concepts.</>
+              <>关键概念的结构化大纲。</>
             )}
           </CardDescription>
         </CardHeader>
@@ -183,8 +184,12 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>正在生成知识框架...</p>
+            <div className="space-y-3" aria-hidden>
+              <div className="h-5 w-52 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+              <div className="h-4 w-full bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+              <div className="h-4 w-11/12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+              <div className="h-4 w-10/12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+              <div className="h-4 w-9/12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
             </div>
           )}
         </CardContent>
@@ -197,20 +202,66 @@ export default function S1KnowledgeFrameworkView({ onProceed }: S1KnowledgeFrame
               <Check className="w-5 h-5 text-blue-600 dark:text-blue-300" />
             </div>
             <div>
-              <CardTitle>Milestone Summary</CardTitle>
-              <CardDescription className="text-blue-900/80 dark:text-blue-200/80">Framework Established</CardDescription>
+              <CardTitle>阶段里程碑</CardTitle>
+              <CardDescription className="text-blue-900/80 dark:text-blue-200/80">知识框架已建立</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-blue-900 dark:text-blue-200">
-              You now have a structured overview tailored to your goal. This
-              framework will be our map for the next stages.
-            </p>
+            <p className="text-blue-900 dark:text-blue-200">已为你的目标建立结构化知识概览，这将作为后续阶段的参考地图。</p>
           </CardContent>
           <CardFooter>
             <Button onClick={onProceed} className="ml-auto">
-              Proceed to System Dynamics (S2)
+              进入 S2：系统动力学
             </Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {/* S2 简化预览区块：在 S1 页面内联展示，减少跳转 */}
+      {(userContext.systemDynamics || streaming.currentStage === 'S2') && (
+        <Card className="mt-6 bg-white dark:bg-gray-950/50">
+          <CardHeader>
+            <CardTitle>S2 预览：系统动力学与核心比喻</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {userContext.systemDynamics ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <div className="rounded border border-gray-200 dark:border-gray-800 p-2">
+                    {userContext.systemDynamics.mermaidChart ? (
+                      <InteractiveMermaid 
+                        chart={userContext.systemDynamics.mermaidChart}
+                        nodes={userContext.systemDynamics.nodes}
+                      />
+                    ) : (
+                      <div className="h-64 grid grid-rows-4 gap-2">
+                        <div className="bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                        <div className="bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                        <div className="bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                        <div className="bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="lg:col-span-1">
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
+                    <div className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">核心比喻</div>
+                    <div className="text-sm text-amber-800 dark:text-amber-300">
+                      {userContext.systemDynamics.metaphor || '生成中…'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2" aria-hidden>
+                <div className="h-5 w-40 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                <div className="h-48 w-full bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => navigateToStage('S2_SYSTEM_DYNAMICS')}>查看完整系统动力学</Button>
+            <Button onClick={onProceed}>继续到 S3</Button>
           </CardFooter>
         </Card>
       )}

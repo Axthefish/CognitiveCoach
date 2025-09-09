@@ -199,7 +199,12 @@ export default function S0IntentView({
                         <option value="troubleshoot">排障</option>
                         <option value="plan">规划</option>
                       </select>
-                      <p className="text-xs text-gray-500">当前策略：智能档位选择</p>
+                      <p className="text-xs text-gray-500">提示：
+                        <span className="ml-1">探索 = 打开视野获取灵感；</span>
+                        <span className="ml-1">比较 = 多方案权衡优劣；</span>
+                        <span className="ml-1">排障 = 面向问题快速定位与修复；</span>
+                        <span className="ml-1">规划 = 产出结构化行动路径。</span>
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <Label>风险偏好</Label>
@@ -213,6 +218,11 @@ export default function S0IntentView({
                         <option value="medium">中</option>
                         <option value="high">高</option>
                       </select>
+                      <p className="text-xs text-gray-500">提示：
+                        <span className="ml-1">低 = 稳健保守，偏向小步快跑；</span>
+                        <span className="ml-1">中 = 风险与回报平衡；</span>
+                        <span className="ml-1">高 = 更激进更具挑战，鼓励探索式尝试。</span>
+                      </p>
                     </div>
                     <div className="md:col-span-2">
                       <p className="text-xs text-gray-500">
