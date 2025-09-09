@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-// 移除标签页，改为单页滚动结构
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Gauge, TrendingUp, Target, BarChart3, Download, Calendar } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { Badge } from "@/components/ui/badge"
