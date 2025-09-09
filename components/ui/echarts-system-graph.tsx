@@ -147,11 +147,13 @@ export function EchartsSystemGraph({ chart, nodes = [], onNodeClick, nodeAnalogi
 
     inst.setOption(option, true)
 
-    const clickHandler = (p: { dataType: string; data: { id: string } }) => {
+    const clickHandler = (p: echarts.ECElementEvent) => {
       if (p.dataType === "node") {
-        const id = p.data.id
-        try { setSelectedNodeId(id) } catch {}
-        onNodeClick?.(id)
+        const id = (p.data as { id?: string })?.id
+        if (id) {
+          try { setSelectedNodeId(id) } catch {}
+          onNodeClick?.(id)
+        }
       }
     }
     inst.on("click", clickHandler)
