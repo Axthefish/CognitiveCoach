@@ -137,8 +137,8 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
                     chart={dynamics.mermaidChart} 
                     nodes={dynamics.nodes}
                     nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
-                    onNodeClick={(_nodeId) => {}}
-                    onWhatIfSimulation={(_nodeId) => {}}
+                    onNodeClick={() => {}}
+                    onWhatIfSimulation={() => {}}
                   />
                 </div>
               </CardContent>

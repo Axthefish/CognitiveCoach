@@ -89,16 +89,17 @@ export function EchartsSystemGraph({ chart, nodes = [], onNodeClick, nodeAnalogi
       tooltip: {
         confine: true,
         trigger: "item",
-        formatter: (p: any) => {
-          if (p.dataType === "node") {
-            const id = (p.data && p.data.id) || p.name
+        formatter: (p: unknown) => {
+          const param = p as { dataType: string; data?: { id?: string; source?: string; target?: string }; name?: string }
+          if (param.dataType === "node") {
+            const id = (param.data && param.data.id) || param.name
             const analogy = nodeAnalogies.find(a => a.nodeId === id)
-            return `<div style="max-width:240px"><div style="font-weight:600;margin-bottom:4px">${p.name}</div>${analogy ? `<div style="opacity:.8">类比：${analogy.analogy}</div>` : ""}</div>`
+            return `<div style="max-width:240px"><div style="font-weight:600;margin-bottom:4px">${param.name}</div>${analogy ? `<div style="opacity:.8">类比：${analogy.analogy}</div>` : ""}</div>`
           }
-          if (p.dataType === "edge") {
-            return `${p.data.source} → ${p.data.target}`
+          if (param.dataType === "edge") {
+            return `${param.data?.source} → ${param.data?.target}`
           }
-          return p.name
+          return param.name
         }
       },
       series: [
@@ -120,7 +121,7 @@ export function EchartsSystemGraph({ chart, nodes = [], onNodeClick, nodeAnalogi
             position: "inside",
             color: "#1f2937",
             fontSize: 12,
-            formatter: (p: any) => p.data.name
+            formatter: (p: { data: { name: string } }) => p.data.name
           },
           emphasis: {
             scale: true,
@@ -146,7 +147,7 @@ export function EchartsSystemGraph({ chart, nodes = [], onNodeClick, nodeAnalogi
 
     inst.setOption(option, true)
 
-    const clickHandler = (p: any) => {
+    const clickHandler = (p: { dataType: string; data: { id: string } }) => {
       if (p.dataType === "node") {
         const id = p.data.id
         try { setSelectedNodeId(id) } catch {}
