@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Lightbulb, AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
 import { InteractiveMermaid } from "@/components/ui/interactive-mermaid"
 import EchartsSystemGraph from "@/components/ui/echarts-system-graph"
 import IntentStrip from "@/components/ui/intent-strip"
@@ -20,8 +20,9 @@ interface S2SystemDynamicsViewProps {
 export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsViewProps) {
   const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues } = useCognitiveCoachStore();
   const dynamics = userContext.systemDynamics;
-  const mainPath: string[] = (dynamics as unknown as { mainPath?: string[] })?.mainPath || [];
-  const loops: Array<{ id: string; title: string; nodes: string[]; summary?: string }> = (dynamics as unknown as { loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }> })?.loops || [];
+  // Extracted but not used in current render - available for future features
+  // const mainPath: string[] = (dynamics as unknown as { mainPath?: string[] })?.mainPath || [];
+  // const loops: Array<{ id: string; title: string; nodes: string[]; summary?: string }> = (dynamics as unknown as { loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }> })?.loops || [];
 
   // 将技术性 QA 提示映射为用户友好文案
   const getFriendlyIssueText = (hint: string): string => {

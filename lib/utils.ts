@@ -11,7 +11,7 @@ export interface SilentIntent {
   constraints?: { time?: string; level?: string };
 }
 
-export function extractSilentIntent(userContext: any): SilentIntent {
+export function extractSilentIntent(userContext: Record<string, unknown>): SilentIntent {
   const goal = (userContext?.userGoal || '').toString().trim()
   const constraints: SilentIntent['constraints'] = {}
   // Derive time from reviewWindow or goal text (very light heuristic)
@@ -27,7 +27,7 @@ export function extractSilentIntent(userContext: any): SilentIntent {
 // Compute Top2 levers based on mainPath and evidence gaps
 export interface LeverItem { id: string; title: string; impact: string; nextAction: string }
 
-export function computeTop2Levers(userContext: any): LeverItem[] {
+export function computeTop2Levers(userContext: Record<string, unknown>): LeverItem[] {
   const levers: LeverItem[] = []
   const mainPath: string[] = userContext?.systemDynamics?.mainPath || []
   const nodes: Array<{ id: string; title: string }> = userContext?.systemDynamics?.nodes || []
@@ -60,7 +60,7 @@ export function computeTop2Levers(userContext: any): LeverItem[] {
 }
 
 export interface CorePathItem { id: string; label: string; note?: string }
-export function computeCorePath(userContext: any): CorePathItem[] {
+export function computeCorePath(userContext: Record<string, unknown>): CorePathItem[] {
   const mainPath: string[] = userContext?.systemDynamics?.mainPath || []
   const nodes: Array<{ id: string; title: string }> = userContext?.systemDynamics?.nodes || []
   const idToTitle = new Map(nodes.map(n => [n.id, n.title]))
