@@ -5,6 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb, AlertTriangle } from "lucide-react"
 import { InteractiveMermaid } from "@/components/ui/interactive-mermaid"
 import EchartsSystemGraph from "@/components/ui/echarts-system-graph"
+import IntentStrip from "@/components/ui/intent-strip"
+import KeyLevers from "@/components/ui/key-levers"
+import CorePathTimeline from "@/components/ui/core-path-timeline"
+import { extractSilentIntent, computeTop2Levers, computeCorePath } from "@/lib/utils"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
@@ -57,8 +61,8 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
   if (isLoading && streaming.currentStage === 'S2') {
     return (
       <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2：系统动力学与核心比喻</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-8">AI 正在分析知识点之间的关系，并创建生动的学习比喻...</p>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2：核心结论与关键杠杆</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">聚焦你当前目标的最少必要信息：一句话目标、两处关键杠杆、三到五步核心路径。</p>
         
         <CognitiveStreamAnimator 
           stage="S2"
@@ -75,9 +79,9 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
 
   return (
     <div className="animate-fade-in">
-      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2：系统动力学与核心比喻</h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-8">我们将可视化系统组件的相互作用，并提炼指导理解的核心比喻。</p>
-      
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S2：核心结论与关键杠杆</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">聚焦你当前目标的最少必要信息：一句话目标、两处关键杠杆、三到五步核心路径。</p>
+
       {dynamics && (dynamics.requiresHumanReview || (dynamics.qaIssues && dynamics.qaIssues.length > 0)) && (
         <details className="mb-6">
           <summary className="cursor-pointer">
@@ -113,115 +117,77 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
           </Card>
         </details>
       )}
-      
       {dynamics ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <Card className="bg-white dark:bg-gray-950/50 h-full">
-              <CardHeader>
-                <CardTitle>系统地图</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="hidden lg:block">
-                  <EchartsSystemGraph 
-                    chart={dynamics.mermaidChart}
-                    nodes={dynamics.nodes}
-                    nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
-                    onNodeClick={(nodeId) => {
-                      try { useCognitiveCoachStore.getState().setSelectedNodeId(nodeId) } catch {}
-                    }}
-                  />
-                </div>
-                <div className="lg:hidden">
-                  <InteractiveMermaid 
-                    chart={dynamics.mermaidChart} 
-                    nodes={dynamics.nodes}
-                    nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
-                    onNodeClick={() => {}}
-                    onWhatIfSimulation={() => {}}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          <div className="lg:col-span-1">
-            {/* Gist Panel: 主路径 + 回路Top3 */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-base">快速总览</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {mainPath.length > 0 && (
-                  <div className="mb-4">
-                    <div className="text-sm font-medium mb-1">主路径</div>
-                    <div className="text-xs text-gray-700 dark:text-gray-300">
-                      {mainPath.join(' → ')}
-                    </div>
+        <div className="space-y-6">
+          {/* Intent Strip */}
+          {(() => {
+            const intent = extractSilentIntent(useCognitiveCoachStore.getState().userContext)
+            return (
+              <IntentStrip
+                goal={intent.goal}
+                constraints={intent.constraints}
+                onConfirm={(patch) => {
+                  useCognitiveCoachStore.getState().updateUserContext({ userGoal: patch.goal ?? intent.goal })
+                }}
+              />
+            )
+          })()}
+
+          {/* Top2 Levers */}
+          {(() => {
+            const levers = computeTop2Levers(useCognitiveCoachStore.getState().userContext)
+            return (
+              <div>
+                <div className="text-sm font-medium mb-2">关键杠杆（仅 2 项）</div>
+                <KeyLevers items={levers} onTry={() => { /* 埋点：尝试 */ }} />
+              </div>
+            )
+          })()}
+
+          {/* Core Path Timeline */}
+          {(() => {
+            const path = computeCorePath(useCognitiveCoachStore.getState().userContext)
+            return (
+              <div>
+                <div className="text-sm font-medium mb-2">核心路径（3–5 步）</div>
+                <CorePathTimeline items={path} onStepFocus={(id) => { try { useCognitiveCoachStore.getState().setSelectedNodeId(id) } catch {} }} />
+              </div>
+            )
+          })()}
+
+          {/* Collapsible: System Graph */}
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-300">查看全景系统图</summary>
+            <div className="mt-3">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="hidden lg:block">
+                    <EchartsSystemGraph 
+                      chart={dynamics.mermaidChart}
+                      nodes={dynamics.nodes}
+                      nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
+                      onNodeClick={(nodeId) => { try { useCognitiveCoachStore.getState().setSelectedNodeId(nodeId) } catch {} }}
+                    />
                   </div>
-                )}
-                {loops.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium">关键回路 Top 3</div>
-                    {loops.slice(0,3).map(l => (
-                      <div key={l.id} className="text-xs text-gray-700 dark:text-gray-300 border rounded p-2">
-                        <div className="font-medium mb-1">{l.title}</div>
-                        <div className="mb-1">{l.nodes.join(' → ')}</div>
-                        {l.summary && <div className="text-gray-600 dark:text-gray-400">{l.summary}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            {/* Reading helper card */}
-            <Card className="mb-6 bg-gray-50 dark:bg-gray-900/40">
-              <CardHeader>
-                <CardTitle className="text-base">如何阅读此图（15秒）</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
-                <div>1. 从颜色看关系：绿色=促进，红色=抑制，蓝色=依赖</div>
-                <div>2. 点击节点查看详情与示例；再次点击其它节点可比较路径</div>
-                <div>3. 用“细节”滑杆控制复杂度；开启模拟查看移除影响</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 h-full">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <Lightbulb className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-                  <CardTitle>Core Metaphor</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-amber-900 dark:text-amber-200 font-medium mb-2">核心比喻</p>
-                <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {dynamics.metaphor}
-                </p>
-              </CardContent>
-            </Card>
-            {dynamics?.nodes && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>节点清单与覆盖状态</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {dynamics.nodes.map((n) => (
-                      <div key={n.id} className="flex items-center justify-between text-sm">
-                        <span className="font-mono text-gray-700 dark:text-gray-300">{n.id}</span>
-                        <span className="text-gray-600 dark:text-gray-400">{n.title}</span>
-                      </div>
-                    ))}
+                  <div className="lg:hidden">
+                    <InteractiveMermaid 
+                      chart={dynamics.mermaidChart} 
+                      nodes={dynamics.nodes}
+                      nodeAnalogies={(dynamics as unknown as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> })?.nodeAnalogies}
+                      onNodeClick={() => {}}
+                      onWhatIfSimulation={() => {}}
+                    />
                   </div>
                 </CardContent>
               </Card>
-            )}
-          </div>
+            </div>
+          </details>
         </div>
       ) : (
         <div className="flex justify-center items-center py-16">
           <Card className="bg-white dark:bg-gray-950/50">
             <CardContent className="p-8">
-              <p className="text-gray-500 text-center">正在生成系统动力学图表...</p>
+              <p className="text-gray-500 text-center">正在生成核心结论与路径...</p>
             </CardContent>
           </Card>
         </div>
