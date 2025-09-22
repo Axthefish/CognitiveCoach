@@ -11,7 +11,8 @@ export interface SilentIntent {
   constraints?: { time?: string; level?: string };
 }
 
-export function extractSilentIntent(userContext: Record<string, unknown>): SilentIntent {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function extractSilentIntent(userContext: any): SilentIntent {
   const goal = (userContext?.userGoal || '').toString().trim()
   const constraints: SilentIntent['constraints'] = {}
   // Derive time from reviewWindow or goal text (very light heuristic)
@@ -27,7 +28,8 @@ export function extractSilentIntent(userContext: Record<string, unknown>): Silen
 // Compute Top2 levers based on mainPath and evidence gaps
 export interface LeverItem { id: string; title: string; impact: string; nextAction: string }
 
-export function computeTop2Levers(userContext: Record<string, unknown>): LeverItem[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function computeTop2Levers(userContext: any): LeverItem[] {
   const levers: LeverItem[] = []
   const mainPath: string[] = userContext?.systemDynamics?.mainPath || []
   const nodes: Array<{ id: string; title: string }> = userContext?.systemDynamics?.nodes || []
@@ -60,7 +62,8 @@ export function computeTop2Levers(userContext: Record<string, unknown>): LeverIt
 }
 
 export interface CorePathItem { id: string; label: string; note?: string }
-export function computeCorePath(userContext: Record<string, unknown>): CorePathItem[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function computeCorePath(userContext: any): CorePathItem[] {
   const mainPath: string[] = userContext?.systemDynamics?.mainPath || []
   const nodes: Array<{ id: string; title: string }> = userContext?.systemDynamics?.nodes || []
   const idToTitle = new Map(nodes.map(n => [n.id, n.title]))
