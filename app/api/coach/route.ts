@@ -23,9 +23,9 @@ type CoachAction =
 
 // 请求体接口
 type RefineGoalPayload = { userInput: string; conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> };
-type GenerateFrameworkPayload = { userGoal: string; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number };
-type GenerateSystemDynamicsPayload = { framework: KnowledgeFramework; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number };
-type GenerateActionPlanPayload = { userGoal: string; framework: KnowledgeFramework; systemNodes?: Array<{ id: string; title?: string }>; decisionType?: string; runTier?: 'Lite'|'Pro'|'Review'; seed?: number };
+type GenerateFrameworkPayload = { userGoal: string; decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan'; runTier?: 'Lite'|'Pro'|'Review'; riskPreference?: 'low' | 'medium' | 'high'; seed?: number };
+type GenerateSystemDynamicsPayload = { framework: KnowledgeFramework; decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan'; runTier?: 'Lite'|'Pro'|'Review'; riskPreference?: 'low' | 'medium' | 'high'; seed?: number };
+type GenerateActionPlanPayload = { userGoal: string; framework: KnowledgeFramework; systemNodes?: Array<{ id: string; title?: string }>; decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan'; runTier?: 'Lite'|'Pro'|'Review'; riskPreference?: 'low' | 'medium' | 'high'; seed?: number };
 type AnalyzeProgressPayload = { progressData: { completedTasks?: string[]; confidenceScore?: number; hoursSpent?: number; challenges?: string; }; userContext: { userGoal: string; actionPlan: ActionPlan; kpis: string[]; strategySpec?: { metrics?: Array<{ metricId: string; confidence?: number; evidence?: unknown[] }> } } };
 type ConsultPayload = { question: string; userContext: { userGoal: string; knowledgeFramework: KnowledgeFramework; actionPlan: ActionPlan; systemDynamics?: { mermaidChart: string; metaphor: string } } };
 
