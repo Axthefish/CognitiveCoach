@@ -264,6 +264,7 @@ export function initSentry() {
   }
 
   // 动态导入 Sentry（注意：需要安装 @sentry/nextjs）
+  // @ts-expect-error Sentry包是可选依赖
   import('@sentry/nextjs').then((Sentry) => {
     Sentry.init({
       dsn: SENTRY_DSN,
