@@ -27,12 +27,28 @@ export type ValidatedEnv = z.infer<typeof envSchema>;
 let cachedEnv: ValidatedEnv | null = null;
 
 /**
+ * 清除环境变量缓存
+ * 用于测试或在需要重新加载环境变量时调用
+ */
+export function clearEnvCache(): void {
+  cachedEnv = null;
+  logger.debug('Environment variable cache cleared');
+}
+
+/**
  * 验证环境变量配置
+ * @param forceRevalidate 强制重新验证，忽略缓存
  * @returns 验证后的环境变量对象
  * @throws 如果环境变量无效
  */
-export function validateEnv(): ValidatedEnv {
-  if (cachedEnv) return cachedEnv;
+export function validateEnv(forceRevalidate = false): ValidatedEnv {
+  // 在开发环境或测试环境，或者强制重新验证时，不使用缓存
+  const shouldSkipCache = 
+    forceRevalidate || 
+    process.env.NODE_ENV === 'test' ||
+    (process.env.NODE_ENV === 'development' && process.env.SKIP_ENV_CACHE === 'true');
+  
+  if (cachedEnv && !shouldSkipCache) return cachedEnv;
   
   const parsed = envSchema.safeParse(process.env);
   
@@ -71,9 +87,13 @@ export function validateEnv(): ValidatedEnv {
 
 /**
  * 获取已验证的环境变量（如果未验证则先验证）
+ * @param forceRevalidate 强制重新验证
  */
-export function getEnv(): ValidatedEnv {
-  return cachedEnv || validateEnv();
+export function getEnv(forceRevalidate = false): ValidatedEnv {
+  if (forceRevalidate || !cachedEnv) {
+    return validateEnv(forceRevalidate);
+  }
+  return cachedEnv;
 }
 
 /**

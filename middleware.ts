@@ -1,0 +1,161 @@
+// Next.js 中间件 - 统一处理 CORS、速率限制、日志记录等
+
+import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+
+/**
+ * Next.js 中间件配置
+ * 
+ * 处理顺序：
+ * 1. CORS 预检请求（OPTIONS）
+ * 2. 请求日志记录
+ * 3. 安全头部设置
+ * 4. API 路径特殊处理
+ */
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const origin = request.headers.get('origin');
+  const method = request.method;
+
+  // 1. CORS 预检请求处理
+  if (method === 'OPTIONS') {
+    return handleCorsPreflightRequest(origin);
+  }
+
+  // 2. 记录请求日志
+  logRequest(request);
+
+  // 3. API 路由特殊处理
+  if (pathname.startsWith('/api/')) {
+    return handleApiRequest(request, origin);
+  }
+
+  // 4. 其他请求正常通过
+  const response = NextResponse.next();
+  addSecurityHeaders(response);
+  
+  return response;
+}
+
+/**
+ * 处理 CORS 预检请求
+ */
+function handleCorsPreflightRequest(origin: string | null): NextResponse {
+  const response = new NextResponse(null, { status: 204 });
+
+  // 设置 CORS 头
+  if (origin) {
+    if (isAllowedOrigin(origin)) {
+      response.headers.set('Access-Control-Allow-Origin', origin);
+    }
+  }
+
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With'
+  );
+  response.headers.set('Access-Control-Max-Age', '86400'); // 24 hours
+
+  return response;
+}
+
+/**
+ * 处理 API 请求
+ */
+function handleApiRequest(request: NextRequest, origin: string | null): NextResponse {
+  const response = NextResponse.next();
+
+  // 添加 CORS 头
+  if (origin && isAllowedOrigin(origin)) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+
+  // 添加安全头部
+  addSecurityHeaders(response);
+
+  return response;
+}
+
+/**
+ * 检查来源是否允许
+ */
+function isAllowedOrigin(origin: string): boolean {
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()) || [];
+  
+  // 开发环境允许 localhost
+  if (process.env.NODE_ENV === 'development') {
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return true;
+    }
+  }
+
+  // 检查是否在允许列表中
+  if (allowedOrigins.length === 0) {
+    return true; // 如果没有配置，默认允许所有
+  }
+
+  return allowedOrigins.some((allowed) => {
+    if (allowed === '*') return true;
+    if (allowed.startsWith('*.')) {
+      // 支持通配符域名
+      const domain = allowed.substring(2);
+      return origin.endsWith(domain);
+    }
+    return origin === allowed;
+  });
+}
+
+/**
+ * 添加安全头部
+ */
+function addSecurityHeaders(response: NextResponse): void {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=()'
+  );
+}
+
+/**
+ * 记录请求日志
+ */
+function logRequest(request: NextRequest): void {
+  const { pathname, search } = request.nextUrl;
+  const method = request.method;
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+
+  // 只记录 API 请求和错误请求
+  if (pathname.startsWith('/api/') || pathname.startsWith('/_next/')) {
+    logger.debug('Incoming request', {
+      method,
+      pathname,
+      search,
+      ip: ip.split(',')[0]?.trim() || ip, // 取第一个 IP
+      userAgent: userAgent.substring(0, 100), // 限制长度
+    });
+  }
+}
+
+/**
+ * 中间件配置
+ * 指定哪些路径需要经过中间件处理
+ */
+export const config = {
+  matcher: [
+    /*
+     * 匹配所有请求路径，除了：
+     * - _next/static (静态文件)
+     * - _next/image (图片优化)
+     * - favicon.ico (网站图标)
+     * - public 文件夹中的文件
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
+

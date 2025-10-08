@@ -69,6 +69,10 @@ export const FrameworkNodeSchema: z.ZodType<FrameworkNode> = z.object({
 
 export const KnowledgeFrameworkSchema = z.array(FrameworkNodeSchema);
 
+// 导出推断类型
+export type FrameworkNode = z.infer<typeof FrameworkNodeSchema>;
+export type KnowledgeFramework = z.infer<typeof KnowledgeFrameworkSchema>;
+
 // S2 system dynamics output
 export const SystemNodeSchema = z.object({
   id: z.string(),
@@ -158,6 +162,10 @@ export const ActionItemSchema = z.object({
 
 export const ActionPlanSchema = z.array(ActionItemSchema);
 
+// 导出推断类型
+export type ActionItem = z.infer<typeof ActionItemSchema>;
+export type ActionPlan = z.infer<typeof ActionPlanSchema>;
+
 export const ActionPlanResponseSchema = z.object({
   actionPlan: ActionPlanSchema,
   kpis: z.array(z.string()),
@@ -196,7 +204,6 @@ export const TaskSpecSchema = z.object({
 });
 
 export type S0RefineGoal = z.infer<typeof S0RefineGoalSchema>;
-export type KnowledgeFramework = z.infer<typeof KnowledgeFrameworkSchema>;
 export type SystemDynamics = z.infer<typeof SystemDynamicsSchema>;
 export type ActionPlanResponse = z.infer<typeof ActionPlanResponseSchema>;
 export type AnalyzeProgress = z.infer<typeof AnalyzeProgressSchema>;

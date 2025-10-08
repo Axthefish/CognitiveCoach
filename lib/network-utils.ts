@@ -212,11 +212,15 @@ export class NetworkMonitor {
   private static instance: NetworkMonitor;
   private isOnline: boolean = typeof navigator !== 'undefined' ? navigator.onLine : true;
   private listeners: Set<(online: boolean) => void> = new Set();
+  private onlineHandler: (() => void) | null = null;
+  private offlineHandler: (() => void) | null = null;
 
   private constructor() {
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => this.updateStatus(true));
-      window.addEventListener('offline', () => this.updateStatus(false));
+      this.onlineHandler = () => this.updateStatus(true);
+      this.offlineHandler = () => this.updateStatus(false);
+      window.addEventListener('online', this.onlineHandler);
+      window.addEventListener('offline', this.offlineHandler);
     }
   }
 
@@ -239,5 +243,23 @@ export class NetworkMonitor {
   subscribe(listener: (online: boolean) => void) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * 清理事件监听器（用于测试或应用卸载）
+   */
+  destroy() {
+    if (typeof window !== 'undefined') {
+      if (this.onlineHandler) {
+        window.removeEventListener('online', this.onlineHandler);
+        this.onlineHandler = null;
+      }
+      if (this.offlineHandler) {
+        window.removeEventListener('offline', this.offlineHandler);
+        this.offlineHandler = null;
+      }
+    }
+    this.listeners.clear();
+    NetworkMonitor.instance = null as unknown as NetworkMonitor;
   }
 }

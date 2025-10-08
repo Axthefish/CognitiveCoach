@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import type { StrategySpecZod as StrategySpec } from './schemas';
+import type { 
+  StrategySpecZod as StrategySpec,
+  KnowledgeFramework,
+  ActionPlan
+} from './schemas';
 import { getHydrationSafeTimestamp, getHydrationSafeRandom, hydrationSafeLog } from './hydration-safe';
 
 // FSM状态定义
@@ -10,32 +14,10 @@ export type FSMState =
   | 'S3_ACTION_PLAN'
   | 'S4_AUTONOMOUS_OPERATION';
 
-// 知识框架节点接口（与 schemas.ts 保持一致）
-export interface FrameworkNode {
-  id: string;
-  title: string;
-  summary: string;
-  children?: FrameworkNode[];
-  evidence?: Array<{
-    source: string;
-    url?: string;
-    date?: string;
-    scope?: string;
-  }>;
-  confidence?: number; // 0-1
-  applicability?: string;
-}
-
-export type KnowledgeFramework = FrameworkNode[];
-
-// 行动计划项接口（根据ReconstructReport.md中的定义）
-export interface ActionItem {
-  id: string;
-  text: string;
-  isCompleted: boolean;
-}
-
-export type ActionPlan = ActionItem[];
+// 重新导出类型以保持向后兼容
+export type { KnowledgeFramework, ActionPlan } from './schemas';
+export type FrameworkNode = KnowledgeFramework[number];
+export type ActionItem = ActionPlan[number];
 
 // Conversation message interface
 export interface ConversationMessage {

@@ -91,14 +91,22 @@ export default function ClientPage() {
     // 如果提供了明确的goal，先将其存储到store中
     if (explicitGoal && explicitGoal !== userContext.userGoal) {
       updateUserContext({ userGoal: explicitGoal });
+      // 使用 Promise 确保状态更新在下一个渲染周期完成
+      await new Promise(resolve => {
+        // 使用 queueMicrotask 确保在下一个微任务中执行
+        queueMicrotask(() => {
+          // 再使用 requestAnimationFrame 确保在下一帧开始前执行
+          requestAnimationFrame(() => {
+            resolve(undefined);
+          });
+        });
+      });
     }
     
-    // 使用 setTimeout 确保状态更新后再启动流式处理
-    setTimeout(() => {
-      startStreaming('S1');
-      // 为空状态策略生成按钮提供一个轻量触发通道
-      (window as unknown as { __cc_restartS3?: () => void }).__cc_restartS3 = () => startStreaming('S3');
-    }, 0);
+    // 状态更新完成后启动流式处理
+    startStreaming('S1');
+    // 为空状态策略生成按钮提供一个轻量触发通道
+    (window as unknown as { __cc_restartS3?: () => void }).__cc_restartS3 = () => startStreaming('S3');
   }, [startStreaming, updateUserContext, userContext.userGoal]);
 
   // S0状态的目标精炼处理 - 使用 useCallback 优化

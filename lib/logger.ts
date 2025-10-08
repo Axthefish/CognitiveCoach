@@ -29,13 +29,33 @@ function getCurrentLogLevel(): LogLevel {
 
 function maskSecrets(input: unknown): string {
   try {
-    const str = typeof input === 'string' ? input : JSON.stringify(input);
-    return str
-      .replace(/(apiKey|authorization|token|secret|password)\s*[:=]\s*"[^"]+"/gi, '$1:"***"')
-      .replace(/(apiKey|authorization|token|secret|password)\s*[:=]\s*'[^']+'/gi, "$1:'***'")
-      .replace(/(AIza[0-9A-Za-z\-_]{35})/g, '***')
-      .replace(/(Bearer\s+)[A-Za-z0-9\-_]+/gi, '$1***')
-      .replace(/(jwt\s*[:=]\s*)[A-Za-z0-9\-_.]+/gi, '$1***');
+    let str = typeof input === 'string' ? input : JSON.stringify(input);
+    
+    // 1. JSON字段格式：{"key":"value"} 或 {"key": "value"} 或无引号
+    str = str.replace(/(["']?(?:apiKey|api_key|authorization|token|secret|password|credentials|auth)["']?\s*[:=]\s*["']?)([^"',}\s]+)(["']?)/gi, '$1***$3');
+    
+    // 2. URL参数格式：?key=value 或 &token=value
+    str = str.replace(/([?&])(key|token|auth|apikey|api_key|secret|password)=([^&\s]+)/gi, '$1$2=***');
+    
+    // 3. Bearer token格式
+    str = str.replace(/(Bearer\s+)[A-Za-z0-9\-_]+/gi, '$1***');
+    
+    // 4. Google API Key格式（AIza开头）
+    str = str.replace(/AIza[0-9A-Za-z\-_]{35}/g, '***');
+    
+    // 5. JWT token格式（三段式）
+    str = str.replace(/eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/g, '***');
+    
+    // 6. 通用长字符串密钥（32+字符的连续字母数字）
+    str = str.replace(/(?:^|[^A-Za-z0-9])([A-Za-z0-9]{32,})(?:[^A-Za-z0-9]|$)/g, (match, key) => {
+      // 避免误伤普通文本，只处理看起来像密钥的字符串
+      if (/^[A-F0-9]+$/i.test(key)) {
+        return match.replace(key, '***');
+      }
+      return match;
+    });
+    
+    return str;
   } catch (serializationError) {
     console.warn('Failed to sanitize log data:', serializationError);
     return '[unserializable]';

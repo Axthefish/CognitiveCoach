@@ -1,71 +1,122 @@
-# Cognitive Coach
+# 🧠 Cognitive Coach
 
-An AI-powered learning companion that guides you through a structured learning journey using the S0–S4 framework.
+一个基于AI的学习助手，通过S0-S4框架引导你完成结构化的学习旅程。
 
-## Features
+## ✨ 核心功能
 
-- S0: Intent Calibration — Clarify and refine your learning goals
-- S1: Knowledge Framework — Generate structured knowledge maps
-- S2: System Dynamics — Visualize relationships with Mermaid diagrams
-- S3: Action Plan — Create actionable steps with KPIs and Strategy DSL
-- S4: Autonomous Operation — Monitor progress and get AI coaching
+- **S0: 目标校准** — 明确和精炼学习目标
+- **S1: 知识框架** — 生成结构化知识图谱
+- **S2: 系统动力学** — 可视化知识关系图
+- **S3: 行动计划** — 创建可执行的行动步骤和KPI
+- **S4: 自主运营** — 监控进度并获得AI指导
 
-### Run Tiers
+### 运行模式
 
-- **Lite**: Fast responses using `gemini-2.5-flash-lite`, single variant generation
-- **Pro**: Comprehensive analysis using `gemini-2.5-pro`, multi-variant generation with QA selection
-- **Review**: Same as Pro but triggers human review for low-confidence outputs
+- **Lite**: 快速响应（gemini-2.5-flash-lite）
+- **Pro**: 全面分析（gemini-2.5-pro，默认）
+- **Review**: Pro模式 + 人工审核
 
-## Tech Stack
+## 🚀 快速开始
 
-- Next.js 15.2.4, React 19, TypeScript, Tailwind CSS
-- Google Gemini (gemini-2.5-pro)
-- Zustand for state management
-- Mermaid for diagrams
-- zod for runtime schema validation
-
-## Environment Variables
-
-```bash
-# Google Gemini
-GOOGLE_AI_API_KEY=your_key
-# or
-GEMINI_API_KEY=your_key
-
-# Model configuration
-GEMINI_MODEL=gemini-2.5-pro          # Default model for Pro/Review tiers
-GEMINI_LITE_MODEL=gemini-2.5-flash-lite  # Faster model for Lite tier
-
-# API
-ALLOWED_ORIGINS=https://yourdomain.com,https://another.com
-RATE_LIMIT_PER_MINUTE=60
-
-# Health check protection
-HEALTH_TOKEN=your_health_token
-
-# Feature flags
-ENABLE_RAG=false
-```
-
-## Quality Gates & Contracts
-
-- Strong schemas (zod) for S0–S4 outputs; required fields include optional evidence[], confidence, applicability
-- QA checks (lib/qa.ts):
-  - S1 schema; S1→S2 consistency (framework ids appear in S2.nodes)
-  - S2 schema and Mermaid precheck
-  - S3 schema + coverage (S2.nodes → strategySpec.metrics) + actionability (triggers/diagnosis/options/recovery/stopLoss)
-- Strategy DSL (lib/strategy-dsl.ts): unifies metrics → triggers → diagnosis → options → recovery/stopLoss
-
-## Local Development
+### 1. 安装依赖
 
 ```bash
 npm install
-npm run dev
-# open http://localhost:3000
 ```
 
-## Notes
+### 2. 配置环境变量
 
-- If QA fails, the UI blocks state transition and shows issues
-- S2 returns nodes[] for mapping; S3 renders a Strategy table and shows VOI Top-3 and reviewWindow when present
+创建 `.env.local` 文件：
+
+```bash
+# 必需：Google Gemini API密钥
+GEMINI_API_KEY=your_api_key_here
+
+# 可选配置
+NODE_ENV=development
+LOG_LEVEL=info
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+### 3. 启动开发服务器
+
+```bash
+npm run dev
+# 打开 http://localhost:3000
+```
+
+## 🛠 技术栈
+
+- **前端**: Next.js 15.2.4, React 19, TypeScript, Tailwind CSS
+- **AI**: Google Gemini (gemini-2.5-pro)
+- **状态管理**: Zustand
+- **图表**: Mermaid, ECharts
+- **验证**: Zod
+
+## 📝 项目结构
+
+```
+├── app/              # Next.js应用路由
+│   ├── api/         # API端点
+│   └── *.tsx        # 页面组件
+├── components/       # React组件
+│   ├── s0-s4/       # 各阶段视图
+│   └── ui/          # 通用UI组件
+├── lib/             # 工具函数和配置
+│   ├── schemas.ts   # Zod schema定义
+│   ├── store.ts     # Zustand状态管理
+│   └── *.ts         # 其他工具
+├── services/        # S0-S4业务服务层
+└── tests/           # 测试文件
+```
+
+## 🧪 测试
+
+```bash
+# 运行所有测试
+npm test
+
+# 生成覆盖率报告
+npm test -- --coverage
+```
+
+## 📦 构建和部署
+
+```bash
+# 构建生产版本
+npm run build
+
+# 启动生产服务器
+npm start
+```
+
+### Vercel部署
+
+项目已配置好Vercel部署，推送到main分支会自动部署。
+
+## 📚 环境变量说明
+
+| 变量名 | 必需 | 说明 |
+|--------|------|------|
+| `GEMINI_API_KEY` | ✅ | Google Gemini API密钥 |
+| `NODE_ENV` | - | 运行环境 (development/production) |
+| `LOG_LEVEL` | - | 日志级别 (debug/info/warn/error) |
+| `ALLOWED_ORIGINS` | - | CORS允许的来源 |
+| `MAX_REQUESTS_PER_MINUTE` | - | 速率限制（默认60） |
+
+## 🔒 安全特性
+
+- ✅ CORS跨域保护
+- ✅ 内容安全策略(CSP)
+- ✅ 速率限制
+- ✅ API密钥掩码
+- ✅ 安全响应头
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request！
+
+## 📄 License
+
+MIT
 
