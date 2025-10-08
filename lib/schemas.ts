@@ -48,16 +48,15 @@ export const S0RefineGoalSchema = z.object({
 }).strict();
 
 // S1 knowledge framework node
-type FrameworkNode = {
+export const FrameworkNodeSchema: z.ZodType<{
   id: string;
   title: string;
   summary: string;
-  children?: FrameworkNode[];
+  children?: unknown[];
   evidence?: z.infer<typeof EvidenceArraySchema>;
   confidence?: z.infer<typeof ConfidenceSchema>;
   applicability?: z.infer<typeof ApplicabilitySchema>;
-};
-export const FrameworkNodeSchema: z.ZodType<FrameworkNode> = z.object({
+}> = z.object({
   id: z.string(),
   title: z.string(),
   summary: z.string(),
