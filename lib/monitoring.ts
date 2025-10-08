@@ -272,7 +272,7 @@ export function initSentry() {
       tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
       
       // 错误过滤
-      beforeSend(event, hint) {
+      beforeSend(event: unknown, hint: { originalException?: unknown }) {
         // 过滤掉开发环境的错误
         if (process.env.NODE_ENV === 'development') {
           return null;
