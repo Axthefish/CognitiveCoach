@@ -14,29 +14,31 @@ import { markHydrationComplete, getHydrationState } from '@/lib/hydration-safe';
 export function HydrationMonitor() {
   useEffect(() => {
     // 确保只在客户端执行
-    if (typeof window !== 'undefined') {
-      // 标记hydration已完成
-      markHydrationComplete();
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    // 标记hydration已完成
+    markHydrationComplete();
+    
+    // 设置全局标记
+    window.__HYDRATION_COMPLETED__ = true;
+    
+    // 开发模式下的调试信息
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 HydrationMonitor: Hydration completed successfully');
+      console.log('🔧 Current hydration state:', getHydrationState());
       
-      // 设置全局标记
-      window.__HYDRATION_COMPLETED__ = true;
+      // 监听页面卸载，重置状态
+      const handleBeforeUnload = () => {
+        window.__HYDRATION_COMPLETED__ = false;
+      };
       
-      // 开发模式下的调试信息
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔧 HydrationMonitor: Hydration completed successfully');
-        console.log('🔧 Current hydration state:', getHydrationState());
-        
-        // 监听页面卸载，重置状态
-        const handleBeforeUnload = () => {
-          window.__HYDRATION_COMPLETED__ = false;
-        };
-        
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        
-        return () => {
-          window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
-      }
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
     }
   }, []);
 
