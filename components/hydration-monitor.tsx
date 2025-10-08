@@ -15,7 +15,7 @@ export function HydrationMonitor() {
   useEffect(() => {
     // 确保只在客户端执行
     if (typeof window === 'undefined') {
-      return;
+      return undefined;
     }
     
     // 标记hydration已完成
@@ -40,6 +40,8 @@ export function HydrationMonitor() {
         window.removeEventListener('beforeunload', handleBeforeUnload);
       };
     }
+    
+    return undefined;
   }, []);
 
   // 这个组件不渲染任何视觉内容
