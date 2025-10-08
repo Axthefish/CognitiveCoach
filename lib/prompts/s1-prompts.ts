@@ -1,5 +1,6 @@
 // S1 阶段 Prompts - 知识框架生成
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { GenerateFrameworkPayload } from '@/lib/schemas';
 
 export const S1_PROMPTS = {

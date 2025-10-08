@@ -27,7 +27,9 @@ export const PERFORMANCE_THRESHOLDS = {
 
 /**
  * 评估性能指标等级
+ * 注意：此函数供未来使用，当前由web-vitals库自动计算rating
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getRating(name: WebVitalsMetric['name'], value: number): 'good' | 'needs-improvement' | 'poor' {
   const threshold = PERFORMANCE_THRESHOLDS[name];
   if (value <= threshold.good) return 'good';

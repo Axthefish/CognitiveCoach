@@ -1,5 +1,6 @@
 // S4 阶段 Prompts - 进度分析和咨询
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { ActionPlan, KnowledgeFramework } from '@/lib/schemas';
 
 export const S4_PROMPTS = {

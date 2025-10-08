@@ -210,14 +210,13 @@ export function extractZodErrorMessage(zodError: { issues: Array<{ path: (string
 /**
  * 格式化错误响应
  */
-export function formatErrorResponse(error: UserFriendlyError, includeDetails = false) {
+export function formatErrorResponse(error: UserFriendlyError) {
   const response: {
     status: 'error';
     error: string;
     title: string;
     suggestion?: string;
     actionable: boolean;
-    details?: string;
   } = {
     status: 'error',
     error: error.message,
