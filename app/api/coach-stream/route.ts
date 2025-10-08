@@ -625,7 +625,7 @@ async function handleGenerateSystemDynamicsStream(
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     
     const frameworkDescription = payload.framework.map(node => {
-      const childrenDesc = node.children?.map((child: { title: string; summary: string }) => `  - ${child.title}: ${child.summary}`).join('\n') || '';
+      const childrenDesc = (node.children as Array<{ title: string; summary: string }> | undefined)?.map(child => `  - ${child.title}: ${child.summary}`).join('\n') || '';
       return `${node.title}: ${node.summary}\n${childrenDesc}`;
     }).join('\n\n');
     
@@ -938,7 +938,7 @@ async function handleGenerateActionPlanStream(
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     
     const frameworkDescription = payload.framework.map(node => {
-      const childrenDesc = node.children?.map((child: { title: string; summary: string }) => `  - ${child.title}: ${child.summary}`).join('\n') || '';
+      const childrenDesc = (node.children as Array<{ title: string; summary: string }> | undefined)?.map(child => `  - ${child.title}: ${child.summary}`).join('\n') || '';
       return `${node.title}: ${node.summary}\n${childrenDesc}`;
     }).join('\n\n');
     
