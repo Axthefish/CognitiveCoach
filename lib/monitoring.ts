@@ -262,25 +262,12 @@ export function initSentry() {
     return;
   }
 
-  // 动态导入 Sentry
+  // 动态导入 Sentry（注意：需要安装 @sentry/nextjs）
   import('@sentry/nextjs').then((Sentry) => {
     Sentry.init({
       dsn: SENTRY_DSN,
       environment: process.env.NODE_ENV,
       tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-      
-      // 性能监控
-      integrations: [
-        new Sentry.BrowserTracing(),
-        new Sentry.Replay({
-          maskAllText: true,
-          blockAllMedia: true
-        })
-      ],
-      
-      // Session Replay
-      replaysSessionSampleRate: 0.1,
-      replaysOnErrorSampleRate: 1.0,
       
       // 错误过滤
       beforeSend(event, hint) {
@@ -307,8 +294,9 @@ export function initSentry() {
     });
     
     logger.info('Sentry initialized');
-  }).catch((error) => {
-    logger.warn('Failed to initialize Sentry:', error);
+  }).catch(() => {
+    // Sentry未安装，静默失败
+    logger.debug('Sentry package not installed, skipping initialization');
   });
 }
 
@@ -370,7 +358,7 @@ export const perfMonitor = new PerformanceMonitor();
 declare global {
   interface Window {
     gtag?: (...args: unknown[]) => void;
-    Sentry?: typeof import('@sentry/nextjs');
+    Sentry?: unknown;
   }
 }
 
