@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CoachRequestSchema } from '@/lib/schemas';
+import { CoachRequestSchema, KnowledgeFramework, ActionPlan } from '@/lib/schemas';
 import { handleOptions, withCors } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';

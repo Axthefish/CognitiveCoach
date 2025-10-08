@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { NextRequest } from 'next/server';
 // Ensure this route is always dynamic and not cached by Next.js
 export const dynamic = 'force-dynamic';
