@@ -125,7 +125,8 @@ export function reportComponentError(info: ErrorBoundaryInfo) {
 
   // 发送到 Sentry（如果配置）
   if (typeof window !== 'undefined' && window.Sentry) {
-    window.Sentry.captureException(info.error, {
+    const Sentry = window.Sentry as { captureException: (error: Error, options?: unknown) => void };
+    Sentry.captureException(info.error, {
       contexts: {
         react: {
           componentStack: info.errorInfo.componentStack
