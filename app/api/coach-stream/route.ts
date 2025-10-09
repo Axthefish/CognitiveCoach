@@ -624,8 +624,8 @@ async function handleGenerateSystemDynamicsStream(
     steps[0].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     
-    const frameworkDescription = payload.framework.map(node => {
-      const childrenDesc = (node.children as Array<{ title: string; summary: string }> | undefined)?.map(child => `  - ${child.title}: ${child.summary}`).join('\n') || '';
+    const frameworkDescription = (payload.framework as Array<{ title: string; summary: string; children?: Array<{ title: string; summary: string }> }>).map(node => {
+      const childrenDesc = node.children?.map(child => `  - ${child.title}: ${child.summary}`).join('\n') || '';
       return `${node.title}: ${node.summary}\n${childrenDesc}`;
     }).join('\n\n');
     
@@ -937,8 +937,8 @@ async function handleGenerateActionPlanStream(
     steps[0].status = 'in_progress';
     controller.enqueue(encoder.encode(createStreamMessage('cognitive_step', { steps })));
     
-    const frameworkDescription = payload.framework.map(node => {
-      const childrenDesc = (node.children as Array<{ title: string; summary: string }> | undefined)?.map(child => `  - ${child.title}: ${child.summary}`).join('\n') || '';
+    const frameworkDescription = (payload.framework as Array<{ title: string; summary: string; children?: Array<{ title: string; summary: string }> }>).map(node => {
+      const childrenDesc = node.children?.map(child => `  - ${child.title}: ${child.summary}`).join('\n') || '';
       return `${node.title}: ${node.summary}\n${childrenDesc}`;
     }).join('\n\n');
     
