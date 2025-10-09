@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { handleOptions, withCors } from '@/lib/cors';
 import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { isHealthProtected, getEnv, hasAIKey } from '@/lib/env-validator';
