@@ -99,10 +99,11 @@ npm start
 | 变量名 | 必需 | 说明 |
 |--------|------|------|
 | `GEMINI_API_KEY` | ✅ | Google Gemini API密钥 |
-| `NODE_ENV` | - | 运行环境 (development/production) |
-| `LOG_LEVEL` | - | 日志级别 (debug/info/warn/error) |
-| `ALLOWED_ORIGINS` | - | CORS允许的来源 |
+| `NODE_ENV` | - | 运行环境 (development/production/test) |
+| `LOG_LEVEL` | - | 日志级别 (debug/info/warn/error，默认info) |
+| `ALLOWED_ORIGINS` | - | CORS允许的来源（逗号分隔） |
 | `MAX_REQUESTS_PER_MINUTE` | - | 速率限制（默认60） |
+| `HEALTH_TOKEN` | - | 健康检查端点的访问令牌（生产环境建议配置） |
 
 ## 🔒 安全特性
 

@@ -16,15 +16,37 @@ const LOG_LEVELS: Record<string, LogLevel> = {
   error: LogLevel.ERROR,
 };
 
-// 获取当前日志级别
+// 缓存的日志级别（用于性能优化）
+let cachedLogLevel: LogLevel | null = null;
+let lastLogLevelCheck = 0;
+const LOG_LEVEL_CACHE_MS = 5000; // 5秒内使用缓存
+
+// 获取当前日志级别（支持动态更新）
 function getCurrentLogLevel(): LogLevel {
+  const now = Date.now();
+  
+  // 如果有缓存且未过期，使用缓存
+  if (cachedLogLevel !== null && (now - lastLogLevelCheck) < LOG_LEVEL_CACHE_MS) {
+    return cachedLogLevel;
+  }
+  
   try {
     const env = getEnv();
-    return LOG_LEVELS[env.LOG_LEVEL] || LogLevel.INFO;
+    cachedLogLevel = LOG_LEVELS[env.LOG_LEVEL] || LogLevel.INFO;
+    lastLogLevelCheck = now;
+    return cachedLogLevel;
   } catch {
     // 如果环境变量验证失败，使用默认级别
-    return LogLevel.INFO;
+    cachedLogLevel = LogLevel.INFO;
+    lastLogLevelCheck = now;
+    return cachedLogLevel;
   }
+}
+
+// 清除日志级别缓存（用于测试或强制刷新）
+export function clearLogLevelCache(): void {
+  cachedLogLevel = null;
+  lastLogLevelCheck = 0;
 }
 
 function maskSecrets(input: unknown): string {
@@ -67,49 +89,29 @@ function truncate(text: string, max = 300): string {
   return text.slice(0, max) + '...<truncated>';
 }
 
-// 结构化日志格式化（暂时未使用，保留以备将来扩展）
-// function formatStructuredLog(level: string, message: string, meta?: Record<string, unknown>) {
-//   const timestamp = new Date().toISOString();
-//   const logEntry = {
-//     timestamp,
-//     level: level.toUpperCase(),
-//     message,
-//     ...(meta && Object.keys(meta).length > 0 && { meta }),
-//   };
-//   
-//   try {
-//     const env = getEnv();
-//     return env.NODE_ENV === 'production' 
-//       ? JSON.stringify(logEntry)
-//       : `[${timestamp}] ${level.toUpperCase()}: ${message}${meta ? ` ${JSON.stringify(meta)}` : ''}`;
-//   } catch {
-//     return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-//   }
-// }
-
-const currentLogLevel = getCurrentLogLevel();
-
+// 创建统一的logger接口，支持动态日志级别
 export const logger = {
   debug: (...args: unknown[]) => {
-    if (currentLogLevel <= LogLevel.DEBUG) {
+    // 每次调用时动态获取日志级别
+    if (getCurrentLogLevel() <= LogLevel.DEBUG) {
       console.debug(...args.map(maskSecrets));
     }
   },
   
   info: (...args: unknown[]) => {
-    if (currentLogLevel <= LogLevel.INFO) {
+    if (getCurrentLogLevel() <= LogLevel.INFO) {
       console.info(...args.map(maskSecrets));
     }
   },
   
   warn: (...args: unknown[]) => {
-    if (currentLogLevel <= LogLevel.WARN) {
+    if (getCurrentLogLevel() <= LogLevel.WARN) {
       console.warn(...args.map(maskSecrets));
     }
   },
   
   error: (...args: unknown[]) => {
-    if (currentLogLevel <= LogLevel.ERROR) {
+    if (getCurrentLogLevel() <= LogLevel.ERROR) {
       const mapped = args.map(a => {
         if (a instanceof Error) return a;
         const s = String(a);
@@ -121,12 +123,26 @@ export const logger = {
   
   // 兼容性方法
   log: (...args: unknown[]) => {
-    if (currentLogLevel <= LogLevel.INFO) {
+    if (getCurrentLogLevel() <= LogLevel.INFO) {
       console.log(...args.map(maskSecrets));
     }
+  },
+  
+  // 添加性能监控方法（与 EnhancedLogger 兼容）
+  time: (label: string): (() => void) => {
+    const startTime = Date.now();
+    logger.debug(`⏱️ Timer started: ${label}`);
+    
+    return () => {
+      const duration = Date.now() - startTime;
+      logger.info(`⏱️ Timer ended: ${label}`, { duration: `${duration}ms` });
+    };
   },
 };
 
 export { maskSecrets, truncate };
+
+// 导出类型以便与 logger-enhanced.ts 兼容
+export type { LogLevel as LogLevelType };
 
 

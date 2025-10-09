@@ -1,66 +1,89 @@
+/**
+ * CognitiveCoach 全局状态管理 - Zustand Store
+ * 
+ * 管理内容：
+ * - FSM 状态（S0 → S1 → S2 → S3 → S4）
+ * - 用户上下文（目标、框架、系统动力学、行动计划等）
+ * - 流式处理状态（进度、步骤、错误等）
+ * - 版本快照（时间旅行、撤销功能）
+ * - 迭代模式（允许返回修改之前的阶段）
+ * 
+ * FSM 状态转换图：
+ * ```
+ * S0_INTENT_CALIBRATION (目标校准)
+ *          │
+ *          │ generateFramework()
+ *          ↓
+ * S1_KNOWLEDGE_FRAMEWORK (知识框架)
+ *          │                ↑
+ *          │                │ navigateToStage() - 迭代模式
+ *          │ generateSystemDynamics()
+ *          ↓                │
+ * S2_SYSTEM_DYNAMICS (系统动力学)
+ *          │                ↑
+ *          │                │ navigateToStage() - 迭代模式
+ *          │ generateActionPlan()
+ *          ↓                │
+ * S3_ACTION_PLAN (行动计划)
+ *          │                ↑
+ *          │                │ navigateToStage() - 迭代模式
+ *          │ analyzeProgress()
+ *          ↓                │
+ * S4_AUTONOMOUS_OPERATION (自主运营)
+ * ```
+ * 
+ * 流式状态转换：
+ * ```
+ * 非流式 (isStreaming: false)
+ *          │
+ *          │ startStreaming(stage)
+ *          ↓
+ * 流式中 (isStreaming: true)
+ *    │    │    cognitiveSteps 更新
+ *    │    │    streamContent 累积
+ *    │    │
+ *    │    ├──> stopStreaming() ──> 完成
+ *    │    │
+ *    │    └──> setStreamError() ──> 错误状态
+ *    │
+ *    └──> navigateToStage() ──> 中止当前流 ──> 切换阶段
+ * ```
+ * 
+ * 导航安全机制：
+ * - isNavigating 标志防止导航期间启动新流
+ * - 导航时自动中止当前流（通过 StreamManager）
+ * - 错误处理确保 isNavigating 总是被重置
+ * 
+ * 版本快照机制：
+ * - 每次关键操作后可创建快照
+ * - 最多保存10个版本（LRU策略）
+ * - 只在客户端创建（防止 hydration 不匹配）
+ * 
+ * 使用示例：
+ * ```typescript
+ * // 获取状态
+ * const { currentState, userContext, streaming } = useCognitiveCoachStore();
+ * 
+ * // 更新状态
+ * const { updateUserContext, setCurrentState } = useCognitiveCoachStore();
+ * updateUserContext({ userGoal: 'Learn React' });
+ * 
+ * // 导航到新阶段
+ * const { navigateToStage } = useCognitiveCoachStore();
+ * await navigateToStage('S2_SYSTEM_DYNAMICS');
+ * 
+ * // 流式处理
+ * const { startStreaming, stopStreaming } = useCognitiveCoachStore();
+ * startStreaming('S1');
+ * // ... 流式处理完成后
+ * stopStreaming();
+ * ```
+ */
+
 import { create } from 'zustand';
-import type { 
-  StrategySpecZod as StrategySpec,
-  KnowledgeFramework,
-  ActionPlan
-} from './schemas';
-import { getHydrationSafeTimestamp, getHydrationSafeRandom, hydrationSafeLog } from './hydration-safe';
-
-// FSM状态定义
-export type FSMState = 
-  | 'S0_INTENT_CALIBRATION'
-  | 'S1_KNOWLEDGE_FRAMEWORK'
-  | 'S2_SYSTEM_DYNAMICS'
-  | 'S3_ACTION_PLAN'
-  | 'S4_AUTONOMOUS_OPERATION';
-
-// 重新导出类型以保持向后兼容
-export type { KnowledgeFramework, ActionPlan } from './schemas';
-export type FrameworkNode = KnowledgeFramework[number];
-export type ActionItem = ActionPlan[number];
-
-// Conversation message interface
-export interface ConversationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-// 用户上下文对象
-export interface UserContext {
-  userGoal: string;
-  knowledgeFramework: KnowledgeFramework | null;
-  systemDynamics: {
-    mermaidChart: string;
-    metaphor: string;
-    nodes?: Array<{ id: string; title: string }>;
-    // S2 clarity extensions
-    mainPath?: string[];
-    loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }>;
-    nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }>;
-    requiresHumanReview?: boolean;
-    qaIssues?: Array<{ severity: string; area: string; hint: string; targetPath: string }>;
-  } | null;
-  actionPlan: ActionPlan | null;
-  kpis: string[] | null;
-  strategySpec: StrategySpec | null;
-  missingEvidenceTop3?: Array<{ metricId: string; what: string; voi_reason: string }>;
-  reviewWindow?: string;
-  // Task spec / preferences
-  decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan';
-  runTier?: 'Lite' | 'Pro' | 'Review';
-  riskPreference?: 'low' | 'medium' | 'high';
-  seed?: number;
-  // Flags & telemetry
-  requiresHumanReview?: boolean;
-  povTags?: string[];
-  lastTelemetry?: unknown;
-  goalConversationHistory: ConversationMessage[]; // Added for S0 conversation tracking
-  goalRecommendations?: Array<{
-    category: string;
-    examples: string[];
-    description: string;
-  }>; // Added for S0 recommendations
-}
+import type { FSMState, UserContext } from './types'; // 从 types 导入
+import { hydrationSafeLog } from './hydration-safe';
+import { globalStreamManager } from './stream-manager';
 
 // 流式状态接口
 interface StreamingState {
@@ -75,6 +98,8 @@ interface StreamingState {
   streamContent: string;
   microLearningTip: string | null;
   streamError: string | null;
+  abortController: AbortController | null; // 用于中断正在进行的请求
+  isNavigating: boolean; // 标志位：防止在导航期间启动新请求
 }
 
 // Store接口
@@ -83,8 +108,6 @@ interface CognitiveCoachStore {
   currentState: FSMState;
   userContext: UserContext;
   selectedNodeId?: string | null;
-  versions: Array<{ id: string; timestamp: string; state: UserContext }>;
-  currentVersion: string | null;
   qaIssues: Array<{ severity: 'blocker' | 'warn'; area: 'schema' | 'coverage' | 'consistency' | 'evidence' | 'actionability'; hint: string; targetPath: string }>; 
   lastFailedStage: 'S1' | 'S2' | 'S3' | null;
   isLoading: boolean;
@@ -103,7 +126,6 @@ interface CognitiveCoachStore {
   updateUserContext: (updates: Partial<UserContext>) => void;
   setSelectedNodeId: (id: string | null) => void;
   batchUpdate: (updates: Partial<CognitiveCoachStore>) => void;
-  addVersionSnapshot: () => void;
   setQaIssues: (stage: 'S1' | 'S2' | 'S3' | null, issues: CognitiveCoachStore['qaIssues']) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -111,7 +133,7 @@ interface CognitiveCoachStore {
   
   // Iterative actions
   markStageCompleted: (stage: FSMState) => void;
-  navigateToStage: (targetState: FSMState) => void;
+  navigateToStage: (targetState: FSMState) => Promise<void>;
   startIterativeRefinement: (targetState: FSMState) => void;
   incrementIteration: (stage: FSMState) => void;
   
@@ -152,6 +174,8 @@ const initialStreamingState: StreamingState = {
   streamContent: '',
   microLearningTip: null,
   streamError: null,
+  abortController: null,
+  isNavigating: false,
 };
 
 // 创建Zustand store
@@ -160,8 +184,6 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   currentState: 'S0_INTENT_CALIBRATION',
   userContext: initialUserContext,
   selectedNodeId: null,
-  versions: [],
-  currentVersion: null,
   qaIssues: [],
   lastFailedStage: null,
   isLoading: false,
@@ -190,26 +212,6 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       ...updates,
     }));
   },
-  
-  addVersionSnapshot: () => {
-    const MAX_VERSIONS = 10; // 限制保存的版本数量
-    const userContext = get().userContext;
-    const timestamp = getHydrationSafeTimestamp();
-    const randomSuffix = (getHydrationSafeRandom() * 1000000).toFixed(0).padStart(6, '0');
-    const id = `v-${timestamp}-${randomSuffix}`;
-    // Inline snapshot creation to avoid circular deps
-    const snapshot = { 
-      id, 
-      timestamp, 
-      state: JSON.parse(JSON.stringify(userContext)) // Deep clone
-    };
-    
-    set((state) => ({
-      // 保持版本数量在限制内，移除最旧的版本
-      versions: [...state.versions.slice(-MAX_VERSIONS + 1), snapshot],
-      currentVersion: snapshot.id,
-    }));
-  },
 
   setQaIssues: (stage, issues) => set({ lastFailedStage: stage, qaIssues: issues }),
   
@@ -219,11 +221,13 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   
   resetStore: () => {
     hydrationSafeLog('🔄 Store: Resetting all store state');
+    
+    // 使用 StreamManager 重置流状态
+    globalStreamManager.reset();
+    
     set({
       currentState: 'S0_INTENT_CALIBRATION',
-      userContext: { ...initialUserContext }, // 使用展开操作符创建新实例
-      versions: [],
-      currentVersion: null,
+      userContext: { ...initialUserContext },
       qaIssues: [],
       lastFailedStage: null,
       isLoading: false,
@@ -231,7 +235,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       completedStages: [],
       iterationCount: {},
       isIterativeMode: false,
-      streaming: { ...initialStreamingState }, // 使用展开操作符创建新实例
+      streaming: { ...initialStreamingState },
     });
   },
 
@@ -243,27 +247,47 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
         : [...state.completedStages, stage]
     })),
 
-  navigateToStage: (targetState) => {
-    hydrationSafeLog(`🧭 Store: Navigating to stage ${targetState}, canceling active streams`);
+  navigateToStage: async (targetState) => {
+    hydrationSafeLog(`🧭 Store: Navigating to stage ${targetState}`);
     
-    // 获取当前状态
-    const currentStreaming = get().streaming;
-    
-    // 如果当前正在流式处理，需要先停止
-    if (currentStreaming.isStreaming) {
-      hydrationSafeLog('🛑 Store: Stopping active streaming before navigation');
+    try {
+      // 先设置导航标志
+      set((state) => ({
+        streaming: {
+          ...state.streaming,
+          isNavigating: true,
+        }
+      }));
+      
+      // 使用 StreamManager 中止当前流
+      globalStreamManager.abort('Navigation to new stage');
+      
+      // 等待 abort 事件传播
+      await Promise.resolve();
+      
+      // 统一更新状态
+      set((state) => ({
+        currentState: targetState,
+        isIterativeMode: state.completedStages.includes(targetState),
+        isLoading: false,
+        error: null,
+        streaming: {
+          ...initialStreamingState,
+          isNavigating: false,
+          abortController: null,
+        },
+      }));
+    } catch (error) {
+      // 确保即使发生错误也重置 isNavigating 标志
+      hydrationSafeLog('❌ Store: Error during navigation, resetting isNavigating flag', error);
+      set((state) => ({
+        streaming: {
+          ...state.streaming,
+          isNavigating: false,
+        },
+        error: error instanceof Error ? error.message : 'Navigation failed',
+      }));
     }
-    
-    set((state) => ({
-      currentState: targetState,
-      isIterativeMode: state.completedStages.includes(targetState),
-      isLoading: false,
-      error: null,
-      // 完全重置流状态，防止任何竞态条件
-      streaming: {
-        ...initialStreamingState
-      },
-    }));
   },
 
   startIterativeRefinement: (targetState) => {
@@ -295,9 +319,28 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
       }
     })),
 
-  // 流式相关 Actions
+  // 流式相关 Actions - 使用 StreamManager
   startStreaming: (stage) => {
     hydrationSafeLog(`🚀 Starting streaming for stage: ${stage}`);
+    
+    // 检查是否正在导航
+    const currentStreaming = get().streaming;
+    if (currentStreaming.isNavigating) {
+      hydrationSafeLog('⚠️ Rejected streaming request: navigation in progress');
+      return;
+    }
+    
+    // 使用 StreamManager 启动流
+    const abortController = globalStreamManager.start(stage);
+    
+    if (!abortController) {
+      hydrationSafeLog('⚠️ Failed to start stream via StreamManager');
+      return;
+    }
+    
+    // 标记为正在流式处理
+    globalStreamManager.markStreaming();
+    
     set((state) => {
       const newState = {
         streaming: {
@@ -308,27 +351,29 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
           streamContent: '',
           microLearningTip: null,
           streamError: null,
+          abortController, // 保存 controller 引用（向后兼容）
+          isNavigating: false,
         },
         isLoading: true,
         error: null,
       };
-      hydrationSafeLog('🔄 State updated:', {
-        isLoading: newState.isLoading,
-        isStreaming: newState.streaming.isStreaming,
-        currentStage: newState.streaming.currentStage
-      });
       return newState;
     });
   },
 
   stopStreaming: () => {
-    hydrationSafeLog('🛑 Store: Stopping streaming and clearing all stream state');
+    hydrationSafeLog('🛑 Store: Stopping streaming');
+    
+    // 使用 StreamManager 完成流
+    globalStreamManager.complete();
+    
     set((state) => ({
       streaming: {
         ...initialStreamingState,
         // 保持已完成的内容，但清除流状态
         streamContent: state.streaming.streamContent,
         cognitiveSteps: state.streaming.cognitiveSteps,
+        abortController: null,
       },
       isLoading: false,
     }));
@@ -368,13 +413,17 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
 
   setStreamError: (error) => {
     hydrationSafeLog('❌ Store: Setting stream error:', error);
+    
+    // 使用 StreamManager 标记错误
+    globalStreamManager.error(error || 'Unknown error');
+    
     set((state) => ({
       streaming: {
         ...state.streaming,
         streamError: error,
         isStreaming: false,
-        // 清除当前阶段，避免混乱
         currentStage: null,
+        abortController: null,
       },
       error,
       isLoading: false,

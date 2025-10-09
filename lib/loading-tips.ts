@@ -1,8 +1,9 @@
 /**
  * Loading tips helper - provides stage-specific tips for LoadingOverlay
+ * 
+ * Note: This file provides UI-layer loading tips for the LoadingOverlay component.
+ * For streaming API tips, see lib/streaming-wrapper.ts (different content and purpose).
  */
-
-import { getHydrationSafeRandom } from './hydration-safe';
 
 export interface LoadingTip {
   text: string;
@@ -48,16 +49,12 @@ const STAGE_TIPS: Record<string, LoadingTip[]> = {
 
 /**
  * Get tips for a specific stage
+ * Used by LoadingOverlay component for UI display
  */
 export function getTipsForStage(stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): LoadingTip[] {
   if (!stage) return STAGE_TIPS.default;
   return STAGE_TIPS[stage] || STAGE_TIPS.default;
 }
 
-/**
- * Get a random tip for a stage
- */
-export function getRandomTip(stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): LoadingTip {
-  const tips = getTipsForStage(stage);
-  return tips[Math.floor(getHydrationSafeRandom() * tips.length)];
-}
+// Note: getRandomTip was removed as it was unused. 
+// For random tip selection in streaming API, use lib/streaming-wrapper.ts

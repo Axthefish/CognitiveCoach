@@ -21,7 +21,6 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     updateUserContext, 
     streaming, 
     isLoading, 
-    addVersionSnapshot, 
     setQaIssues,
     selectedNodeId,
   } = useCognitiveCoachStore()
@@ -43,14 +42,31 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
         povTags: 'povTags' in data ? data.povTags : [],
         requiresHumanReview: 'requiresHumanReview' in data ? data.requiresHumanReview : false,
       });
-      addVersionSnapshot();
       setQaIssues(null, []);
     }
   };
 
   // 处理流式生成错误
-  const handleStreamError = (_error: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
-    // 可以在这里添加错误处理逻辑
+  const handleStreamError = (error: string) => {
+    const msg = typeof error === 'string' ? error : String(error);
+    
+    // 只在组件仍挂载时处理错误
+    if (!isMountedRef.current) {
+      return;
+    }
+    
+    // 报告错误
+    reportError(new Error(msg), {
+      stage: 'S3',
+      userGoal: userContext.userGoal,
+      component: 'S3ActionPlanView',
+      hasActionPlan: !!actionPlan,
+      actionPlanLength: actionPlan?.length || 0,
+      isMounted: isMountedRef.current
+    });
+    
+    // 错误时也设置 loading 为 false
+    setLoading(false);
   };
   
   // Get action plan and KPIs from store
@@ -162,13 +178,13 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     URL.revokeObjectURL(url)
   }
 
-  const exportToTodoist = () => {
-    // Generate Todoist template
-    const todoistTemplate = actionPlan
+  const exportToTaskList = () => {
+    // Generate task list as plain text (compatible with Todoist, Things, etc.)
+    const taskListTemplate = actionPlan
       .map(task => `- ${task.text}`)
       .join('\n')
     
-    const blob = new Blob([todoistTemplate], { type: 'text/plain' })
+    const blob = new Blob([taskListTemplate], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -232,9 +248,9 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
                     <Calendar className="w-4 h-4 mr-1" />
                     导出日历
                   </Button>
-                  <Button variant="outline" size="sm" onClick={exportToTodoist}>
+                  <Button variant="outline" size="sm" onClick={exportToTaskList}>
                     <Download className="w-4 h-4 mr-1" />
-                    导出任务
+                    导出任务列表
                   </Button>
                 </div>
               </div>

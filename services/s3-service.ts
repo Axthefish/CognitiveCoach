@@ -3,25 +3,21 @@
 import { NextResponse } from 'next/server';
 import {
   ActionPlanResponseSchema,
-  type KnowledgeFramework,
-  type ActionPlanResponse,
 } from '@/lib/schemas';
-import { generateJson } from '@/lib/gemini-config';
+import type { GenerateActionPlanPayload } from '@/lib/api-types';
+import { generateJsonWithRetry } from '@/lib/ai-retry-handler';
 import { S3_PROMPTS } from '@/lib/prompts/s3-prompts';
 import { createStageError, handleError } from '@/lib/app-errors';
+import { 
+  validateObject,
+  validateStringField,
+  validateArrayField,
+  validateBooleanField
+} from '@/lib/service-utils';
 import { runQualityGates } from '@/lib/qa';
 import { logger } from '@/lib/logger';
 import { createSuccessResponse } from '@/lib/error-utils';
-
-export interface GenerateActionPlanPayload {
-  userGoal: string;
-  framework: KnowledgeFramework;
-  systemNodes?: Array<{ id: string; title?: string }>;
-  decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan';
-  runTier?: 'Lite' | 'Pro' | 'Review';
-  riskPreference?: 'low' | 'medium' | 'high';
-  seed?: number;
-}
+import { handleNoApiKeyResult } from '@/lib/api-fallback';
 
 interface PlanVariant {
   text: string;
@@ -54,16 +50,12 @@ export class S3Service {
     });
 
     try {
-      // 格式化框架描述
-      const frameworkDescription = S3_PROMPTS.formatFrameworkDescription(
-        payload.framework
-      );
-
-      // 构建 prompt
+      // 使用 S3_PROMPTS 构建 prompt
       const prompt = S3_PROMPTS.generateActionPlan({
         userGoal: payload.userGoal,
         framework: payload.framework,
-        frameworkDescription,
+        systemNodes: payload.systemNodes,
+        decisionType: payload.decisionType,
       });
 
       // n-best generation (Pro 模式生成 2 个变体，Lite 模式只生成 1 个)
@@ -88,6 +80,15 @@ export class S3Service {
           ...enrichedPlan,
           telemetry,
         });
+      }
+
+      // 检查是否所有变体都因为 NO_API_KEY 失败
+      if (variants.length === 0 || variants.every((v) => v.qaScore === 0)) {
+        // 可能是 NO_API_KEY 错误，返回服务不可用
+        const noApiKeyResponse = handleNoApiKeyResult({ ok: false, error: 'NO_API_KEY' }, 's3');
+        if (noApiKeyResponse) {
+          return noApiKeyResponse;
+        }
       }
 
       // 如果所有变体都失败，尝试最后一次重试（降低温度）
@@ -124,11 +125,18 @@ export class S3Service {
 
     for (let i = 0; i < count; i++) {
       try {
-        const config = S3_PROMPTS.getGenerationConfig(runTier, i);
-        const result = await generateJson<Record<string, unknown>>(
+        // 使用带重试的版本
+        const result = await generateJsonWithRetry<Record<string, unknown>>(
           prompt,
-          config,
-          runTier
+          this.validateActionPlanResponse,
+          {
+            maxRetries: 2, // 变体生成时减少重试次数
+            onRetry: (attempt, error) => {
+              logger.warn(`S3 variant ${i} retry attempt ${attempt}:`, { error });
+            }
+          },
+          runTier,
+          's3'
         );
 
         const text = result.ok ? JSON.stringify(result.data) : '';
@@ -208,14 +216,27 @@ export class S3Service {
     systemNodes: Array<{ id: string }> = []
   ): Promise<NextResponse | null> {
     try {
-      const config = S3_PROMPTS.getRetryConfig();
-      const result = await generateJson<Record<string, unknown>>(
+      // 使用带重试的版本，降低温度
+      const result = await generateJsonWithRetry<Record<string, unknown>>(
         prompt,
-        config,
-        runTier
+        this.validateActionPlanResponse,
+        {
+          maxRetries: 2,
+          onRetry: (attempt, error) => {
+            logger.warn(`S3 final retry attempt ${attempt}:`, { error });
+          }
+        },
+        runTier,
+        's3'
       );
 
-      if (!result.ok) return null;
+      if (!result.ok) {
+        // Handle NO_API_KEY error - return null to be handled by caller
+        if (result.error === 'NO_API_KEY') {
+          logger.warn('NO_API_KEY error in S3 final retry');
+        }
+        return null;
+      }
 
       const planData = result.data;
 
@@ -288,6 +309,39 @@ export class S3Service {
       povTags,
       requiresHumanReview,
     };
+  }
+
+  /**
+   * 验证行动计划响应格式
+   * 使用通用验证辅助函数减少重复代码
+   */
+  private validateActionPlanResponse(data: unknown): data is Record<string, unknown> {
+    const obj = validateObject(data);
+    if (!obj) return false;
+    
+    // 验证必需的 actionPlan 数组
+    if (!validateArrayField(obj, 'actionPlan', { 
+      required: true,
+      minLength: 1,
+      elementValidator: (item) => {
+        const i = validateObject(item);
+        if (!i) return false;
+        return (
+          validateStringField(i, 'id', { required: true }) &&
+          validateStringField(i, 'text', { required: true }) &&
+          validateBooleanField(i, 'isCompleted', true)
+        );
+      }
+    })) {
+      return false;
+    }
+    
+    // 验证必需的 kpis 数组
+    if (!validateArrayField(obj, 'kpis', { required: true })) {
+      return false;
+    }
+    
+    return true;
   }
 }
 

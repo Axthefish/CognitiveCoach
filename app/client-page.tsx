@@ -6,7 +6,7 @@ import S0IntentView from '@/components/s0-intent-view';
 import dynamic from 'next/dynamic';
 
 const S1KnowledgeFrameworkView = dynamic(
-  () => import('@/components/s1-knowledge-framework-static'),
+  () => import('@/components/s1-knowledge-framework-view'),
   { 
     ssr: false,
     loading: () => (
@@ -38,8 +38,13 @@ import { IterativeNavigator } from '@/components/ui/iterative-navigator';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
-// import { enhancedFetch, NetworkError } from '@/lib/network-utils';
-import { markHydrationComplete } from '@/lib/hydration-safe';
+import { useStageNavigation } from '@/lib/hooks/useStageNavigation';
+
+// DebugPanel - 仅在开发环境动态导入，减少生产包体积
+const DebugPanel = dynamic(
+  () => import('@/components/ui/debug-panel').then(m => ({ default: m.DebugPanel })),
+  { ssr: false }
+);
 
 export default function ClientPage() {
   // 防止 hydration mismatch 的标志
@@ -60,106 +65,25 @@ export default function ClientPage() {
   
   // 获取 actions（这些通常是稳定的，不会导致重渲染）
   const { 
-    setCurrentState, 
-    updateUserContext, 
-    setLoading, 
     setError,
-    markStageCompleted,
     navigateToStage,
     startIterativeRefinement
   } = useCognitiveCoachStore();
   
 
 
+  // 使用自定义 Hook 管理状态导航
+  const { 
+    generateKnowledgeFramework, 
+    handleProceedFromS0, 
+    handleProceedToNextState 
+  } = useStageNavigation();
+
   // 客户端挂载标志，避免 hydration mismatch
   React.useEffect(() => {
     setIsClientMounted(true);
-    // 标记 hydration 完成，允许使用真实的随机数和时间戳
-    markHydrationComplete();
+    // Note: markHydrationComplete() 由 HydrationMonitor 组件统一管理
   }, []);
-
-  // 获取当前状态ID（S0, S1等） - 使用 useMemo 优化
-  const currentStateId = React.useMemo(() => 
-    currentState.split('_')[0] as 'S0' | 'S1' | 'S2' | 'S3' | 'S4', 
-    [currentState]
-  );
-
-  // 启动流式知识框架生成（使用新的store actions）
-  const { startStreaming } = useCognitiveCoachStore();
-  
-  const generateKnowledgeFramework = React.useCallback(async (explicitGoal?: string) => {
-    // 如果提供了明确的goal，先将其存储到store中
-    if (explicitGoal && explicitGoal !== userContext.userGoal) {
-      updateUserContext({ userGoal: explicitGoal });
-      // 使用 Promise 确保状态更新在下一个渲染周期完成
-      await new Promise(resolve => {
-        // 使用 queueMicrotask 确保在下一个微任务中执行
-        queueMicrotask(() => {
-          // 再使用 requestAnimationFrame 确保在下一帧开始前执行
-          requestAnimationFrame(() => {
-            resolve(undefined);
-          });
-        });
-      });
-    }
-    
-    // 状态更新完成后启动流式处理
-    startStreaming('S1');
-    // 为空状态策略生成按钮提供一个轻量触发通道
-    (window as unknown as { __cc_restartS3?: () => void }).__cc_restartS3 = () => startStreaming('S3');
-  }, [startStreaming, updateUserContext, userContext.userGoal]);
-
-  // S0状态的目标精炼处理 - 使用 useCallback 优化
-  const handleProceedFromS0 = React.useCallback(async (goal: string) => {
-    // 如果用户提供了明确的目标，保存到 store
-    if (goal) {
-      updateUserContext({ 
-        userGoal: goal
-      });
-    }
-    
-    // 切换到S1状态并启动流式生成
-    setCurrentState('S1_KNOWLEDGE_FRAMEWORK');
-    await generateKnowledgeFramework(goal);
-  }, [setCurrentState, updateUserContext, generateKnowledgeFramework]);
-
-  // 通用的状态前进处理
-  const handleProceedToNextState = React.useCallback(async () => {
-    if (isLoading) return; // 防止重复点击
-
-    const transitions: Record<string, string> = {
-      'S1_KNOWLEDGE_FRAMEWORK': 'S2_SYSTEM_DYNAMICS',
-      'S2_SYSTEM_DYNAMICS': 'S3_ACTION_PLAN',
-      'S3_ACTION_PLAN': 'S4_AUTONOMOUS_OPERATION'
-    };
-
-    // 如果在 S1 阶段已经生成了系统模型，则直接进入 S3，避免重复的二次等待
-    let nextState = transitions[currentState];
-    if (currentState === 'S1_KNOWLEDGE_FRAMEWORK') {
-      nextState = userContext.systemDynamics ? 'S3_ACTION_PLAN' : 'S2_SYSTEM_DYNAMICS';
-    }
-    
-    if (!nextState) {
-      console.error('No next state for:', currentState);
-      return;
-    }
-
-    // Mark current stage as completed
-    markStageCompleted(currentState as typeof completedStages[number]);
-    
-    // 切换到下一个状态
-    setCurrentState(nextState as typeof currentState);
-    
-    // 根据状态切换执行不同的操作
-    if (nextState === 'S2_SYSTEM_DYNAMICS') {
-      startStreaming('S2');
-    } else if (nextState === 'S3_ACTION_PLAN') {
-      startStreaming('S3');
-    } else if (nextState === 'S4_AUTONOMOUS_OPERATION') {
-      // S4 doesn't use streaming but might need setup
-      setLoading(false);
-    }
-  }, [currentState, isLoading, setCurrentState, setLoading, startStreaming, markStageCompleted, userContext.systemDynamics]);
 
   // 渲染当前状态对应的视图
   const renderCurrentStateView = () => {
@@ -291,24 +215,8 @@ export default function ClientPage() {
         {renderCurrentStateView()}
       </main>
 
-              {/* 调试信息（仅在开发环境显示） */}
-        {process.env.NODE_ENV === 'development' && isClientMounted && (
-          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs max-w-sm" suppressHydrationWarning>
-            <div className="font-bold mb-2">Debug Info:</div>
-            <div>Current State: {currentState}</div>
-            <div>User Goal: {userContext.userGoal || 'Not set'}</div>
-            <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
-            <div>Streaming: {streaming.isStreaming ? 'Yes' : 'No'}</div>
-            <div>Streaming Stage: {streaming.currentStage || 'None'}</div>
-            <div>Has Framework: {userContext.knowledgeFramework ? 'Yes' : 'No'}</div>
-            <div>Show Stream UI: {(isLoading && streaming.currentStage === currentStateId.slice(0, 2)) ? 'Yes' : 'No'}</div>
-            <div>Error: {error || 'None'}</div>
-            <div>RunTier: {userContext.runTier}</div>
-            <div>DecisionType: {userContext.decisionType}</div>
-            <div>Seed: {userContext.seed ?? '-'}</div>
-            <div>Client Mounted: {isClientMounted ? 'Yes' : 'No'}</div>
-          </div>
-        )}
+      {/* 调试信息面板（仅在开发环境显示） */}
+      {process.env.NODE_ENV === 'development' && <DebugPanel isClientMounted={isClientMounted} />}
     </div>
   );
 }

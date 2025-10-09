@@ -4,7 +4,6 @@
 import { LRUCache } from 'lru-cache';
 import crypto from 'crypto';
 import { logger } from './logger';
-// import { getEnv } from './env-validator'; // 暂时注释，将来可能需要
 
 export interface CacheOptions {
   ttl?: number; // Time to live in milliseconds
@@ -38,23 +37,34 @@ export class CacheKeyGenerator {
     return `${prefix}:${hash}`;
   }
   
-  static generateForPrompt(stage: string, prompt: string, context?: Record<string, unknown>): string {
+  static generateForPrompt(stage: string, prompt: string, context?: Record<string, unknown>, userId?: string): string {
+    // 增加更多上下文信息以确保键的唯一性
     const data = {
       stage,
-      prompt: prompt.substring(0, 100), // 只使用前100个字符
-      context: context ? this.extractKeyContext(context) : {}
+      prompt: prompt.substring(0, 200), // 增加到200字符以提高区分度
+      context: context ? this.extractKeyContext(context) : {},
+      userId: userId || 'anonymous', // 添加用户标识
+      timestamp: Math.floor(Date.now() / (1000 * 60 * 5)), // 5分钟时间窗口（同一窗口内相同请求可复用）
     };
     
     return this.generate('prompt', data);
   }
   
   private static extractKeyContext(context: Record<string, unknown>): Record<string, unknown> {
-    // 只提取关键上下文信息用于缓存键
-    const keyFields = ['userGoal', 'decisionType', 'runTier', 'riskPreference'];
+    // 提取关键上下文信息用于缓存键，增加更多字段
+    const keyFields = [
+      'userGoal', 
+      'decisionType', 
+      'runTier', 
+      'riskPreference',
+      'seed', // 添加 seed 以区分不同随机性要求
+      'iterationCount', // 添加迭代次数
+      'frameworkSize', // 框架大小（用于区分不同复杂度）
+    ];
     const extracted: Record<string, unknown> = {};
     
     for (const field of keyFields) {
-      if (field in context) {
+      if (field in context && context[field] !== undefined) {
         extracted[field] = context[field];
       }
     }
@@ -111,6 +121,7 @@ class MemoryMonitor {
 export class CacheService<T extends object> {
   private cache: LRUCache<string, T>;
   private maxMemoryBytes: number;
+  private cleanupTimer?: NodeJS.Timeout; // 存储定时器引用以便清理
   private stats: CacheStats = {
     hits: 0,
     misses: 0,
@@ -173,9 +184,14 @@ export class CacheService<T extends object> {
   
   private startPeriodicCleanup(): void {
     // 定期清理过期项目
-    setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       this.performMaintenance();
     }, 2 * 60 * 1000); // 每2分钟执行一次
+    
+    // 如果是 Node.js 环境，取消 unref 以允许进程退出
+    if (this.cleanupTimer.unref) {
+      this.cleanupTimer.unref();
+    }
   }
   
   private performMaintenance(): void {
@@ -279,6 +295,23 @@ export class CacheService<T extends object> {
     logger.info(`Cache cleared: ${this.name}`);
   }
   
+  /**
+   * 销毁缓存服务，清理定时器和资源
+   * 应该在应用关闭或缓存不再需要时调用
+   */
+  destroy(): void {
+    // 停止定时器
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+      logger.info(`Cleanup timer stopped for ${this.name}`);
+    }
+    
+    // 清空缓存
+    this.cache.clear();
+    logger.info(`Cache destroyed: ${this.name}`);
+  }
+  
   getStats(): CacheStats {
     this.updateStats(); // 确保统计信息是最新的
     return { ...this.stats };
@@ -346,6 +379,7 @@ export class CacheService<T extends object> {
 // AI 响应缓存
 export class AIResponseCache {
   private caches: Map<string, CacheService<object>> = new Map();
+  private destroyed = false;
   
   constructor() {
     // 为每个阶段创建独立的缓存
@@ -521,10 +555,73 @@ export class AIResponseCache {
       }
     }
   }
+  
+  /**
+   * 销毁所有缓存服务
+   * 应该在应用关闭时调用
+   */
+  destroy(): void {
+    if (this.destroyed) {
+      logger.warn('AIResponseCache already destroyed');
+      return;
+    }
+    
+    logger.info('Destroying AIResponseCache and all sub-caches...');
+    
+    for (const [name, cache] of this.caches) {
+      cache.destroy();
+      logger.info(`Cache ${name} destroyed`);
+    }
+    
+    this.caches.clear();
+    this.destroyed = true;
+    
+    logger.info('AIResponseCache destroyed successfully');
+  }
+  
+  /**
+   * 检查缓存是否已销毁
+   */
+  isDestroyed(): boolean {
+    return this.destroyed;
+  }
 }
 
 // 单例实例
 export const aiResponseCache = new AIResponseCache();
+
+// 进程生命周期管理 - 确保在进程退出时正确清理资源
+// 使用标志避免重复注册监听器（防止内存泄漏）
+let cleanupHandlersRegistered = false;
+
+if (typeof process !== 'undefined' && !cleanupHandlersRegistered) {
+  cleanupHandlersRegistered = true;
+  
+  const cleanup = () => {
+    logger.info('Process shutting down, cleaning up cache resources...');
+    aiResponseCache.destroy();
+  };
+  
+  // 监听各种退出信号
+  process.once('SIGTERM', cleanup); // 使用once避免重复调用
+  process.once('SIGINT', cleanup);
+  process.once('beforeExit', cleanup);
+  
+  // 监听未捕获的异常和Promise拒绝
+  process.once('uncaughtException', (error) => {
+    logger.error('Uncaught exception, cleaning up before exit:', error);
+    aiResponseCache.destroy();
+    process.exit(1);
+  });
+  
+  process.once('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled promise rejection, cleaning up before exit:', { reason, promise });
+    aiResponseCache.destroy();
+    process.exit(1);
+  });
+  
+  logger.debug('Cache cleanup handlers registered (once)');
+}
 
 // 缓存装饰器
 export function cached(stage: string, ttl?: number) {

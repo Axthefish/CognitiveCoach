@@ -34,21 +34,28 @@ export const S0RefineGoalSchema = z.object({
     category: z.string(),
     examples: z.array(z.string()),
     description: z.string()
-    // TODO: 扩展点 - 可添加 allow_multiple: z.boolean().optional(), is_other: z.boolean().optional()
+    // 未来扩展：allow_multiple, is_other 等字段可在需要时添加
   })).optional(),
   // Make metadata fields optional to match AI output capabilities
   evidence: EvidenceArraySchema.optional(),
   confidence: ConfidenceSchema.optional(),
   applicability: ApplicabilitySchema.optional(),
-  // TODO: 扩展点 - 可添加以下字段以支持更丰富的交互：
-  // question_type: z.enum(['form', 'choice', 'confirmation']).optional(),
-  // missing_fields: z.array(z.string()).optional(),
-  // assumptions: z.array(z.string()).optional(),
-  // draft_goal: z.string().optional(),
+  // 未来可扩展字段（如需要更丰富的交互）：
+  // question_type, missing_fields, assumptions, draft_goal 等
 }).strict();
 
-// S1 knowledge framework node
-export const FrameworkNodeSchema: z.ZodSchema = z.object({
+// S1 knowledge framework node - 手动定义类型以解决递归类型推断问题
+export interface FrameworkNode {
+  id: string;
+  title: string;
+  summary: string;
+  children?: FrameworkNode[];
+  evidence?: Array<{ source: string; summary?: string }>;
+  confidence?: number;
+  applicability?: string;
+}
+
+export const FrameworkNodeSchema: z.ZodSchema<FrameworkNode> = z.object({
   id: z.string(),
   title: z.string(),
   summary: z.string(),
@@ -60,9 +67,8 @@ export const FrameworkNodeSchema: z.ZodSchema = z.object({
 
 export const KnowledgeFrameworkSchema = z.array(FrameworkNodeSchema);
 
-// 导出推断类型
-export type FrameworkNode = z.infer<typeof FrameworkNodeSchema>;
-export type KnowledgeFramework = z.infer<typeof KnowledgeFrameworkSchema>;
+// 导出类型
+export type KnowledgeFramework = FrameworkNode[];
 
 // S2 system dynamics output
 export const SystemNodeSchema = z.object({

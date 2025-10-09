@@ -1,9 +1,31 @@
 // 标准化错误处理系统
+// 职责：错误分类、业务逻辑、AppError 类
+// 依赖：使用 error-utils 的底层响应格式化函数
 
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { logger } from './logger';
 import { isProduction } from './env-validator';
+import { createErrorResponse as createErrorResponseBase } from './error-utils';
+import type { ApiErrorResponse } from './api-types';
+
+// 扩展 Window 接口用于开发环境错误报告
+declare global {
+  interface Window {
+    __errorReports?: ErrorReport[];
+  }
+}
+
+interface ErrorReport {
+  type: 'app_error' | 'unknown_error';
+  message: string;
+  code?: string;
+  stage?: string;
+  timestamp: string;
+  environment: string;
+  userAgent?: string;
+  url?: string;
+}
 
 // 错误代码枚举
 export const ErrorCodes = {
@@ -107,22 +129,50 @@ export class AppError extends Error {
 
   /**
    * 获取安全的错误详情 - 绝不在生产环境暴露内部实现细节
+   * 
+   * 安全策略：
+   * - 生产环境：完全不返回任何详情（强制undefined）
+   * - 开发环境：返回过滤后的详情，移除敏感字段
+   * - 检测潜在的密钥格式（AIza..., sk-..., Bearer等）
    */
   private getSecureDetails(): unknown {
+    // 生产环境：完全不返回任何详情
     if (isProduction()) {
       return undefined;
     }
 
-    // 开发环境也要过滤掉敏感信息
+    // 开发环境：过滤敏感信息
     if (this.details && typeof this.details === 'object') {
       const sanitized = { ...this.details } as Record<string, unknown>;
+      
       // 移除可能包含敏感信息的字段
-      delete sanitized.stack;
-      delete sanitized.env;
-      delete sanitized.apiKey;
-      delete sanitized.token;
-      delete sanitized.password;
-      delete sanitized.credentials;
+      const sensitiveFields = [
+        'stack', 'env', 'apiKey', 'token', 'password', 'credentials',
+        'authorization', 'bearer', 'jwt', 'secret', 'key', 'auth',
+        'accessToken', 'refreshToken', 'sessionId'
+      ];
+      
+      sensitiveFields.forEach(field => {
+        delete sanitized[field];
+      });
+      
+      // 检测并移除包含密钥格式的字段
+      Object.keys(sanitized).forEach(key => {
+        const value = sanitized[key];
+        if (typeof value === 'string') {
+          // 检测常见的API密钥格式
+          const keyPatterns = [
+            /^AIza[0-9A-Za-z\-_]{35}$/,  // Google API key
+            /^sk-[a-zA-Z0-9]{48}$/,       // OpenAI key
+            /^Bearer\s+/i,                // Bearer token
+            /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/  // JWT format
+          ];
+          
+          if (keyPatterns.some(pattern => pattern.test(value))) {
+            sanitized[key] = '[REDACTED: potential key detected]';
+          }
+        }
+      });
       
       return sanitized;
     }
@@ -131,37 +181,26 @@ export class AppError extends Error {
   }
 }
 
-// 错误响应接口
-export interface ErrorResponse {
-  status: 'error';
-  code: ErrorCode;
-  message: string;
-  details?: unknown;
-  fixHints?: string[];
-  stage?: string;
-  timestamp: string;
-}
+// 错误响应接口（使用 ApiErrorResponse 确保类型一致性）
+export type ErrorResponse = ApiErrorResponse;
 
 // 统一的错误处理器
-export function handleError(error: unknown, stage?: string): NextResponse<ErrorResponse> {
-  const timestamp = new Date().toISOString();
-  
+// 使用 error-utils 的底层响应创建函数
+export function handleError(error: unknown, stage?: string): NextResponse<ApiErrorResponse> {
   // 记录错误日志
   logger.error(`Error in ${stage || 'unknown stage'}:`, error);
   
   // 处理 AppError
   if (error instanceof AppError) {
-    return NextResponse.json<ErrorResponse>(
+    return createErrorResponseBase(
+      error.userMessage,
+      error.statusCode,
       {
-        status: 'error',
         code: error.code,
-        message: error.userMessage,
         details: serializeErrorDetailsSecurely(error.details),
         fixHints: error.fixHints,
         stage: error.stage || stage,
-        timestamp,
-      },
-      { status: error.statusCode }
+      }
     );
   }
   
@@ -172,17 +211,15 @@ export function handleError(error: unknown, stage?: string): NextResponse<ErrorR
       message: issue.message,
     }));
     
-    return NextResponse.json<ErrorResponse>(
+    return createErrorResponseBase(
+      '输入数据格式不正确',
+      400,
       {
-        status: 'error',
         code: ErrorCodes.SCHEMA_VALIDATION_ERROR,
-        message: '输入数据格式不正确',
         details: serializeErrorDetailsSecurely(issues),
         fixHints: ['请检查输入数据格式', '确保所有必填字段都已提供'],
         stage,
-        timestamp,
-      },
-      { status: 400 }
+      }
     );
   }
   
@@ -203,29 +240,25 @@ export function handleError(error: unknown, stage?: string): NextResponse<ErrorR
       statusCode = 400;
     }
     
-    return NextResponse.json<ErrorResponse>(
+    return createErrorResponseBase(
+      getErrorMessage(code),
+      statusCode,
       {
-        status: 'error',
         code,
-        message: getErrorMessage(code),
-        details: serializeErrorDetailsSecurely(error.stack, true), // 强制隐藏堆栈信息
+        details: serializeErrorDetailsSecurely(error.stack, true),
         stage,
-        timestamp,
-      },
-      { status: statusCode }
+      }
     );
   }
   
   // 处理未知错误
-  return NextResponse.json<ErrorResponse>(
+  return createErrorResponseBase(
+    '发生未知错误，请联系技术支持',
+    500,
     {
-      status: 'error',
       code: ErrorCodes.INTERNAL_ERROR,
-      message: '发生未知错误，请联系技术支持',
       stage,
-      timestamp,
-    },
-    { status: 500 }
+    }
   );
 }
 
@@ -237,10 +270,18 @@ function getErrorMessage(code: ErrorCode): string {
 
 /**
  * 安全的错误详情序列化 - 绝不在生产环境泄露敏感信息
- * @param details 错误详情
- * @param forceHide 强制隐藏（用于特别敏感的信息）
+ * 
+ * 安全策略：
+ * - 强制隐藏模式：用于堆栈信息等特别敏感的数据
+ * - 生产环境：完全不返回任何详情
+ * - 开发环境：递归过滤敏感字段和潜在的密钥格式
+ * 
+ * @param details - 错误详情（可能包含敏感信息）
+ * @param forceHide - 强制隐藏标志（用于堆栈信息等）
+ * @returns 安全的错误详情或undefined
  */
 export function serializeErrorDetailsSecurely(details: unknown, forceHide = false): unknown {
+  // 强制隐藏或生产环境：完全不返回
   if (forceHide || isProduction()) {
     return undefined;
   }
@@ -260,7 +301,9 @@ export function serializeErrorDetailsSecurely(details: unknown, forceHide = fals
       /credential/i,
       /auth/i,
       /bearer/i,
-      /jwt/i
+      /jwt/i,
+      /AIza[0-9A-Za-z\-_]{35}/,  // Google API key format
+      /sk-[a-zA-Z0-9]{48}/,       // OpenAI key format
     ];
     
     const containsSensitive = sensitivePatterns.some(pattern => pattern.test(details));
@@ -276,10 +319,12 @@ export function serializeErrorDetailsSecurely(details: unknown, forceHide = fals
     const sanitized = Array.isArray(details) ? [...details] : { ...details };
     const obj = sanitized as Record<string, unknown>;
     
-    // 移除可能包含敏感信息的字段
+    // 移除可能包含敏感信息的字段（扩展列表）
     const sensitiveFields = [
       'stack', 'env', 'apiKey', 'token', 'password', 'credentials',
-      'authorization', 'bearer', 'jwt', 'secret', 'key', 'auth'
+      'authorization', 'bearer', 'jwt', 'secret', 'key', 'auth',
+      'accessToken', 'refreshToken', 'sessionId', 'privateKey',
+      'publicKey', 'certificate', 'hash', 'salt'
     ];
     
     sensitiveFields.forEach(field => {
@@ -288,10 +333,28 @@ export function serializeErrorDetailsSecurely(details: unknown, forceHide = fals
       }
     });
     
-    // 递归处理嵌套对象
+    // 检测并清理包含潜在密钥的字段
     Object.keys(obj).forEach(key => {
-      if (obj[key] && typeof obj[key] === 'object') {
-        obj[key] = serializeErrorDetailsSecurely(obj[key], false);
+      const value = obj[key];
+      
+      // 递归处理嵌套对象
+      if (value && typeof value === 'object') {
+        obj[key] = serializeErrorDetailsSecurely(value, false);
+        return;
+      }
+      
+      // 检测字符串值中的潜在密钥
+      if (typeof value === 'string') {
+        const keyPatterns = [
+          /^AIza[0-9A-Za-z\-_]{35}$/,  // Google API key
+          /^sk-[a-zA-Z0-9]{48}$/,       // OpenAI key
+          /^Bearer\s+/i,                // Bearer token
+          /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/  // JWT format
+        ];
+        
+        if (keyPatterns.some(pattern => pattern.test(value))) {
+          obj[key] = '[REDACTED: potential key detected]';
+        }
       }
     });
     
@@ -476,3 +539,40 @@ export const createStageError = {
     fixHints: ['检查进度数据是否完整', '确保所有字段都已填写']
   }),
 };
+
+// ============================================================================
+// 错误报告工具（整合自 error-reporter.ts）
+// ============================================================================
+
+/**
+ * 错误报告 - 用于客户端组件错误上报
+ */
+export function reportError(error: Error, context: Record<string, unknown> = {}) {
+  const errorReport = {
+    message: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString(),
+    url: typeof window !== 'undefined' ? window.location.href : 'server',
+    userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'server',
+    context
+  };
+
+  if (process.env.NODE_ENV === 'development') {
+    logger.error('Error reported:', errorReport);
+    
+    // 在开发环境中存储到全局对象供调试
+    if (typeof window !== 'undefined') {
+      window.__errorReports = window.__errorReports || [];
+      window.__errorReports.push(errorReport);
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    // 生产环境只记录关键信息
+    logger.error('Production error:', {
+      message: error.message,
+      timestamp: errorReport.timestamp,
+      context
+    });
+  }
+  
+  return errorReport;
+}

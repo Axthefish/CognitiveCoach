@@ -3,7 +3,7 @@
 import React from 'react';
 import { Button } from './button';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
-import { NetworkError, getUserFriendlyErrorMessage } from '@/lib/network-utils';
+import { NetworkError, getUserFriendlyErrorMessage } from '@/lib/error-utils';
 
 interface ErrorDisplayProps {
   error: NetworkError | Error | null;

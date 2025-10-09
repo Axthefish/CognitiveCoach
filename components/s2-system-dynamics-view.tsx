@@ -8,7 +8,7 @@ import EchartsSystemGraph from "@/components/ui/echarts-system-graph"
 import IntentStrip from "@/components/ui/intent-strip"
 import KeyLevers from "@/components/ui/key-levers"
 import CorePathTimeline from "@/components/ui/core-path-timeline"
-import { extractSilentIntent, computeTop2Levers, computeCorePath } from "@/lib/utils"
+import { extractSilentIntent, computeTop2Levers, computeCorePath } from "@/lib/s2-utils"
 import { useCognitiveCoachStore } from "@/lib/store"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
@@ -18,11 +18,8 @@ interface S2SystemDynamicsViewProps {
 }
 
 export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsViewProps) {
-  const { userContext, streaming, isLoading, updateUserContext, addVersionSnapshot, setQaIssues } = useCognitiveCoachStore();
+  const { userContext, streaming, isLoading, updateUserContext, setQaIssues } = useCognitiveCoachStore();
   const dynamics = userContext.systemDynamics;
-  // Extracted but not used in current render - available for future features
-  // const mainPath: string[] = (dynamics as unknown as { mainPath?: string[] })?.mainPath || [];
-  // const loops: Array<{ id: string; title: string; nodes: string[]; summary?: string }> = (dynamics as unknown as { loops?: Array<{ id: string; title: string; nodes: string[]; summary?: string }> })?.loops || [];
 
   // 将技术性 QA 提示映射为用户友好文案
   const getFriendlyIssueText = (hint: string): string => {
@@ -49,15 +46,34 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
           ...(('nodeAnalogies' in data) ? { nodeAnalogies: (data as { nodeAnalogies?: Array<{ nodeId: string; analogy: string; example?: string }> }).nodeAnalogies } : {}),
         }
       });
-      addVersionSnapshot();
       setQaIssues(null, []);
     }
   };
 
   // 处理流式生成错误
-  const handleStreamError = (_error: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
-    // 可以在这里添加错误处理逻辑
+  const handleStreamError = (error: string) => {
+    const msg = typeof error === 'string' ? error : String(error);
+    
+    // 只在组件仍挂载时处理错误
+    if (!isMountedRef.current) {
+      return;
+    }
+    
+    // 报告错误
+    reportError(new Error(msg), {
+      stage: 'S2',
+      userGoal: userContext.userGoal,
+      component: 'S2SystemDynamicsView',
+      hasSystemDynamics: !!systemDynamics,
+      hasNodes: !!(systemDynamics?.nodes),
+      nodesLength: systemDynamics?.nodes?.length || 0,
+      isMounted: isMountedRef.current
+    });
+    
+    // 错误时也设置 loading 为 false
+    setLoading(false);
   };
+  
   // 如果正在加载且当前阶段是 S2，显示流式动画器
   if (isLoading && streaming.currentStage === 'S2') {
     return (

@@ -16,10 +16,6 @@ const envSchema = z.object({
   // Optional configuration
   MAX_REQUESTS_PER_MINUTE: z.string().optional().transform(val => val ? parseInt(val, 10) : 60),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  
-  // Rate limiting configuration
-  RATE_LIMIT_STORE: z.enum(['memory', 'redis']).optional().default('memory'),
-  REDIS_URL: z.string().optional(),
 });
 
 export type ValidatedEnv = z.infer<typeof envSchema>;
@@ -45,8 +41,7 @@ export function validateEnv(forceRevalidate = false): ValidatedEnv {
   // 在开发环境或测试环境，或者强制重新验证时，不使用缓存
   const shouldSkipCache = 
     forceRevalidate || 
-    process.env.NODE_ENV === 'test' ||
-    (process.env.NODE_ENV === 'development' && process.env.SKIP_ENV_CACHE === 'true');
+    process.env.NODE_ENV === 'test';
   
   if (cachedEnv && !shouldSkipCache) return cachedEnv;
   
@@ -111,11 +106,57 @@ export function isDevelopment(): boolean {
 }
 
 /**
- * 获取配置的AI API密钥
+ * 验证 Google Gemini API Key 格式
+ * Google API Keys 通常以 "AIza" 开头，长度约为 39 字符
+ */
+function isValidGeminiApiKey(key: string): boolean {
+  if (!key || typeof key !== 'string') return false;
+  
+  // 基本长度检查（至少20个字符）
+  if (key.length < 20) {
+    logger.warn('API key too short, expected at least 20 characters');
+    return false;
+  }
+  
+  // Google API Key 标准格式检查（通常以 AIza 开头）
+  if (key.startsWith('AIza')) {
+    if (key.length < 35 || key.length > 45) {
+      logger.warn('Google API key length unexpected', { length: key.length });
+      return false;
+    }
+    return true;
+  }
+  
+  // 如果不是标准格式，至少检查是否是合理的字符串（字母数字和连字符/下划线）
+  if (!/^[A-Za-z0-9\-_]+$/.test(key)) {
+    logger.warn('API key contains invalid characters');
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * 获取配置的AI API密钥（带格式验证）
  */
 export function getAIApiKey(): string | null {
   const env = getEnv();
-  return env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY || null;
+  const key = env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY || null;
+  
+  if (!key) {
+    return null;
+  }
+  
+  // 验证 API Key 格式
+  if (!isValidGeminiApiKey(key)) {
+    logger.error('Invalid GEMINI_API_KEY format detected', {
+      keyLength: key.length,
+      keyPrefix: key.substring(0, 4) + '...',
+    });
+    return null;
+  }
+  
+  return key;
 }
 
 /**

@@ -51,18 +51,6 @@ Mermaid图表要求：
 - 与知识框架内容相关`,
 
   /**
-   * 格式化知识框架为文本描述
-   */
-  formatFrameworkDescription: (framework: KnowledgeFramework): string => {
-    return framework.map(node => {
-      const childrenDesc = node.children?.map(child => 
-        `  - ${child.title}: ${child.summary}`
-      ).join('\n') || '';
-      return `${node.title}: ${node.summary}\n${childrenDesc}`;
-    }).join('\n\n');
-  },
-
-  /**
    * 获取 S2 生成配置
    */
   getGenerationConfig: (runTier?: 'Lite' | 'Pro' | 'Review') => ({

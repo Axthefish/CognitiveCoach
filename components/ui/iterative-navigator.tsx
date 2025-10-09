@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle, Circle, CircleDot, ArrowLeft, RotateCcw, AlertTriangle, ChevronDown, ChevronUp, Eye, X } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
-import type { FSMState } from "@/lib/store"
+import type { FSMState } from "@/lib/types"
 
 interface Stage {
   id: FSMState

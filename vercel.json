@@ -2,6 +2,9 @@
   "functions": {
     "app/api/coach/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/coach-stream/route.ts": {
+      "maxDuration": 300
     }
   },
   "env": {

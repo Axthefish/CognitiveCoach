@@ -1,13 +1,15 @@
-// Next.js 中间件 - 统一处理 CORS、速率限制、日志记录等
+// Next.js 中间件 - 统一处理安全头部、日志记录等
+// CORS 处理统一使用 lib/cors.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { handleOptions, withCors } from '@/lib/cors';
 
 /**
  * Next.js 中间件配置
  * 
  * 处理顺序：
- * 1. CORS 预检请求（OPTIONS）
+ * 1. CORS 预检请求（OPTIONS）- 使用 lib/cors.ts
  * 2. 请求日志记录
  * 3. 安全头部设置
  * 4. API 路径特殊处理
@@ -17,9 +19,9 @@ export async function middleware(request: NextRequest) {
   const origin = request.headers.get('origin');
   const method = request.method;
 
-  // 1. CORS 预检请求处理
+  // 1. CORS 预检请求处理 - 统一使用 lib/cors.ts
   if (method === 'OPTIONS') {
-    return handleCorsPreflightRequest(origin);
+    return handleOptions(request);
   }
 
   // 2. 记录请求日志
@@ -27,7 +29,9 @@ export async function middleware(request: NextRequest) {
 
   // 3. API 路由特殊处理
   if (pathname.startsWith('/api/')) {
-    return handleApiRequest(request, origin);
+    const response = NextResponse.next();
+    addSecurityHeaders(response);
+    return withCors(response, origin);
   }
 
   // 4. 其他请求正常通过
@@ -35,76 +39,6 @@ export async function middleware(request: NextRequest) {
   addSecurityHeaders(response);
   
   return response;
-}
-
-/**
- * 处理 CORS 预检请求
- */
-function handleCorsPreflightRequest(origin: string | null): NextResponse {
-  const response = new NextResponse(null, { status: 204 });
-
-  // 设置 CORS 头
-  if (origin) {
-    if (isAllowedOrigin(origin)) {
-      response.headers.set('Access-Control-Allow-Origin', origin);
-    }
-  }
-
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.headers.set(
-    'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, X-Requested-With'
-  );
-  response.headers.set('Access-Control-Max-Age', '86400'); // 24 hours
-
-  return response;
-}
-
-/**
- * 处理 API 请求
- */
-function handleApiRequest(request: NextRequest, origin: string | null): NextResponse {
-  const response = NextResponse.next();
-
-  // 添加 CORS 头
-  if (origin && isAllowedOrigin(origin)) {
-    response.headers.set('Access-Control-Allow-Origin', origin);
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
-  }
-
-  // 添加安全头部
-  addSecurityHeaders(response);
-
-  return response;
-}
-
-/**
- * 检查来源是否允许
- */
-function isAllowedOrigin(origin: string): boolean {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()) || [];
-  
-  // 开发环境允许 localhost
-  if (process.env.NODE_ENV === 'development') {
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return true;
-    }
-  }
-
-  // 检查是否在允许列表中
-  if (allowedOrigins.length === 0) {
-    return true; // 如果没有配置，默认允许所有
-  }
-
-  return allowedOrigins.some((allowed) => {
-    if (allowed === '*') return true;
-    if (allowed.startsWith('*.')) {
-      // 支持通配符域名
-      const domain = allowed.substring(2);
-      return origin.endsWith(domain);
-    }
-    return origin === allowed;
-  });
 }
 
 /**

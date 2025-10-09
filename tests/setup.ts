@@ -2,7 +2,10 @@
 // 用于配置测试运行时环境
 
 // 设置测试环境变量
-process.env.NODE_ENV = 'test';
+Object.defineProperty(process.env, 'NODE_ENV', {
+  value: 'test',
+  writable: true,
+});
 process.env.GEMINI_API_KEY = 'test-api-key';
 process.env.GEMINI_MODEL = 'gemini-2.5-pro';
 process.env.GEMINI_LITE_MODEL = 'gemini-2.5-flash-lite';

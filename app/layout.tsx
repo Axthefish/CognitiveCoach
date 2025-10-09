@@ -44,20 +44,11 @@ export const metadata: Metadata = {
     title: "CognitiveCoach - AI认知教练平台",
     description: "基于AI的个性化认知教练平台，助力高效学习与成长",
     siteName: "CognitiveCoach",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "CognitiveCoach AI认知教练平台",
-      },
-    ],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "CognitiveCoach - AI认知教练平台",
     description: "基于AI的个性化认知教练平台，助力高效学习与成长",
-    images: ["/twitter-card.png"],
   },
   alternates: {
     canonical: "https://cognitivecoach.ai",

@@ -2,24 +2,21 @@
 
 import { NextResponse } from 'next/server';
 import { KnowledgeFrameworkSchema, type KnowledgeFramework } from '@/lib/schemas';
+import type { GenerateFrameworkPayload } from '@/lib/api-types';
 import { generateJsonWithRetry } from '@/lib/ai-retry-handler';
 import { S1_PROMPTS } from '@/lib/prompts/s1-prompts';
 import { createStageError, handleError } from '@/lib/app-errors';
 import { runQualityGates } from '@/lib/qa';
 import { logger } from '@/lib/logger';
-import { createErrorResponse, createSuccessResponse } from '@/lib/error-utils';
-
-export interface GenerateFrameworkPayload {
-  userGoal: string;
-  decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan';
-  runTier?: 'Lite' | 'Pro' | 'Review';
-  riskPreference?: 'low' | 'medium' | 'high';
-  seed?: number;
-}
-
-export interface GenerateFrameworkResponse {
-  framework: KnowledgeFramework;
-}
+import { createSuccessResponse } from '@/lib/error-utils';
+import { handleNoApiKeyResult } from '@/lib/api-fallback';
+import { 
+  handleSchemaValidation,
+  handleQAValidation,
+  validateObject,
+  validateStringField,
+  validateArrayField
+} from '@/lib/service-utils';
 
 export class S1Service {
   private static instance: S1Service;
@@ -45,7 +42,6 @@ export class S1Service {
     try {
       // 构建 prompt
       const prompt = S1_PROMPTS.generateFramework({ userGoal: payload.userGoal });
-      const config = S1_PROMPTS.getGenerationConfig(payload.runTier);
 
       // 使用智能重试机制调用 AI
       const result = await generateJsonWithRetry<KnowledgeFramework>(
@@ -67,6 +63,12 @@ export class S1Service {
           attempts: result.attempts,
         });
 
+        // Handle NO_API_KEY error with unified fallback
+        const noApiKeyResponse = handleNoApiKeyResult(result, 's1');
+        if (noApiKeyResponse) {
+          return noApiKeyResponse;
+        }
+
         throw createStageError.s1('Failed to generate framework', {
           error: result.error,
           attempts: result.attempts,
@@ -76,32 +78,15 @@ export class S1Service {
 
       // Schema 验证
       const validationResult = KnowledgeFrameworkSchema.safeParse(result.data);
-      if (!validationResult.success) {
-        logger.error('Schema validation failed:', validationResult.error);
-        throw createStageError.s1('Invalid framework format', {
-          errors: validationResult.error.issues,
-          receivedData: result.data,
-        });
-      }
+      const framework = handleSchemaValidation(validationResult, 's1', result.data);
 
       // 质量门控
-      const qaResult = runQualityGates('S1', validationResult.data);
-      if (!qaResult.passed) {
-        logger.warn('Quality gates failed:', qaResult.issues);
-        return createErrorResponse(
-          'Quality gates failed',
-          400,
-          {
-            fixHints: qaResult.issues.map((i) => i.hint),
-            stage: 'S1',
-            details: JSON.stringify(qaResult.issues),
-          }
-        );
-      }
+      const qaResult = runQualityGates('S1', framework);
+      handleQAValidation(qaResult, 'S1');
 
       logger.info('S1 framework generation successful');
 
-      return createSuccessResponse({ framework: validationResult.data });
+      return createSuccessResponse({ framework });
     } catch (error) {
       logger.error('S1Service.generateFramework error:', error);
       return handleError(error, 'S1');
@@ -110,6 +95,7 @@ export class S1Service {
 
   /**
    * 验证框架格式
+   * 使用通用验证辅助函数减少重复代码
    */
   private validateFramework(data: unknown): data is KnowledgeFramework {
     if (!Array.isArray(data)) return false;
@@ -117,18 +103,16 @@ export class S1Service {
 
     // 验证每个节点
     return data.every((node) => {
-      if (!node || typeof node !== 'object') return false;
-      const n = node as Record<string, unknown>;
+      const n = validateObject(node);
+      if (!n) return false;
       
-      // 必须有 id, title, summary
-      if (typeof n.id !== 'string' || !n.id) return false;
-      if (typeof n.title !== 'string' || !n.title) return false;
-      if (typeof n.summary !== 'string' || !n.summary) return false;
-
-      // children 是可选的，但如果存在必须是数组
-      if (n.children !== undefined && !Array.isArray(n.children)) return false;
-
-      return true;
+      // 使用辅助函数验证必需字段
+      return (
+        validateStringField(n, 'id', { required: true, minLength: 1 }) &&
+        validateStringField(n, 'title', { required: true, minLength: 1 }) &&
+        validateStringField(n, 'summary', { required: true, minLength: 1 }) &&
+        validateArrayField(n, 'children', { required: false })
+      );
     });
   }
 }

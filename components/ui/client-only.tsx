@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { markHydrationComplete, getHydrationState } from '@/lib/hydration-safe';
+import { markHydrationComplete } from '@/lib/hydration-safe';
 
 interface ClientOnlyProps {
   children: React.ReactNode;
@@ -32,9 +32,7 @@ export function ClientOnly({
     if (typeof window !== 'undefined') {
       markHydrationComplete();
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔧 ClientOnly: Component mounted, hydration state:', getHydrationState());
-      }
+      // ClientOnly component mounted
     }
   }, []);
   

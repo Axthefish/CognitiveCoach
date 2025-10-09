@@ -1,3 +1,18 @@
+/**
+ * 质量门控系统 - 确保AI生成内容符合质量标准
+ * 
+ * 职责：
+ * - Schema 合规性验证（阻断性）
+ * - 内容覆盖度检查（警告）
+ * - 跨阶段一致性验证（警告）
+ * - 证据充分性检查（提示）
+ * 
+ * 使用场景：
+ * - 所有Service层在AI响应后调用
+ * - 阻断性问题会抛出错误
+ * - 警告级别问题记录日志但不阻断
+ */
+
 import { z } from 'zod';
 import {
   KnowledgeFrameworkSchema,
@@ -5,9 +20,21 @@ import {
   ActionPlanResponseSchema,
 } from './schemas';
 
+/**
+ * 问题领域分类
+ */
 export type IssueArea = 'schema' | 'coverage' | 'consistency' | 'evidence' | 'actionability';
+
+/**
+ * 问题严重程度
+ * - blocker: 阻断性问题，必须修复
+ * - warn: 警告级别，记录但不阻断
+ */
 export type IssueSeverity = 'blocker' | 'warn';
 
+/**
+ * 质量问题描述
+ */
 export interface QualityIssue {
   severity: IssueSeverity;
   area: IssueArea;
@@ -15,16 +42,52 @@ export interface QualityIssue {
   targetPath: string;
 }
 
+/**
+ * 质量门控检查结果
+ */
 export interface QualityGateResult {
   passed: boolean;
   issues: QualityIssue[];
 }
 
+/**
+ * 添加质量问题到列表
+ * @internal
+ */
 function addIssue(issues: QualityIssue[], issue: QualityIssue) {
   issues.push(issue);
 }
 
-// v1 minimal gates: schema only unless context provided
+/**
+ * 运行质量门控检查
+ * 
+ * 检查维度：
+ * - schema: Schema 合规性（阻断性）
+ * - coverage: 内容覆盖度（警告）
+ * - consistency: 跨阶段一致性（警告）
+ * - evidence: 证据充分性（提示）
+ * - actionability: 可操作性（提示）
+ * 
+ * @param stage - 当前处理阶段 (S1: 知识框架, S2: 系统动力学, S3: 行动计划, S4: 进度分析)
+ * @param output - AI生成的输出（未验证）
+ * @param context - 额外的上下文信息用于跨阶段一致性检查
+ * @param context.framework - S1生成的知识框架（S2阶段使用）
+ * @param context.nodes - 系统节点列表（S3阶段使用）
+ * @param context.strategyMetrics - 策略指标（S4阶段使用）
+ * @returns QualityGateResult - 包含是否通过和具体问题列表
+ * 
+ * @example
+ * ```typescript
+ * const qaResult = runQualityGates('S1', aiOutput);
+ * if (!qaResult.passed) {
+ *   throw new AppError({
+ *     code: ErrorCodes.QA_VALIDATION_FAILED,
+ *     message: 'Quality gates failed',
+ *     details: qaResult.issues
+ *   });
+ * }
+ * ```
+ */
 export function runQualityGates(
   stage: 'S1' | 'S2' | 'S3' | 'S4',
   output: unknown,

@@ -2,28 +2,19 @@
 
 import { NextResponse } from 'next/server';
 import { S0RefineGoalSchema } from '@/lib/schemas';
+import type { RefineGoalPayload, RefineGoalResponse } from '@/lib/api-types';
+import type { ConversationMessage } from '@/lib/types';
 import { generateJsonWithRetry } from '@/lib/ai-retry-handler';
-import { DynamicPromptBuilder, S0_TEMPLATES, PROMPT_STRATEGIES } from '@/lib/prompt-templates';
-import { AppError, ErrorCodes, handleError, createStageError } from '@/lib/app-errors';
+import { S0_PROMPTS, isVagueInput } from '@/lib/prompts/s0-prompts';
+import { handleError, createStageError } from '@/lib/app-errors';
+import { 
+  validateObject,
+  validateStringField,
+  validateArrayField
+} from '@/lib/service-utils';
 import { logger } from '@/lib/logger';
 import { getAIApiKey } from '@/lib/env-validator';
-import type { ConversationMessage } from '@/lib/store';
-
-export interface RefineGoalPayload {
-  userInput: string;
-  conversationHistory?: ConversationMessage[];
-}
-
-export interface RefineGoalResponse {
-  status: 'clarification_needed' | 'clarified' | 'recommendations_provided';
-  ai_question?: string;
-  goal?: string;
-  recommendations?: Array<{
-    category: string;
-    examples: string[];
-    description: string;
-  }>;
-}
+import { handleNoApiKeyResult, createS0FallbackResponse } from '@/lib/api-fallback';
 
 export class S0Service {
   private static instance: S0Service;
@@ -50,46 +41,23 @@ export class S0Service {
         historyLength: conversationHistory.length
       });
       
-      // 构建动态 prompt
-      const promptBuilder = new DynamicPromptBuilder(S0_TEMPLATES.refineGoal);
-      
-      // 根据用户输入特征调整 prompt
-      const userInput = payload.userInput.trim().toLowerCase();
-      if (this.isVagueInput(userInput)) {
-        PROMPT_STRATEGIES.vague_input(promptBuilder);
-      }
-      
-      // 如果有对话历史，添加到示例中
-      if (conversationHistory.length > 0) {
-        const recentHistory = conversationHistory.slice(-2).map(msg => ({
-          input: msg.content,
-          output: msg.role === 'assistant' ? msg.content : ''
-        }));
-        promptBuilder.withUserHistory(recentHistory);
-      }
-      
-      // 构建上下文
-      const context = {
+      // 构建 prompt 上下文
+      const promptContext = {
         userInput: payload.userInput,
-        conversationHistory: this.formatConversationHistory(conversationHistory),
-        interactionCount: conversationHistory.length + 1
+        conversationHistory,
+        interactionCount: conversationHistory.length + 1,
+        isVagueInput: isVagueInput(payload.userInput)
       };
       
-      const prompt = promptBuilder.build(context);
+      const prompt = S0_PROMPTS.refineGoal(promptContext);
       
       logger.debug('Calling AI with prompt length:', prompt.length);
 
       // Check if API key is available before making the AI call
       const apiKey = getAIApiKey();
       if (!apiKey) {
-        logger.warn('No AI API key configured, returning fallback clarification response');
-        return NextResponse.json({
-          status: 'success',
-          data: {
-            status: 'clarification_needed',
-            ai_question: '为加速明确目标，请一次性回答：1) 具体学习主题；2) 期望产出；3) 时间范围。（若已有部分明确，仅补充缺失项即可。）'
-          }
-        });
+        logger.warn('No AI API key configured, returning fallback response');
+        return createS0FallbackResponse();
       }
 
       // 计算用户澄清轮次（排除首次输入，只计算user消息）
@@ -116,16 +84,10 @@ export class S0Service {
           attempts: result.attempts
         });
         
-        // Handle NO_API_KEY error with fallback
-        if (result.error === 'NO_API_KEY') {
-          logger.warn('NO_API_KEY error from generateJsonWithRetry, returning fallback clarification response');
-          return NextResponse.json({
-            status: 'success',
-            data: {
-              status: 'clarification_needed',
-              ai_question: '为加速明确目标，请一次性回答：1) 具体学习主题；2) 期望产出；3) 时间范围。（若已有部分明确，仅补充缺失项即可。）'
-            }
-          });
+        // Handle NO_API_KEY error with unified fallback
+        const noApiKeyResponse = handleNoApiKeyResult(result, 's0');
+        if (noApiKeyResponse) {
+          return noApiKeyResponse;
         }
         
         // 智能 fallback 处理
@@ -186,75 +148,34 @@ export class S0Service {
     }
   }
   
-  // 验证响应格式
+  /**
+   * 验证响应格式
+   * 使用通用验证辅助函数减少重复代码
+   */
   private validateResponse(data: unknown): data is RefineGoalResponse {
-    if (!data || typeof data !== 'object') return false;
+    const obj = validateObject(data);
+    if (!obj) return false;
     
-    const obj = data as Record<string, unknown>;
-    
-    // 必须有 status 字段
-    if (!obj.status || typeof obj.status !== 'string') return false;
+    // 验证必需的 status 字段
+    if (!validateStringField(obj, 'status', { required: true })) return false;
     
     // 根据 status 验证其他字段
     switch (obj.status) {
       case 'clarification_needed':
-        return typeof obj.ai_question === 'string' && obj.ai_question.length > 0;
+        return validateStringField(obj, 'ai_question', { required: true, minLength: 1 });
         
       case 'clarified':
-        return typeof obj.goal === 'string' && obj.goal.length > 0;
+        return validateStringField(obj, 'goal', { required: true, minLength: 1 });
         
       case 'recommendations_provided':
         return (
-          typeof obj.ai_question === 'string' &&
-          Array.isArray(obj.recommendations) &&
-          obj.recommendations.length > 0
+          validateStringField(obj, 'ai_question', { required: true }) &&
+          validateArrayField(obj, 'recommendations', { required: true, minLength: 1 })
         );
         
       default:
         return false;
     }
-  }
-  
-  // 判断用户输入是否模糊 - 优化误触发，加入具体实体检测
-  private isVagueInput(input: string): boolean {
-    // 模糊指示词模式
-    const vaguePatterns = [
-      /不知道/,
-      /不确定/,
-      /帮我/,
-      /推荐/,
-      /建议/,
-      /什么/,
-      /怎么/,
-      /没有/,
-      /暂时/
-    ];
-    
-    // 具体实体/关键词模式 - 如果包含这些则不视为模糊
-    const specificEntityPatterns = [
-      /React|Vue|Angular|JavaScript|TypeScript|Python|Java|C\+\+|Go/i,
-      /雅思|托福|CFA|PMP|CISSP|AWS|Azure|GCP/i,
-      /产品经理|数据分析师|UI设计师|前端|后端|全栈/i,
-      /机器学习|人工智能|区块链|云计算|大数据/i,
-      /英语|日语|韩语|德语|法语|西班牙语/i,
-      /\d+个?月|\d+周|\d+天/  // 时间表达
-    ];
-    
-    const hasVagueWords = vaguePatterns.some(pattern => pattern.test(input));
-    const hasSpecificEntities = specificEntityPatterns.some(pattern => pattern.test(input));
-    const isTooShort = input.length < 5; // 降低长度阈值从10到5
-    
-    // 仅当包含模糊指示词且缺少具体实体时才判定为模糊
-    return (hasVagueWords && !hasSpecificEntities) || isTooShort;
-  }
-  
-  // 格式化对话历史
-  private formatConversationHistory(history: ConversationMessage[]): string {
-    if (history.length === 0) return '无';
-    
-    return history
-      .map(msg => `${msg.role === 'user' ? '用户' : '教练'}: ${msg.content}`)
-      .join('\n');
   }
   
   // 处理空响应的智能 fallback - 使用结构化一次性补齐

@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportError } from '@/lib/app-errors';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -19,7 +20,11 @@ export class ErrorBoundary extends React.Component<
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
+    // 使用统一的错误报告系统
+    reportError(error, {
+      componentStack: errorInfo.componentStack,
+      context: 'ErrorBoundary'
+    });
   }
 
   override render() {

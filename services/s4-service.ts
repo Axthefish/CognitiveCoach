@@ -3,44 +3,24 @@
 import { NextResponse } from 'next/server';
 import {
   AnalyzeProgressSchema,
-  type ActionPlan,
-  type KnowledgeFramework,
   type AnalyzeProgress,
 } from '@/lib/schemas';
-import { generateJson, generateText } from '@/lib/gemini-config';
+import type { AnalyzeProgressPayload, ConsultPayload } from '@/lib/api-types';
+import { generateJsonWithRetry } from '@/lib/ai-retry-handler';
+import { generateText } from '@/lib/gemini-config';
 import { S4_PROMPTS } from '@/lib/prompts/s4-prompts';
-import { createStageError, handleError, serializeErrorDetailsSecurely } from '@/lib/app-errors';
+import { createStageError, handleError } from '@/lib/app-errors';
 import { runQualityGates } from '@/lib/qa';
 import { logger } from '@/lib/logger';
-import { createErrorResponse, createSuccessResponse } from '@/lib/error-utils';
-
-export interface AnalyzeProgressPayload {
-  progressData: {
-    completedTasks?: string[];
-    confidenceScore?: number;
-    hoursSpent?: number;
-    challenges?: string;
-  };
-  userContext: {
-    userGoal: string;
-    actionPlan: ActionPlan;
-    kpis: string[];
-    strategySpec?: { metrics?: Array<{ metricId: string }> };
-  };
-}
-
-export interface ConsultPayload {
-  question: string;
-  userContext: {
-    userGoal: string;
-    knowledgeFramework: KnowledgeFramework;
-    actionPlan: ActionPlan;
-    systemDynamics?: {
-      mermaidChart: string;
-      metaphor: string;
-    };
-  };
-}
+import { createSuccessResponse } from '@/lib/error-utils';
+import { handleNoApiKeyResult } from '@/lib/api-fallback';
+import { 
+  handleSchemaValidation,
+  handleQAValidation,
+  validateObject,
+  validateStringField,
+  validateArrayField
+} from '@/lib/service-utils';
 
 export class S4Service {
   private static instance: S4Service;
@@ -84,56 +64,51 @@ export class S4Service {
         kpis: payload.userContext.kpis,
       });
 
-      const config = S4_PROMPTS.getGenerationConfig();
-
-      // 调用 AI 生成分析
-      const result = await generateJson<AnalyzeProgress>(prompt, config, 'Pro');
+      // 使用带重试的版本调用 AI 生成分析
+      const result = await generateJsonWithRetry<AnalyzeProgress>(
+        prompt,
+        this.validateAnalyzeProgress,
+        {
+          maxRetries: 3,
+          onRetry: (attempt, error) => {
+            logger.warn(`S4 analyzeProgress retry attempt ${attempt}:`, { error });
+          }
+        },
+        'Pro',
+        's4'
+      );
 
       if (!result.ok) {
-        const errorMessage =
-          result.error === 'EMPTY_RESPONSE'
-            ? '抱歉，AI暂时无法分析您的进度。请稍后重试。'
-            : '进度分析遇到问题，请检查输入数据并重试。';
+        logger.error('AI call failed:', {
+          error: result.error,
+          attempts: result.attempts
+        });
 
-        logger.error('AI call failed:', result.error);
+        // Handle NO_API_KEY error with unified fallback
+        const noApiKeyResponse = handleNoApiKeyResult(result, 's4');
+        if (noApiKeyResponse) {
+          return noApiKeyResponse;
+        }
 
-        return createErrorResponse(errorMessage, 400, {
-          stage: 'S4',
-          details: serializeErrorDetailsSecurely(result.error) as string | undefined,
+        throw createStageError.s4('Failed to analyze progress', {
+          error: result.error,
+          attempts: result.attempts,
         });
       }
 
       // Schema 验证
       const validationResult = AnalyzeProgressSchema.safeParse(result.data);
-      if (!validationResult.success) {
-        logger.error('Schema validation failed:', validationResult.error);
-        return createErrorResponse(
-          'Schema validation failed for S4 output',
-          400,
-          {
-            stage: 'S4',
-            details: JSON.stringify(validationResult.error.issues),
-          }
-        );
-      }
+      const analysisData = handleSchemaValidation(validationResult, 's4', result.data);
 
       // 质量门控（S3->S4 linkage）
-      const qaResult = runQualityGates('S4', validationResult.data, {
+      const qaResult = runQualityGates('S4', analysisData, {
         strategyMetrics: payload.userContext.strategySpec?.metrics || [],
       });
-
-      if (!qaResult.passed) {
-        logger.warn('Quality gates failed:', qaResult.issues);
-        return createErrorResponse('Quality gates failed', 400, {
-          stage: 'S4',
-          fixHints: qaResult.issues.map((i) => i.hint),
-          details: JSON.stringify(qaResult.issues),
-        });
-      }
+      handleQAValidation(qaResult, 'S4');
 
       logger.info('S4 progress analysis successful');
 
-      return createSuccessResponse(validationResult.data);
+      return createSuccessResponse(analysisData);
     } catch (error) {
       logger.error('S4Service.analyzeProgress error:', error);
       return handleError(error, 'S4');
@@ -178,9 +153,15 @@ export class S4Service {
 
       if (!result.ok) {
         logger.error('AI call failed:', result.error);
-        return createErrorResponse('Failed to get consultation response', 400, {
-          stage: 'S4',
-          details: result.error,
+
+        // Handle NO_API_KEY error with unified fallback
+        const noApiKeyResponse = handleNoApiKeyResult(result, 's4');
+        if (noApiKeyResponse) {
+          return noApiKeyResponse;
+        }
+
+        throw createStageError.s4('Failed to get consultation response', {
+          error: result.error,
         });
       }
 
@@ -191,6 +172,31 @@ export class S4Service {
       logger.error('S4Service.consult error:', error);
       return handleError(error, 'S4');
     }
+  }
+
+  /**
+   * 验证进度分析响应格式
+   * 使用通用验证辅助函数减少重复代码
+   */
+  private validateAnalyzeProgress(data: unknown): data is AnalyzeProgress {
+    const obj = validateObject(data);
+    if (!obj) return false;
+    
+    // 验证必需的 analysis 字符串
+    if (!validateStringField(obj, 'analysis', { required: true, minLength: 1 })) {
+      return false;
+    }
+    
+    // 验证必需的 suggestions 数组
+    if (!validateArrayField(obj, 'suggestions', {
+      required: true,
+      minLength: 1,
+      elementValidator: (s) => typeof s === 'string' && s.length > 0
+    })) {
+      return false;
+    }
+    
+    return true;
   }
 }
 

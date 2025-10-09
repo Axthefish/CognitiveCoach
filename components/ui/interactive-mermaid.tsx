@@ -7,6 +7,7 @@ import { useCognitiveCoachStore } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Lightbulb, Eye, EyeOff, HelpCircle, Zap } from "lucide-react"
+import { reportError } from "@/lib/app-errors"
 
 mermaid.initialize({
   startOnLoad: false,
@@ -136,7 +137,11 @@ export function InteractiveMermaid({
         lastGoodSvgRef.current = svg
         setRenderWarning(null)
       } catch (error) {
-        console.error("Mermaid rendering failed:", error)
+        // 使用统一的错误报告系统
+        reportError(error instanceof Error ? error : new Error(String(error)), {
+          context: 'MermaidRendering',
+          chart: processedChart?.substring(0, 200)
+        });
         // Fallback to last good SVG to avoid blank
         if (lastGoodSvgRef.current) {
           setSvg(lastGoodSvgRef.current)

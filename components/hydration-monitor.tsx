@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from 'react';
-import { markHydrationComplete, getHydrationState } from '@/lib/hydration-safe';
+import { markHydrationComplete, getHydrationState, hydrationSafeLog } from '@/lib/hydration-safe';
 
 /**
  * HydrationMonitor - 全局hydration状态监控组件
@@ -26,8 +26,8 @@ export function HydrationMonitor() {
     
     // 开发模式下的调试信息
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔧 HydrationMonitor: Hydration completed successfully');
-      console.log('🔧 Current hydration state:', getHydrationState());
+      hydrationSafeLog('🔧 HydrationMonitor: Hydration completed successfully');
+      hydrationSafeLog('🔧 Current hydration state:', getHydrationState());
       
       // 监听页面卸载，重置状态
       const handleBeforeUnload = () => {

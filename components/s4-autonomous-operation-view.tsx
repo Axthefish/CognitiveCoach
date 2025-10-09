@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, Target, MessageSquarePlus, Send, X, BarChart3, Zap } from "lucide-react"
 import { useCognitiveCoachStore } from "@/lib/store"
-import { enhancedFetch, NetworkError } from "@/lib/network-utils"
+import { enhancedFetch, NetworkError } from "@/lib/error-utils"
 
 export default function S4AutonomousOperationView() {
   const { userContext, resetStore } = useCognitiveCoachStore()
@@ -135,7 +135,7 @@ export default function S4AutonomousOperationView() {
       }
     } catch (error) {
       // Error consulting - 错误处理已在上面的条件中处理
-      if (error instanceof Error && 'type' in error) {
+      if (error && typeof error === 'object' && 'type' in error && 'retryable' in error) {
         const networkError = error as NetworkError;
         if (networkError.type === 'timeout') {
           setConsultResponse('咨询请求超时，请稍后重试。');

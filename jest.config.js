@@ -19,7 +19,7 @@ module.exports = {
     '!**/node_modules/**',
     '!**/.next/**',
   ],
-  coverageThresholds: {
+  coverageThreshold: {
     global: {
       branches: 50,
       functions: 50,

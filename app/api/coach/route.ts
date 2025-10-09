@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CoachRequestSchema, KnowledgeFramework, ActionPlan } from '@/lib/schemas';
 import { handleOptions, withCors } from '@/lib/cors';
-import { buildRateKey, checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { serializeErrorDetailsSecurely } from '@/lib/app-errors';
+import {
+  extractRequestInfo,
+  checkRequestRateLimit,
+  validateRequestBody,
+  logRequestCompletion,
+} from '@/lib/api-middleware';
 
 // 导入所有服务
 import { S0Service } from '@/services/s0-service';
@@ -12,104 +16,87 @@ import { S2Service } from '@/services/s2-service';
 import { S3Service } from '@/services/s3-service';
 import { S4Service } from '@/services/s4-service';
 
-// API请求的action类型
-type CoachAction = 
-  | 'refineGoal'
-  | 'generateFramework'
-  | 'generateSystemDynamics'
-  | 'generateActionPlan'
-  | 'analyzeProgress'
-  | 'consult';
-
-// 请求体接口
-type RefineGoalPayload = { userInput: string; conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> };
-type GenerateFrameworkPayload = { userGoal: string; decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan'; runTier?: 'Lite'|'Pro'|'Review'; riskPreference?: 'low' | 'medium' | 'high'; seed?: number };
-type GenerateSystemDynamicsPayload = { framework: KnowledgeFramework; decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan'; runTier?: 'Lite'|'Pro'|'Review'; riskPreference?: 'low' | 'medium' | 'high'; seed?: number };
-type GenerateActionPlanPayload = { userGoal: string; framework: KnowledgeFramework; systemNodes?: Array<{ id: string; title?: string }>; decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan'; runTier?: 'Lite'|'Pro'|'Review'; riskPreference?: 'low' | 'medium' | 'high'; seed?: number };
-type AnalyzeProgressPayload = { progressData: { completedTasks?: string[]; confidenceScore?: number; hoursSpent?: number; challenges?: string; }; userContext: { userGoal: string; actionPlan: ActionPlan; kpis: string[]; strategySpec?: { metrics?: Array<{ metricId: string; confidence?: number; evidence?: unknown[] }> } } };
-type ConsultPayload = { question: string; userContext: { userGoal: string; knowledgeFramework: KnowledgeFramework; actionPlan: ActionPlan; systemDynamics?: { mermaidChart: string; metaphor: string } } };
-
-type CoachPayload = RefineGoalPayload | GenerateFrameworkPayload | GenerateSystemDynamicsPayload | GenerateActionPlanPayload | AnalyzeProgressPayload | ConsultPayload;
-
-interface CoachRequest {
-  action: CoachAction;
-  payload: CoachPayload;
-}
-
-// 响应体接口
-interface CoachResponse {
-  status: 'success' | 'error';
-  data?: unknown;
-  error?: string;
-}
+// 使用共享的API类型定义，消除重复
+import type {
+  CoachResponse,
+  RefineGoalPayload,
+  GenerateFrameworkPayload,
+  GenerateSystemDynamicsPayload,
+  GenerateActionPlanPayload,
+  AnalyzeProgressPayload,
+  ConsultPayload,
+} from '@/lib/api-types';
 
 // 主处理函数
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get('origin');
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
-  const rateKey = buildRateKey(ip, '/api/coach');
-  const rl = checkRateLimit(rateKey);
+  const startTime = Date.now(); // 记录请求开始时间
+  
+  const { origin, ip } = extractRequestInfo(request);
+  
+  // Rate limiting检查
+  const rl = checkRequestRateLimit(ip, '/api/coach');
   if (!rl.allowed) {
     const res = NextResponse.json({ status: 'error', error: 'Too Many Requests' });
     res.headers.set('Retry-After', String(rl.retryAfter ?? 60));
     return withCors(res, origin);
   }
-  let body: CoachRequest | undefined;
+  
+  // Schema验证
+  const validation = await validateRequestBody(request);
+  if (!validation.valid) {
+    const res = NextResponse.json({ 
+      status: 'error', 
+      error: validation.error?.message || '请求验证失败',
+      code: validation.error?.code,
+      details: serializeErrorDetailsSecurely(validation.error?.issues),
+    } as CoachResponse, { status: 400 });
+    return withCors(res, origin);
+  }
+  
+  const body = validation.request!;
   
   try {
-    const json = await request.json();
-    
-    // 记录请求（生产环境不包含敏感数据）
-    logger.debug('Received request body:', { action: json?.action });
-    
-    const parsed = CoachRequestSchema.safeParse(json);
-    if (!parsed.success) {
-      // 记录验证失败
-      logger.error('Schema validation failed:', {
-        action: json?.action,
-        errorCount: parsed.error.issues.length,
-        firstError: parsed.error.issues[0]?.message
-      });
-      
-      const validationDetails = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
-      const res = NextResponse.json({ 
-        status: 'error', 
-        error: '请求格式不正确，请检查您的输入并重试', 
-        details: serializeErrorDetailsSecurely(validationDetails),
-        receivedData: serializeErrorDetailsSecurely(json) // 安全处理接收到的数据
-      } as CoachResponse, { status: 400 });
-      return withCors(res, origin);
-    }
-    body = parsed.data as unknown as CoachRequest;
     
     const { action, payload } = body;
 
     // 根据action调用对应的处理器
+    let response: NextResponse;
     switch (action) {
       case 'refineGoal':
-        return withCors(await handleRefineGoal(payload as RefineGoalPayload), origin);
+        response = await handleRefineGoal(payload as RefineGoalPayload);
+        break;
       
       case 'generateFramework':
-        return withCors(await handleGenerateFramework(payload as GenerateFrameworkPayload), origin);
+        response = await handleGenerateFramework(payload as GenerateFrameworkPayload);
+        break;
       
       case 'generateSystemDynamics':
-        return withCors(await handleGenerateSystemDynamics(payload as GenerateSystemDynamicsPayload), origin);
+        response = await handleGenerateSystemDynamics(payload as GenerateSystemDynamicsPayload);
+        break;
       
       case 'generateActionPlan':
-        return withCors(await handleGenerateActionPlan(payload as GenerateActionPlanPayload), origin);
+        response = await handleGenerateActionPlan(payload as GenerateActionPlanPayload);
+        break;
       
       case 'analyzeProgress':
-        return withCors(await handleAnalyzeProgress(payload as AnalyzeProgressPayload), origin);
+        response = await handleAnalyzeProgress(payload as AnalyzeProgressPayload);
+        break;
       
       case 'consult':
-        return withCors(await handleConsult(payload as ConsultPayload), origin);
+        response = await handleConsult(payload as ConsultPayload);
+        break;
       
       default:
-        return withCors(NextResponse.json(
+        response = NextResponse.json(
           { status: 'error', error: '不支持的操作类型，请联系技术支持' } as CoachResponse,
           { status: 400 }
-        ), origin);
+        );
     }
+    
+    // 记录API请求完成
+    logRequestCompletion(action, startTime, response.status, ip);
+    
+    return withCors(response, origin);
   } catch (error) {
     logger.error('API Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
