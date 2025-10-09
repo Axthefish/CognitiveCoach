@@ -172,9 +172,11 @@ export default function S2SystemDynamicsView({ onProceed }: S2SystemDynamicsView
             )
           })()}
 
-          {/* Collapsible: System Graph */}
-          <details className="mt-2">
-            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-300">查看全景系统图</summary>
+          {/* Collapsible: System Graph - 默认展开 */}
+          <details className="mt-2" open>
+            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+              全景系统图（点击可收起）
+            </summary>
             <div className="mt-3">
               <Card>
                 <CardContent className="p-4">

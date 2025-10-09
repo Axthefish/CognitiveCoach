@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { normalizeId } from "@/lib/qa"
 import { CognitiveStreamAnimator } from "@/components/cognitive-stream-animator"
 import { StreamResponseData } from "@/lib/schemas"
+import { reportError } from "@/lib/app-errors"
 
 interface S3ActionPlanViewProps {
   onProceed: () => void
@@ -23,12 +24,33 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     isLoading, 
     setQaIssues,
     selectedNodeId,
+    setLoading,
   } = useCognitiveCoachStore()
   const [currentStep, setCurrentStep] = useState(0)
   const [completedSteps, setCompletedSteps] = useState<string[]>([])
   const [alternativeOptions, setAlternativeOptions] = useState<string[]>([])
   const [showCelebrate, setShowCelebrate] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  
+  // 生命周期管理
+  const isMountedRef = useRef(true)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 组件挂载时的生命周期管理
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    // 清理函数
+    return () => {
+      isMountedRef.current = false;
+      
+      // 清理超时定时器
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // 处理流式生成完成
   const handleStreamComplete = (data: StreamResponseData) => {
@@ -54,6 +76,9 @@ function S3ActionPlanView({ onProceed }: S3ActionPlanViewProps) {
     if (!isMountedRef.current) {
       return;
     }
+    
+    // 获取 actionPlan 用于错误报告
+    const actionPlan = userContext.actionPlan || [];
     
     // 报告错误
     reportError(new Error(msg), {

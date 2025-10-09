@@ -7,20 +7,7 @@ import dynamic from 'next/dynamic';
 
 const S1KnowledgeFrameworkView = dynamic(
   () => import('@/components/s1-knowledge-framework-view'),
-  { 
-    ssr: false,
-    loading: () => (
-      <div className="animate-fade-in">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">S1：知识框架构建</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-8">
-          正在加载知识框架模块...
-        </p>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    )
-  }
+  { ssr: false }
 );
 const S2SystemDynamicsView = dynamic(
   () => import('@/components/s2-system-dynamics-view'),

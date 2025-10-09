@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCognitiveCoachStore } from '@/lib/store';
 
 /**
- * 加载进度管理 Hook
+ * 加载进度管理 Hook (v2 - 从全局store读取)
  * 
  * 功能：
  * - 平滑的进度数字动画
- * - 基于认知步骤计算真实进度
+ * - 从全局store读取进度，避免组件重新挂载导致重置
  * - 支持自定义帧率和速度
  */
 
@@ -30,22 +31,10 @@ export function useLoadingProgress(
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
 
-  // 计算真实进度
-  const calculateProgress = useCallback(() => {
-    const total = cognitiveSteps.length;
-    if (total === 0) return null;
-    
-    const completed = cognitiveSteps.filter(s => s.status === 'completed').length;
-    const inProgress = cognitiveSteps.filter(s => s.status === 'in_progress').length;
-    
-    // 真实进度计算（completed全算，in_progress算50%）
-    const realProgress = Math.min(99, Math.round(((completed + inProgress * 0.5) / total) * 100));
-    return realProgress;
-  }, [cognitiveSteps]);
+  // 从store读取全局进度状态
+  const targetProgress = useCognitiveCoachStore(state => state.streaming.loadingProgress);
 
-  const targetProgress = calculateProgress();
-
-  // 平滑进度动画
+  // 平滑进度动画 - 改进：避免从null突变到目标值
   const animate = useCallback((timestamp: number) => {
     if (lastTimeRef.current === 0) {
       lastTimeRef.current = timestamp;
@@ -56,7 +45,11 @@ export function useLoadingProgress(
     if (elapsed >= frameMs) {
       setDisplayProgress(prevValue => {
         if (targetProgress === null) return null;
-        if (prevValue === null) return targetProgress;
+        
+        // 改进：第一次从null到有值时，使用较小的初始值平滑过渡
+        if (prevValue === null) {
+          return Math.min(targetProgress, 5); // 从5%开始，避免突变
+        }
         
         const delta = targetProgress - prevValue;
         if (Math.abs(delta) < 0.5) {

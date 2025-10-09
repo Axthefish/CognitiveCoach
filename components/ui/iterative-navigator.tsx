@@ -71,6 +71,7 @@ export function IterativeNavigator({
   const [showPreview, setShowPreview] = React.useState(false)
   const [previewStage, setPreviewStage] = React.useState<Stage | null>(null)
   const [showOnboardTip, setShowOnboardTip] = React.useState(false)
+  const [showNavigationTip, setShowNavigationTip] = React.useState(false)
 
   const activeIndex = stages.findIndex(s => s.id === currentState)
   const activeStage = stages[activeIndex]
@@ -90,7 +91,9 @@ export function IterativeNavigator({
     if (savedDensity === 'compact' || savedDensity === 'standard') setDensity(savedDensity)
     const onboardSeen = window.localStorage.getItem('iterativeNavigatorOnboardV1')
     setShowOnboardTip(onboardSeen !== '1')
-  }, [])
+    const navTipSeen = window.localStorage.getItem('iterativeNavigatorNavTipV1')
+    setShowNavigationTip(navTipSeen !== '1' && completedStages.length > 0)
+  }, [completedStages.length])
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
@@ -277,6 +280,32 @@ export function IterativeNavigator({
               style={{ width: `${progressPercent}%` }}
             />
           </div>
+          
+          {/* 导航功能使用提示 */}
+          {showNavigationTip && !collapsed && completedStages.length > 0 && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600 dark:text-blue-400 mt-0.5">💡</span>
+                  <div className="text-sm text-blue-900 dark:text-blue-200">
+                    <strong>提示：</strong>点击已完成阶段右侧的按钮可以<strong>返回查看</strong>或<strong>重新优化</strong>内容
+                  </div>
+                </div>
+                <button
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex-shrink-0"
+                  onClick={() => {
+                    setShowNavigationTip(false)
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('iterativeNavigatorNavTipV1', '1')
+                    }
+                  }}
+                  aria-label="关闭提示"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           {collapsed && activeStage && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
               当前：{activeStage.name}
@@ -346,10 +375,11 @@ export function IterativeNavigator({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => onNavigate(stage.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                 title="返回此阶段"
                               >
-                                <ArrowLeft className="w-4 h-4" />
+                                <ArrowLeft className="w-4 h-4 mr-1" />
+                                <span className="text-xs">返回</span>
                               </Button>
                             )}
                             
@@ -358,10 +388,11 @@ export function IterativeNavigator({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => onRefine(stage.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                                 title="优化此阶段"
                               >
-                                <RotateCcw className="w-4 h-4" />
+                                <RotateCcw className="w-4 h-4 mr-1" />
+                                <span className="text-xs">优化</span>
                               </Button>
                             )}
                             {status === 'completed' && (
@@ -369,10 +400,11 @@ export function IterativeNavigator({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => { setPreviewStage(stage); setShowPreview(true) }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                                 title="查看结果"
                               >
-                                <Eye className="w-4 h-4" />
+                                <Eye className="w-4 h-4 mr-1" />
+                                <span className="text-xs">预览</span>
                               </Button>
                             )}
                           </div>

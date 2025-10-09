@@ -100,6 +100,7 @@ interface StreamingState {
   streamError: string | null;
   abortController: AbortController | null; // 用于中断正在进行的请求
   isNavigating: boolean; // 标志位：防止在导航期间启动新请求
+  loadingProgress: number | null; // 全局进度状态（0-100）
 }
 
 // Store接口
@@ -176,6 +177,7 @@ const initialStreamingState: StreamingState = {
   streamError: null,
   abortController: null,
   isNavigating: false,
+  loadingProgress: null,
 };
 
 // 创建Zustand store
@@ -353,6 +355,7 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
           streamError: null,
           abortController, // 保存 controller 引用（向后兼容）
           isNavigating: false,
+          loadingProgress: 0, // 重置进度为0开始新阶段
         },
         isLoading: true,
         error: null,
@@ -380,12 +383,25 @@ export const useCognitiveCoachStore = create<CognitiveCoachStore>((set, get) => 
   },
 
   updateCognitiveSteps: (steps) => 
-    set((state) => ({
-      streaming: {
-        ...state.streaming,
-        cognitiveSteps: steps,
-      },
-    })),
+    set((state) => {
+      // 自动计算进度
+      const total = steps.length;
+      let progress: number | null = null;
+      
+      if (total > 0) {
+        const completed = steps.filter(s => s.status === 'completed').length;
+        const inProgress = steps.filter(s => s.status === 'in_progress').length;
+        progress = Math.min(99, Math.round(((completed + inProgress * 0.5) / total) * 100));
+      }
+      
+      return {
+        streaming: {
+          ...state.streaming,
+          cognitiveSteps: steps,
+          loadingProgress: progress,
+        },
+      };
+    }),
 
   appendStreamContent: (content) => 
     set((state) => ({
