@@ -637,10 +637,11 @@ async function handleGenerateSystemDynamicsStream(
     // Extract all S1 framework IDs for coverage requirement
     const extractFrameworkIds = (framework: KnowledgeFramework | FrameworkNode): string[] => {
       const ids: string[] = [];
-      const walk = (node: FrameworkNode) => {
+      const walk = (node: unknown) => {
         if (!node || typeof node !== 'object') return;
-        if (typeof node.id === 'string') ids.push(node.id);
-        if (Array.isArray(node.children)) node.children.forEach(walk);
+        const n = node as { id?: string; children?: unknown[] };
+        if (typeof n.id === 'string') ids.push(n.id);
+        if (Array.isArray(n.children)) n.children.forEach(walk);
       };
       if (Array.isArray(framework)) framework.forEach(walk);
       else walk(framework);
