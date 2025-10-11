@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface EnhancedProgressIndicatorProps {
   progress: number;
@@ -15,22 +15,32 @@ export function EnhancedProgressIndicator({
   showMilestones = true,
   variant = 'wave'
 }: EnhancedProgressIndicatorProps) {
-  const [displayProgress, setDisplayProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(progress);
   const [pulseIntensity, setPulseIntensity] = useState(0);
+  const prevProgressRef = useRef(progress);
 
-  // Smooth progress animation
+  // Smooth progress animation - 避免重置和跳跃
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // 如果进度值真的发生了变化（非组件重新挂载）
+    if (prevProgressRef.current !== progress) {
+      const timer = setTimeout(() => {
+        setDisplayProgress(progress);
+      }, 50); // 缩短延迟，使动画更流畅
+      prevProgressRef.current = progress;
+      return () => clearTimeout(timer);
+    } else if (displayProgress !== progress) {
+      // 组件重新挂载但progress相同时，直接同步
       setDisplayProgress(progress);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [progress]);
+    }
+  }, [progress, displayProgress]);
 
-  // Pulse effect on progress change
+  // Pulse effect on progress change - 仅在实际变化时触发
   useEffect(() => {
-    setPulseIntensity(1);
-    const timer = setTimeout(() => setPulseIntensity(0), 300);
-    return () => clearTimeout(timer);
+    if (prevProgressRef.current !== progress && progress > 0) {
+      setPulseIntensity(1);
+      const timer = setTimeout(() => setPulseIntensity(0), 300);
+      return () => clearTimeout(timer);
+    }
   }, [progress]);
 
   // Milestones for different stages

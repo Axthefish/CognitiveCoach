@@ -149,14 +149,11 @@ export default function ClientPage() {
           />
         )}
 
-        {/* 根据上下文显示不同的全局加载覆盖（错误优先，避免与加载并存） */}
-        {isLoading && !error && (
+        {/* 全局加载覆盖仅用于阻塞性质的QA问题，正常加载由各Stage组件内部处理 */}
+        {isLoading && !error && (qaIssues.length > 0 || userContext.requiresHumanReview) && (
           <LoadingOverlay 
             stage={streaming.currentStage || 'S0'} 
-            variant={
-              // 如果有 QA 问题或需要人工审核，显示阻塞版本
-              qaIssues.length > 0 || userContext.requiresHumanReview ? 'blocking' : 'inline'
-            }
+            variant="blocking"
             onRetry={() => {
               // 重试逻辑
               if (lastFailedStage) {
