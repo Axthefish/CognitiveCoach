@@ -54,7 +54,8 @@ export default function ClientPage() {
   const { 
     setError,
     navigateToStage,
-    startIterativeRefinement
+    startIterativeRefinement,
+    startStreaming
   } = useCognitiveCoachStore();
   
 
