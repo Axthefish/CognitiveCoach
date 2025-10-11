@@ -140,6 +140,7 @@ export function CognitiveStreamAnimator({
       {currentTip && (
         <MicroLearningTip
           tip={currentTip}
+          stage={stage}
           className="mb-6"
         />
       )}

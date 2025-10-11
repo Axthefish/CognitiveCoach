@@ -6,9 +6,10 @@ import { Lightbulb } from 'lucide-react';
 interface MicroLearningTipProps {
   tip: string;
   stage: 'S0' | 'S1' | 'S2' | 'S3' | 'S4';
+  className?: string;
 }
 
-export function MicroLearningTip({ tip, stage }: MicroLearningTipProps) {
+export function MicroLearningTip({ tip, stage, className }: MicroLearningTipProps) {
   const getStageColor = (stage: string) => {
     switch (stage) {
       case 'S0':
@@ -57,7 +58,7 @@ export function MicroLearningTip({ tip, stage }: MicroLearningTipProps) {
   const colors = getStageColor(stage);
 
   return (
-    <div className={`${colors.bg} ${colors.border} border rounded-lg p-4 animate-fade-in`}>
+    <div className={`${colors.bg} ${colors.border} border rounded-lg p-4 animate-fade-in ${className || ''}`}>
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
           <Lightbulb className={`w-5 h-5 ${colors.icon}`} />
