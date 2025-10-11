@@ -15,9 +15,10 @@ interface CognitiveStep {
 
 interface CognitiveProcessIndicatorProps {
   steps: CognitiveStep[];
+  className?: string;
 }
 
-export function CognitiveProcessIndicator({ steps }: CognitiveProcessIndicatorProps) {
+export function CognitiveProcessIndicator({ steps, className }: CognitiveProcessIndicatorProps) {
   const getStepIcon = (status: CognitiveStepStatus) => {
     switch (status) {
       case 'completed':
@@ -62,7 +63,7 @@ export function CognitiveProcessIndicator({ steps }: CognitiveProcessIndicatorPr
   };
 
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${className || ''}`}>
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
         🧠 AI 认知过程
       </h3>
