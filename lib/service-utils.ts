@@ -33,7 +33,7 @@ import type { QualityGateResult } from './qa';
  * ```
  */
 export function handleSchemaValidation<T>(
-  result: z.SafeParseReturnType<unknown, T>,
+  result: { success: true; data: T } | { success: false; error: z.ZodError },
   stage: 's0' | 's1' | 's2' | 's3' | 's4',
   data?: unknown
 ): T {

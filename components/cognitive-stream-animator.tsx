@@ -151,7 +151,7 @@ export function CognitiveStreamAnimator({
           {content ? (
             <TypewriterContent content={content} />
           ) : (
-            <ContentSkeleton />
+            <ContentSkeleton stage={stage} />
           )}
         </div>
       )}

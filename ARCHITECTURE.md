@@ -1,8 +1,189 @@
 # CognitiveCoach 架构文档
 
-> 基于 AI 的认知学习助手，通过 S0-S4 五阶段框架引导结构化学习旅程
+> 基于 AI 的认知学习助手，采用"**通用框架 + 个性化补充**"理念
 
-**版本**: 1.10  
+**当前版本**: V2.0  
+**最后更新**: 2025-01-15  
+
+---
+
+## 🎉 V2.0 架构 (Current)
+
+### 核心理念变更
+
+**从线性流程到目的驱动**
+
+| 维度 | V1 (Legacy) | V2 (Current) |
+|------|------------|-------------|
+| **阶段数** | 5个阶段 (S0-S4) | 3个阶段 (Stage 0-2) |
+| **核心理念** | 线性渐进式 | 通用框架 + 个性化 |
+| **交互方式** | 表单 + 图表 | 对话 + 可视化 |
+| **权重系统** | 无 | 基于目的的动态权重 (0-100%) |
+| **视觉呈现** | Mermaid 流程图 | ECharts 逻辑流程图 |
+| **个性化** | 最后阶段 | 贯穿全流程 |
+
+### V2 架构概览
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Stage 0: 目的澄清与问题域框定                        │
+│  - 对话式交互 (ChatBox)                               │
+│  - 多轮追问与确认                                     │
+│  - 输出: PurposeDefinition                           │
+└──────────────────┬──────────────────────────────────┘
+                   │
+                   ↓
+┌─────────────────────────────────────────────────────┐
+│  Stage 1: 通用框架生成与可视化                        │
+│  - 基于目的生成带权重的框架                           │
+│  - 权重计算: necessity×0.4 + impact×0.3 + timeROI×0.3│
+│  - 逻辑流程图展示 (ECharts)                          │
+│  - Pause 机制（给用户思考时间）                       │
+│  - 输出: UniversalFramework                          │
+└──────────────────┬──────────────────────────────────┘
+                   │
+                   ↓
+┌─────────────────────────────────────────────────────┐
+│  Stage 2: 动态信息收集与个性化方案生成                │
+│  - 左侧: ChatBox（动态问题）                         │
+│  - 右侧: LogicFlowChart（实时更新）                  │
+│  - 分析缺失信息 → 提问 → 调整权重 → 生成方案         │
+│  - 输出: PersonalizedPlan                            │
+└─────────────────────────────────────────────────────┘
+```
+
+### V2 核心特性
+
+#### 1. 权重计算系统
+
+```typescript
+// 三维度评估
+weight = (necessity × 0.4) + (impact × 0.3) + (timeROI × 0.3)
+
+// 四级颜色编码
+深蓝色 (90-100%): 核心必修
+蓝色   (70-89%):  重要推荐
+浅蓝色 (50-69%):  可选增强
+灰色   (<50%):    低优先级
+```
+
+#### 2. 新文件结构
+
+```
+V2 新增文件 (~24个, ~3300行):
+├── lib/
+│   ├── types-v2.ts              # V2 类型系统
+│   ├── store-v2.ts              # V2 状态管理
+│   ├── weight-calculator.ts     # 权重计算算法
+│   └── prompts/
+│       ├── stage0-prompts.ts
+│       ├── stage1-prompts.ts
+│       ├── stage2-prompts.ts
+│       └── testing/             # Prompt测试套件
+│
+├── components/
+│   ├── stage0-view.tsx          # 目的澄清视图
+│   ├── stage1-view.tsx          # 框架展示视图
+│   ├── stage2-view.tsx          # 个性化视图
+│   ├── chat-interface/          # 对话组件（4个文件）
+│   └── logic-flow-chart/        # 逻辑流程图（4个文件）
+│
+├── services/
+│   ├── stage0-service.ts        # 目的澄清服务
+│   ├── stage1-service.ts        # 框架生成服务
+│   └── stage2-service.ts        # 个性化服务
+│
+├── app/
+│   ├── client-page-v2.tsx       # V2 主页面
+│   └── api/
+│       ├── stage0/route.ts
+│       ├── stage1/route.ts
+│       └── stage2/route.ts
+│
+└── 文档
+    ├── IMPLEMENTATION_SUMMARY.md
+    └── QUICKSTART_V2.md
+```
+
+#### 3. V2 数据流
+
+```
+用户输入
+  ↓
+Stage0Service.processInitialInput()
+  ↓
+多轮对话 (对话状态机)
+  ↓
+PurposeDefinition (置信度 > 0.8)
+  ↓
+Stage1Service.generateFramework()
+  ↓
+AI生成框架 + 权重计算
+  ↓
+UniversalFramework (带权重的节点图)
+  ↓
+Pause（用户思考）
+  ↓
+Stage2Service.analyzeMissingInfo()
+  ↓
+生成动态问题 (3-5个)
+  ↓
+收集用户回答
+  ↓
+Stage2Service.generatePersonalizedPlan()
+  ↓
+调整框架权重 + 生成行动步骤
+  ↓
+PersonalizedPlan (完整方案)
+```
+
+#### 4. V2 API 端点
+
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/api/stage0` | POST | 目的澄清（支持 initial/continue/confirm） |
+| `/api/stage1` | POST | 生成通用框架 |
+| `/api/stage2` | POST | 分析缺失信息 (analyze) / 生成方案 (generate) |
+| `/api/health` | GET | 健康检查 |
+
+### V2 技术亮点
+
+1. **对话状态机** (Stage 0)
+   - 多轮追问策略
+   - 置信度评估
+   - 动态确认机制
+
+2. **权重计算算法** (Stage 1)
+   - 三维度评估（必要性、影响力、时间ROI）
+   - 权重分布验证
+   - 自动颜色映射
+
+3. **动态问题生成** (Stage 2)
+   - 基于框架分析缺失信息
+   - 4种问题类型（baseline, resource, context, motivation）
+   - 影响力排序
+
+4. **实时框架更新** (Stage 2)
+   - 分屏布局
+   - 左侧对话 + 右侧可视化
+   - 基于用户回答动态调整权重
+
+### 迁移说明
+
+**从 V1 迁移到 V2**:
+- ✅ V1 代码已完整保留（下文）
+- ✅ V2 作为默认版本（`app/page.tsx` 使用 `ClientPageV2`）
+- ✅ V1 和 V2 可共存（通过切换入口文件）
+- ⚠️ V1 Service/View/Prompts 已移除，仅保留架构文档用于参考
+
+---
+
+## 📋 V1 架构文档 (Legacy - 仅供参考)
+
+> **注意**: 以下内容为 V1 架构的完整文档，保留用于技术参考和版本对比。  
+> **当前生产环境使用 V2 架构**。
+
+**V1 版本**: 1.10  
 **最后更新**: 2025-10-09  
 **代码清理优化**: 
 - 2025-10-09 v1.1（删除死代码、统一错误处理、API middleware抽取）

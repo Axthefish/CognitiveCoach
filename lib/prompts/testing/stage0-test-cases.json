@@ -1,0 +1,206 @@
+{
+  "description": "Stage 0 (目的澄清) Prompt 测试用例",
+  "version": "1.0.0",
+  "test_cases": [
+    {
+      "id": "tc001",
+      "category": "技能学习",
+      "scenario": "模糊表达 - 单个词汇",
+      "user_input": "我想学Python",
+      "expected_analysis": {
+        "possible_domains": [
+          "编程语言学习",
+          "技能提升",
+          "职业发展"
+        ],
+        "possible_purposes": [
+          "数据分析工具需求",
+          "职业转型",
+          "自动化工作流程",
+          "纯粹兴趣学习"
+        ]
+      },
+      "expected_questions": [
+        "学习Python主要是为了什么？有具体的应用场景吗？",
+        "你目前的编程基础如何？",
+        "是工作需要还是个人兴趣？"
+      ],
+      "expected_clarification_rounds": 2-3,
+      "expected_final_output": {
+        "clarified_purpose": "学习Python用于数据分析，提升工作效率",
+        "problem_domain": "Python编程学习（数据分析方向）",
+        "domain_boundary": "包括：Python基础语法、数据处理库（pandas, numpy）、数据可视化；不包括：Web开发、机器学习建模、算法竞赛",
+        "key_constraints": [
+          "零编程基础",
+          "每周5-10小时学习时间",
+          "工作中有实际数据集可练习"
+        ]
+      }
+    },
+    {
+      "id": "tc002",
+      "category": "问题解决",
+      "scenario": "清晰目标",
+      "user_input": "我是一个产品经理，想提升数据分析能力，以便更好地制定产品策略和分析用户行为。我有一些Excel基础，但想学更专业的数据工具。",
+      "expected_analysis": {
+        "possible_domains": [
+          "数据分析技能学习",
+          "产品管理能力提升"
+        ],
+        "possible_purposes": [
+          "产品决策支持",
+          "用户行为分析",
+          "数据驱动产品策略"
+        ]
+      },
+      "expected_clarification_rounds": 1-2,
+      "expected_final_output": {
+        "clarified_purpose": "学习数据分析工具和方法，用于产品策略制定和用户行为分析，提升数据驱动决策能力",
+        "problem_domain": "产品数据分析能力提升",
+        "domain_boundary": "包括：数据分析工具（SQL, Python）、数据可视化、统计基础、A/B测试；不包括：深度机器学习、大数据工程",
+        "key_constraints": [
+          "有Excel基础",
+          "产品经理职位，非技术背景",
+          "需要与产品工作结合",
+          "有公司数据可实践"
+        ]
+      }
+    },
+    {
+      "id": "tc003",
+      "category": "职业发展",
+      "scenario": "转型需求",
+      "user_input": "我想转行做数据分析",
+      "expected_analysis": {
+        "possible_domains": [
+          "职业转型",
+          "技能学习",
+          "职业规划"
+        ],
+        "possible_purposes": [
+          "换工作/换行业",
+          "提升收入",
+          "职业兴趣转变"
+        ]
+      },
+      "expected_questions": [
+        "你之前是做什么工作的？有什么可转化的技能吗？",
+        "为什么想转数据分析？是什么吸引了你？",
+        "你对数据分析的了解有多少？",
+        "有没有时间和经济上的考虑？"
+      ],
+      "expected_clarification_rounds": 3-4,
+      "expected_final_output": {
+        "clarified_purpose": "从运营岗位转型到数据分析岗位，通过系统学习获得相关技能和项目经验，在6-12个月内找到数据分析工作",
+        "problem_domain": "数据分析职业转型（运营→数据分析）",
+        "domain_boundary": "包括：数据分析技能学习、项目经验积累、面试准备、行业了解；不包括：学术研究、算法科学家方向",
+        "key_constraints": [
+          "运营背景，有业务理解优势",
+          "零编程基础",
+          "6-12个月转型时间",
+          "目前在职，每天2-3小时学习",
+          "预算有限"
+        ]
+      }
+    },
+    {
+      "id": "tc004",
+      "category": "个人成长",
+      "scenario": "抽象目标",
+      "user_input": "我想提升自己的思维能力",
+      "expected_analysis": {
+        "possible_domains": [
+          "认知能力提升",
+          "思维训练",
+          "个人成长"
+        ],
+        "possible_purposes": [
+          "解决工作中的复杂问题",
+          "提升决策质量",
+          "个人发展需求"
+        ]
+      },
+      "expected_questions": [
+        "具体指什么样的思维能力？逻辑思维、创造性思维还是系统思维？",
+        "是遇到了什么问题，让你想提升这方面？",
+        "你期望提升后能解决什么具体问题？"
+      ],
+      "expected_clarification_rounds": 3-5,
+      "notes": "这类抽象目标需要多轮追问，逐步具体化"
+    },
+    {
+      "id": "tc005",
+      "category": "工具学习",
+      "scenario": "明确工具，模糊目的",
+      "user_input": "我要学 SQL",
+      "expected_questions": [
+        "学习SQL主要是为了什么？工作需要还是个人项目？",
+        "你的工作或学习中会接触什么样的数据？",
+        "有编程或数据库的基础吗？"
+      ],
+      "expected_clarification_rounds": 2-3
+    },
+    {
+      "id": "tc006",
+      "category": "综合项目",
+      "scenario": "多重目标",
+      "user_input": "我想做一个数据分析项目，分析我们公司的销售数据，找出增长机会，同时也想借这个机会学习数据分析技能",
+      "expected_analysis": {
+        "possible_domains": [
+          "实战项目",
+          "技能学习",
+          "业务分析"
+        ],
+        "possible_purposes": [
+          "业务问题解决（主）",
+          "技能提升（副）"
+        ]
+      },
+      "expected_clarification_rounds": 1-2,
+      "notes": "需要识别主要目标（业务问题）和次要目标（学习）"
+    }
+  ],
+  "evaluation_criteria": {
+    "question_quality": {
+      "description": "生成的问题质量评估",
+      "metrics": [
+        "是否开放式",
+        "是否友好自然",
+        "是否聚焦关键信息",
+        "是否避免重复"
+      ]
+    },
+    "analysis_accuracy": {
+      "description": "问题域和目的识别准确性",
+      "metrics": [
+        "问题域识别是否准确",
+        "可能目的是否全面",
+        "初步线索是否合理"
+      ]
+    },
+    "conversation_efficiency": {
+      "description": "对话效率评估",
+      "metrics": [
+        "轮次数是否合理（通常2-4轮）",
+        "是否在适当时机进入确认",
+        "是否避免过度追问"
+      ]
+    },
+    "final_output_quality": {
+      "description": "最终输出质量",
+      "metrics": [
+        "目的是否清晰可操作",
+        "边界是否明确",
+        "约束是否具体",
+        "置信度是否合理"
+      ]
+    }
+  },
+  "testing_instructions": {
+    "setup": "1. 配置 GEMINI_API_KEY\n2. 运行测试脚本\n3. 记录每个测试用例的实际输出",
+    "execution": "依次运行每个测试用例，记录：\n- AI 生成的问题\n- 对话轮次\n- 最终输出\n- 任何异常情况",
+    "evaluation": "对比实际输出与预期输出：\n- 问题相关性\n- 对话自然度\n- 最终定义准确性\n- 用户体验流畅度",
+    "iteration": "根据测试结果：\n1. 识别 Prompt 的弱点\n2. 调整 Prompt 设计\n3. 重新测试\n4. 记录改进"
+  }
+}
+

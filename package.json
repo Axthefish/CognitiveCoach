@@ -21,6 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "echarts": "^5.6.0",
+    "echarts-for-react": "^3.0.2",
     "echarts-gl": "^2.0.9",
     "lru-cache": "^10.1.0",
     "lucide-react": "^0.536.0",

@@ -83,6 +83,7 @@ export function InteractiveMermaid({
   // Render Mermaid chart
   useEffect(() => {
     const renderMermaid = async () => {
+      let processedChart = '';
       try {
         // Sanitize incoming chart text to avoid common breakages (e.g., stray <br/>)
         const sanitize = (src: string): string => {
@@ -97,7 +98,7 @@ export function InteractiveMermaid({
           return s;
         };
 
-        let processedChart = sanitize(chart)
+        processedChart = sanitize(chart)
         
         // Apply what-if simulation by modifying the chart
         if (whatIfMode && removedNodes.length > 0) {

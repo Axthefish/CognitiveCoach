@@ -548,13 +548,13 @@ export const createStageError = {
  * 错误报告 - 用于客户端组件错误上报
  */
 export function reportError(error: Error, context: Record<string, unknown> = {}) {
-  const errorReport = {
+  const errorReport: ErrorReport = {
+    type: 'unknown_error',
     message: error.message,
-    stack: error.stack,
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
     url: typeof window !== 'undefined' ? window.location.href : 'server',
     userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'server',
-    context
   };
 
   if (process.env.NODE_ENV === 'development') {
