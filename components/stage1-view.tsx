@@ -7,7 +7,7 @@ import { LogicFlowChart, ChartLegend } from './logic-flow-chart/LogicFlowChart';
 import { GlassCard } from './ui/glass-card';
 import { SmartLoading } from './ui/smart-loading';
 import { Button } from './ui/button';
-import { ArrowRight, Download, Sparkles } from 'lucide-react';
+import { Download, Sparkles } from 'lucide-react';
 import { postJSON, type ApiError, getErrorMessage } from '@/lib/api-client';
 import type { Stage1Response } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
