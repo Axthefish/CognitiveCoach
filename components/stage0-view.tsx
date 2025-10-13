@@ -25,10 +25,9 @@ export default function Stage0View() {
   } = useCognitiveCoachStoreV2();
   
   const [isThinking, setIsThinking] = React.useState(false);
-  const [thinkingText, setThinkingText] = React.useState(''); // 🆕 真实的thinking文本
+  const [thinkingText, setThinkingText] = React.useState(''); // streaming thinking文本
   const [showConfirmation, setShowConfirmation] = React.useState(false);
   const isMobile = useIsMobile();
-  const [retryCount, setRetryCount] = React.useState(0);
   
   // 处理用户发送消息
   const handleSendMessage = async (content: string) => {
@@ -46,18 +45,18 @@ export default function Stage0View() {
     
     addStage0Message(userMessage);
     setIsThinking(true);
-    setThinkingText(''); // 重置thinking文本
+    setThinkingText('');
     
     try {
-      // 🆕 使用streaming API展示思考过程
+      // 使用streaming API - Cursor风格
       const response = await fetch('/api/stage0-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: isInitial ? 'initial' : 'continue',
-          userInput: isInitial ? content : undefined,
-          conversationHistory: isInitial ? undefined : stage0Messages,
-          currentDefinition: isInitial ? undefined : {
+        action: isInitial ? 'initial' : 'continue',
+        userInput: isInitial ? content : undefined,
+        conversationHistory: isInitial ? undefined : stage0Messages,
+        currentDefinition: isInitial ? undefined : {
           rawInput: purposeDefinition?.rawInput || stage0Messages[0]?.content || '',
           clarifiedPurpose: purposeDefinition?.clarifiedPurpose || '',
           problemDomain: purposeDefinition?.problemDomain || '',
@@ -73,22 +72,21 @@ export default function Stage0View() {
       });
       
       if (!response.ok) {
-        throw new Error('Stream request failed');
+        throw new Error(`HTTP ${response.status}`);
       }
       
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       
       if (!reader) {
-        throw new Error('No reader available');
+        throw new Error('No stream reader');
       }
       
       let buffer = '';
-      let receivedData: { next_question?: string; assessment?: { confidence?: number }; action?: string } | null = null;
+      let finalData: { next_question?: string; assessment?: { confidence?: number }; action?: string } | null = null;
       
       while (true) {
         const { done, value } = await reader.read();
-        
         if (done) break;
         
         buffer += decoder.decode(value, { stream: true });
@@ -96,62 +94,52 @@ export default function Stage0View() {
         buffer = lines.pop() || '';
         
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6));
-              
-              if (event.type === 'thinking' && event.text) {
-                // 🆕 实时累积thinking文本
-                setThinkingText(prev => prev + event.text);
-              } else if (event.type === 'data' && event.data) {
-                receivedData = event.data;
-              } else if (event.type === 'error') {
-                throw new Error(event.error || 'Unknown error');
-              }
-            } catch (parseError) {
-              logger.warn('[Stage0View] Failed to parse event', { parseError });
+          if (!line.startsWith('data: ')) continue;
+          
+          try {
+            const event = JSON.parse(line.slice(6));
+            
+            if (event.type === 'thinking') {
+              // Cursor风格：实时累加thinking文本
+              setThinkingText(prev => prev + (event.text || ''));
+            } else if (event.type === 'data') {
+              finalData = event.data;
+            } else if (event.type === 'error') {
+              throw new Error(event.error);
             }
+          } catch (e) {
+            logger.warn('[Stage0] Parse event failed', { line });
           }
         }
       }
       
-      // Stream完成，处理结果
-      if (receivedData) {
-        // 🔧 防重复：检查最后一条消息是否已经是相同内容
+      // 处理最终结果
+      if (finalData) {
         const lastMessage = stage0Messages[stage0Messages.length - 1];
-        const shouldAddMessage = 
+        const shouldAdd = 
           !lastMessage || 
           lastMessage.role !== 'assistant' || 
-          lastMessage.content !== receivedData.next_question;
+          lastMessage.content !== finalData.next_question;
         
-        if (shouldAddMessage && receivedData.next_question) {
-          // 添加 AI 回复
-          const aiMessage: ChatMessage = {
+        if (shouldAdd && finalData.next_question) {
+          addStage0Message({
             id: `msg-${Date.now()}-ai`,
             role: 'assistant',
-            content: receivedData.next_question,
+            content: finalData.next_question,
             timestamp: Date.now(),
             metadata: { stage: 'STAGE_0_PURPOSE_CLARIFICATION', type: 'question' },
-          };
-          
-          addStage0Message(aiMessage);
-        }
-        
-        // 更新目的定义（如果有assessment）
-        if (receivedData.assessment) {
-          updatePurposeDefinition({
-            confidence: receivedData.assessment.confidence || 0.5,
-            clarificationState: 'REFINING',
           });
         }
         
-        // 检查是否需要确认
-        if (receivedData.action === 'confirm') {
+        if (finalData.assessment) {
+          updatePurposeDefinition({
+            confidence: finalData.assessment.confidence || 0.5,
+          });
+        }
+        
+        if (finalData.action === 'confirm') {
           setShowConfirmation(true);
         }
-      } else {
-        // 没有收到数据，可能是错误
-        setError('未收到有效响应，请重试');
       }
     } catch (error) {
       // 🔧 友好的错误处理
@@ -173,8 +161,7 @@ export default function Stage0View() {
       });
     } finally {
       setIsThinking(false);
-      setThinkingText(''); // 🔧 清理thinking文本
-      setRetryCount(0);
+      setThinkingText('');
     }
   };
   
@@ -300,13 +287,9 @@ export default function Stage0View() {
           messages={stage0Messages}
           onSendMessage={handleSendMessage}
           isThinking={isThinking}
-          thinkingMessage={
-            retryCount > 0 
-              ? `正在重试... (第${retryCount}次)`
-              : "🤔 正在连接AI..."
-          }
-          thinkingText={thinkingText} // 🆕 传入真实thinking文本
-          estimatedTime="30-45秒"
+          thinkingMessage="..." // Cursor风格
+          thinkingText={thinkingText} // streaming文本
+          estimatedTime={undefined} // 不显示时间
           disabled={showConfirmation}
           placeholder="Please describe the problem you want to solve or the goal you want to achieve..."
         />

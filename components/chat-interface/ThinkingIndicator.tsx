@@ -10,51 +10,20 @@ interface ThinkingIndicatorProps {
 }
 
 export const ThinkingIndicator = React.memo(function ThinkingIndicator({ 
-  message = 'AI is thinking...', 
-  progress,
-  showProgress = false,
-  estimatedTime,
+  message = '...', 
 }: ThinkingIndicatorProps) {
   return (
-    <div className="flex justify-start w-full mb-4">
-      <div className="bg-white/95 backdrop-blur-sm border border-blue-200 rounded-lg px-4 py-3 shadow-lg max-w-[85%]">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            {/* 动画点点点 */}
-            <div className="flex gap-1">
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-            
-            {/* 提示文本 */}
-            <span className="text-sm text-gray-700 font-medium flex-1">{message}</span>
-            
-            {/* 进度百分比 */}
-            {showProgress && progress !== undefined && (
-              <span className="text-xs text-blue-600 font-bold">
-                {progress}%
-              </span>
-            )}
-          </div>
+    <div className="flex justify-start w-full mb-2">
+      <div className="bg-gray-50/80 rounded-lg px-3 py-2 border border-gray-200/50">
+        <div className="flex items-center gap-2">
+          {/* Cursor-style旋转图标 */}
+          <svg className="w-3 h-3 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+          </svg>
           
-          {/* 进度条 */}
-          {showProgress && progress !== undefined && (
-            <div className="relative h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          )}
-          
-          {/* 预计时间 */}
-          {estimatedTime && (
-            <div className="text-xs text-gray-500 flex items-center gap-1">
-              <span>⏱️</span>
-              <span>预计需要 {estimatedTime}</span>
-            </div>
-          )}
+          {/* 极简文本 */}
+          <span className="text-xs text-gray-500 font-mono">{message}</span>
         </div>
       </div>
     </div>

@@ -1,76 +1,42 @@
 /**
- * ThinkingStream - 实时展示AI思考过程
- * 类似ChatGPT的streaming效果
+ * ThinkingStream - Cursor风格的streaming思考展示
+ * 极简、清晰、专业
  */
 
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 
 interface ThinkingStreamProps {
-  thinkingText: string; // 累积的思考文本
-  isComplete?: boolean; // 是否完成
+  thinkingText: string;
 }
 
 export const ThinkingStream = React.memo(function ThinkingStream({ 
-  thinkingText, 
-  isComplete = false 
+  thinkingText 
 }: ThinkingStreamProps) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  
-  // 自动滚动到底部
-  React.useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [thinkingText]);
-  
   if (!thinkingText) return null;
   
   return (
-    <motion.div
-      className="flex justify-start w-full mb-4"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg px-4 py-3 shadow-lg max-w-[85%]">
-        <div className="flex items-start gap-3">
-          {/* 思考图标 */}
-          {!isComplete && (
-            <div className="flex gap-1 mt-1 flex-shrink-0">
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          )}
+    <div className="flex justify-start w-full mb-2">
+      <div className="bg-gray-50/80 rounded-lg px-3 py-2 max-w-[90%] border border-gray-200/50">
+        <div className="flex items-start gap-2">
+          {/* Cursor-style旋转图标 */}
+          <div className="mt-0.5 flex-shrink-0">
+            <svg className="w-3 h-3 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+            </svg>
+          </div>
           
-          {isComplete && (
-            <span className="text-green-600 text-lg mt-0.5">✓</span>
-          )}
-          
-          {/* 思考内容 */}
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-blue-700 mb-1.5 flex items-center gap-2">
-              <span>🧠 AI思考过程</span>
-              {!isComplete && (
-                <motion.span
-                  className="inline-block w-1 h-3 bg-blue-600"
-                  animate={{ opacity: [1, 0, 1] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                />
-              )}
-            </div>
-            <div 
-              ref={containerRef}
-              className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto prose prose-sm"
-            >
-              {thinkingText}
-            </div>
+          {/* 思考文本 - Cursor风格 */}
+          <div className="flex-1 text-xs text-gray-600 leading-normal font-mono">
+            {thinkingText}
+            {/* Cursor-style闪烁光标 */}
+            <span className="inline-block w-px h-3 bg-gray-400 ml-px animate-pulse" />
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 });
 
