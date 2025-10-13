@@ -85,8 +85,7 @@ export async function POST(request: NextRequest) {
           validated.action,
           validated.userInput,
           validated.conversationHistory as ChatMessage[] || [],
-          validated.currentDefinition || {},
-          thinkingResult.fullText // 传入思考过程作为上下文
+          validated.currentDefinition || {}
         );
         
         const result = await generateJson(
