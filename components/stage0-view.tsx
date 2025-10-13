@@ -100,7 +100,18 @@ export default function Stage0View() {
       const apiError = error as ApiError;
       const errorInfo = getErrorMessage(apiError);
       setError(errorInfo.message);
-      logger.error('[Stage0View] Error sending message', { error: apiError });
+      
+      // 详细的错误日志
+      logger.error('[Stage0View] Error sending message', {
+        error: apiError,
+        errorMessage: apiError?.message,
+        errorCode: apiError?.code,
+        errorStatus: apiError?.status,
+        isNetworkError: apiError?.isNetworkError,
+        isTimeout: apiError?.isTimeout,
+        isRetryable: apiError?.isRetryable,
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      });
     } finally {
       setIsThinking(false);
       setRetryCount(0);
