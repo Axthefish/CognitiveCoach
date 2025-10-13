@@ -87,7 +87,6 @@ export function ChatBox({
             {isThinking && thinkingText && (
               <ThinkingStream 
                 thinkingText={thinkingText}
-                isComplete={false}
               />
             )}
             

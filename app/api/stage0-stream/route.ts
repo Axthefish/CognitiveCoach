@@ -1,13 +1,14 @@
 /**
- * Stage 0 Streaming API - 展示AI思考过程
+ * Stage 0 Streaming API - 简化版：直接JSON mode + 前端模拟thinking
  * 
- * 策略：
- * 1. 先streaming输出thinking过程（text）
- * 2. 基于thinking生成JSON结果
+ * 策略优化：
+ * - 直接用JSON mode生成（快速、可靠）
+ * - Thinking在前端模拟（不需要等AI生成）
+ * - 参考Cursor的设计：快速响应 > 炫技
  */
 
 import { NextRequest } from 'next/server';
-import { generateStreamingText, generateJson } from '@/lib/gemini-config';
+import { generateJson } from '@/lib/gemini-config';
 import { getDeepDivePrompt, getInitialCollectionPrompt, getStage0GenerationConfig } from '@/lib/prompts/stage0-prompts';
 import type { ChatMessage } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
@@ -21,7 +22,7 @@ const Stage0StreamRequestSchema = z.object({
 });
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 30; // 降低到30秒
 
 export async function POST(request: NextRequest) {
   logger.info('[Stage0 Stream API] Received request');
@@ -34,135 +35,55 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const validated = Stage0StreamRequestSchema.parse(body);
         
-        // 生成thinking prompt
-        const thinkingPrompt = validated.action === 'initial'
-          ? `${getInitialCollectionPrompt(validated.userInput || '')}
-
-在生成JSON之前，先用自然语言描述你的思考过程（2-3句话）：
-- 你对用户输入的初步理解
-- 你打算问什么以及为什么
-
-格式：
-<thinking>
-你的思考过程...
-</thinking>
-
-<json_output>
-{...}
-</json_output>`
-          : `${getDeepDivePrompt(
+        // 生成简洁的prompt（不要求特殊格式）
+        const prompt = validated.action === 'initial'
+          ? getInitialCollectionPrompt(validated.userInput || '')
+          : getDeepDivePrompt(
               validated.conversationHistory as ChatMessage[] || [],
               validated.currentDefinition || {}
-            )}
+            );
 
-在生成JSON之前，先用自然语言描述你的思考过程（2-3句话）：
-- 当前理解的clarity程度
-- 还缺少什么关键信息
-- 下一步打算问什么
-
-格式：
-<thinking>
-你的思考过程...
-</thinking>
-
-<json_output>
-{...}
-</json_output>`;
-
-        // Streaming输出thinking
-        let fullText = '';
-        let isInThinking = false;
+        // 前端模拟thinking效果（立即发送）
+        const thinkingMessages = [
+          '分析用户输入...',
+          '理解问题域...',
+          '准备问题...',
+        ];
         
-        const result = await generateStreamingText(
-          thinkingPrompt,
-          (chunk) => {
-            fullText += chunk;
-            
-            // 检测<thinking>标签
-            if (fullText.includes('<thinking>') && !isInThinking) {
-              isInThinking = true;
-            }
-            
-            if (isInThinking && !fullText.includes('</thinking>')) {
-              // 实时发送thinking内容
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({
-                  type: 'thinking',
-                  text: chunk,
-                })}\n\n`)
-              );
-            }
-          },
+        for (const msg of thinkingMessages) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({
+              type: 'thinking',
+              text: msg,
+            })}\n\n`)
+          );
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        // 直接生成JSON（快速、可靠）
+        const result = await generateJson(
+          prompt,
           getStage0GenerationConfig(),
-          'Pro'
+          'Pro',
+          'S0'
         );
         
-        if (!result.ok) {
+        if (result.ok) {
+          // 发送数据
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({
+              type: 'data',
+              data: result.data,
+            })}\n\n`)
+          );
+        } else {
+          // 发送错误
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: 'error',
-              error: result.error,
+              error: result.error || 'Generation failed',
             })}\n\n`)
           );
-          controller.close();
-          return;
-        }
-        
-        // 提取JSON部分
-        const jsonMatch = result.fullText.match(/<json_output>\s*(\{[\s\S]*?\})\s*<\/json_output>/);
-        
-        if (!jsonMatch) {
-          // 降级：直接用JSON mode重新生成
-          logger.warn('[Stage0 Stream] No JSON found in streaming output, falling back');
-          
-          const jsonPrompt = validated.action === 'initial'
-            ? getInitialCollectionPrompt(validated.userInput || '')
-            : getDeepDivePrompt(
-                validated.conversationHistory as ChatMessage[] || [],
-                validated.currentDefinition || {}
-              );
-          
-          const jsonResult = await generateJson(
-            jsonPrompt,
-            getStage0GenerationConfig(),
-            'Pro',
-            'S0'
-          );
-          
-          if (jsonResult.ok) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'data',
-                data: jsonResult.data,
-              })}\n\n`)
-            );
-          } else {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'error',
-                error: 'JSON generation failed',
-              })}\n\n`)
-            );
-          }
-        } else {
-          // 发送JSON数据
-          try {
-            const jsonData = JSON.parse(jsonMatch[1]);
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'data',
-                data: jsonData,
-              })}\n\n`)
-            );
-          } catch (parseError) {
-            logger.error('[Stage0 Stream] JSON parse failed', { parseError });
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'error',
-                error: 'Invalid JSON in response',
-              })}\n\n`)
-            );
-          }
         }
         
         // 发送完成信号

@@ -108,7 +108,7 @@ export default function Stage0View() {
               throw new Error(event.error);
             }
           } catch (e) {
-            logger.warn('[Stage0] Parse event failed', { line });
+            logger.warn('[Stage0] Parse event failed', { line, error: e });
           }
         }
       }

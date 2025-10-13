@@ -38,20 +38,20 @@ type GenConfig = {
 
 // 获取超时配置 - 按阶段和档位动态调整
 function getTimeoutConfig(runTier?: 'Lite' | 'Pro' | 'Review', stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): number {
-  // 基础超时配置（毫秒）
+  // 基础超时配置（毫秒）- 参考Cursor：优先响应速度
   const baseTimeouts = {
-    'Lite': 45000,  // 45秒
-    'Pro': 90000,   // 90秒
-    'Review': 120000 // 120秒
+    'Lite': 20000,  // 20秒 (Lite应该极快)
+    'Pro': 30000,   // 30秒 (合理的等待时间)
+    'Review': 60000 // 60秒 (复杂任务)
   };
   
   // 阶段复杂度系数（相对于基础值的倍数）
   const stageComplexity: Record<string, number> = {
-    'S0': 0.5,  // S0最简单：对话式，快速响应
-    'S1': 1.0,  // S1标准：知识框架生成
-    'S2': 1.2,  // S2稍复杂：需要生成Mermaid图
-    'S3': 1.5,  // S3最复杂：策略DSL生成，n-best
-    'S4': 0.8,  // S4中等：进度分析
+    'S0': 0.8,  // S0：对话式，应该快速
+    'S1': 2.0,  // S1：框架生成，允许更长时间
+    'S2': 1.5,  // S2：个性化方案
+    'S3': 2.5,  // S3：策略生成，最复杂
+    'S4': 1.0,  // S4：进度分析
   };
   
   const tier = runTier || 'Pro';
