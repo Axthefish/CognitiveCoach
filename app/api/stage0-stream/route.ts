@@ -1,17 +1,18 @@
 /**
- * Stage 0 Streaming API - 真实思考过程展示
+ * Stage 0 Streaming API - 简化可靠版
  * 
  * 设计理念：
- * - 两阶段输出：先streaming思考过程，再生成JSON结果
- * - 参考Cursor：展示真实的AI推理，增强可信度
- * - 参考Anthropic：给模型自主判断空间，通过上下文工程引导而非硬编码规则
+ * - 单次JSON生成，但在响应中包含thinking字段
+ * - 通过streaming逐字展示thinking，然后显示结果
+ * - 参考Cursor：展示真实推理，但保持简单可靠
+ * - 参考Anthropic：给模型自主判断空间
  */
 
 import { NextRequest } from 'next/server';
-import { generateJson, generateStreamingText } from '@/lib/gemini-config';
+import { generateJson } from '@/lib/gemini-config';
 import { 
-  getThinkingPrompt, 
-  getStructuredOutputPrompt, 
+  getInitialCollectionPrompt,
+  getDeepDivePrompt, 
   getStage0GenerationConfig 
 } from '@/lib/prompts/stage0-prompts';
 import type { ChatMessage } from '@/lib/types-v2';
@@ -26,7 +27,7 @@ const Stage0StreamRequestSchema = z.object({
 });
 
 export const runtime = 'nodejs';
-export const maxDuration = 45; // 给thinking + JSON两阶段足够时间
+export const maxDuration = 30; // 单次生成，30秒足够
 
 export async function POST(request: NextRequest) {
   logger.info('[Stage0 Stream API] Received request');
@@ -39,68 +40,57 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const validated = Stage0StreamRequestSchema.parse(body);
         
-        // 阶段1：生成思考过程（streaming）
-        const thinkingPrompt = getThinkingPrompt(
-          validated.action,
-          validated.userInput,
-          validated.conversationHistory as ChatMessage[] || [],
-          validated.currentDefinition || {}
-        );
-        
-        logger.info('[Stage0 Stream] Phase 1: Generating thinking process');
-        
-        const thinkingResult = await generateStreamingText(
-          thinkingPrompt,
-          (chunk) => {
-            // 实时发送思考文本
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'thinking',
-                text: chunk,
-              })}\n\n`)
+        // 生成prompt（包含thinking要求）
+        const prompt = validated.action === 'initial'
+          ? getInitialCollectionPrompt(validated.userInput || '')
+          : getDeepDivePrompt(
+              validated.conversationHistory as ChatMessage[] || [],
+              validated.currentDefinition || {}
             );
-          },
-          {
-            temperature: 0.8, // 思考过程可以更自然
-            maxOutputTokens: 1000,
-          },
-          'Pro'
-        );
         
-        if (!thinkingResult.ok) {
-          throw new Error(`Thinking generation failed: ${thinkingResult.error}`);
-        }
+        logger.info('[Stage0 Stream] Generating response with thinking');
         
-        // 发送thinking完成信号
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({
-            type: 'thinking_done',
-          })}\n\n`)
-        );
-        
-        // 阶段2：基于思考生成结构化结果（JSON mode）
-        logger.info('[Stage0 Stream] Phase 2: Generating structured output');
-        
-        const structuredPrompt = getStructuredOutputPrompt(
-          validated.action,
-          validated.userInput,
-          validated.conversationHistory as ChatMessage[] || [],
-          validated.currentDefinition || {}
-        );
-        
+        // 生成包含thinking的JSON
         const result = await generateJson(
-          structuredPrompt,
+          prompt,
           getStage0GenerationConfig(),
           'Pro',
           'S0'
         );
         
         if (result.ok) {
+          const data = result.data as any;
+          
+          // 如果有thinking字段，逐字展示
+          if (data.thinking) {
+            const thinking = data.thinking;
+            const chunkSize = 3; // 每次发送3个字符，模拟打字效果
+            
+            for (let i = 0; i < thinking.length; i += chunkSize) {
+              const chunk = thinking.slice(i, i + chunkSize);
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({
+                  type: 'thinking',
+                  text: chunk,
+                })}\n\n`)
+              );
+              // 小延迟模拟打字效果
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            // thinking完成
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'thinking_done',
+              })}\n\n`)
+            );
+          }
+          
           // 发送结构化数据
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: 'data',
-              data: result.data,
+              data: data,
             })}\n\n`)
           );
         } else {
