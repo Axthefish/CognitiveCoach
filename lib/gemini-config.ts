@@ -199,3 +199,51 @@ export async function generateText(
   if (first.ok) return first;
   return await run(0.4);
 }
+
+/**
+ * Streaming文本生成（用于展示思考过程）
+ */
+export async function generateStreamingText(
+  prompt: string,
+  onChunk: (text: string) => void,
+  overrides?: Partial<GenConfig>,
+  runTier?: 'Lite' | 'Pro' | 'Review',
+  stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'
+): Promise<{ ok: true; fullText: string } | { ok: false; error: string }> {
+  const client = createGeminiClient();
+  if (!client) return { ok: false, error: 'NO_API_KEY' };
+
+  const config: GenConfig = {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 65536,
+    ...overrides,
+  };
+
+  const model = client.getGenerativeModel({ model: getModelName(runTier) });
+  
+  try {
+    const result = await model.generateContentStream({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: config,
+    });
+    
+    let fullText = '';
+    
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      onChunk(chunkText); // 实时回调
+    }
+    
+    return { ok: true, fullText };
+  } catch (error) {
+    logger.error('[Gemini] Streaming generation failed', { error });
+    return { 
+      ok: false, 
+      error: error instanceof Error ? error.message : 'STREAM_ERROR' 
+    };
+  }
+}
+

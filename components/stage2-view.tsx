@@ -35,6 +35,7 @@ export default function Stage2View() {
   
   const [isThinking, setIsThinking] = React.useState(false);
   const [thinkingProgress, setThinkingProgress] = React.useState(0);
+  const [thinkingText, setThinkingText] = React.useState(''); // 🆕 真实thinking文本（待实现streaming）
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [showPlan, setShowPlan] = React.useState(false);
   const [mobileTab, setMobileTab] = React.useState<'chat' | 'chart'>('chat');
@@ -364,6 +365,7 @@ export default function Stage2View() {
             }
             thinkingProgress={thinkingProgress}
             showThinkingProgress={stage2State === 'GENERATING'}
+            thinkingText={thinkingText} // 🆕 传入thinking文本（Stage2暂时仍用模拟）
             estimatedTime={stage2State === 'GENERATING' ? '80-100秒' : '20-30秒'}
             disabled={stage2State !== 'QUESTIONING'}
             placeholder={
@@ -716,6 +718,7 @@ export default function Stage2View() {
                 }
                 thinkingProgress={thinkingProgress}
                 showThinkingProgress={stage2State === 'GENERATING'}
+                thinkingText={thinkingText} // 🆕 传入thinking文本
                 estimatedTime={stage2State === 'GENERATING' ? '80-100秒' : '20-30秒'}
                 disabled={stage2State !== 'QUESTIONING'}
                 placeholder={

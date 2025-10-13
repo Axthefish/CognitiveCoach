@@ -4,6 +4,7 @@ import React from 'react';
 import type { ChatMessage } from '@/lib/types-v2';
 import { MessageBubble } from './MessageBubble';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { ThinkingStream } from './ThinkingStream';
 import { InputArea } from './InputArea';
 import { cn } from '@/lib/utils';
 
@@ -12,9 +13,10 @@ interface ChatBoxProps {
   onSendMessage: (content: string) => void;
   isThinking?: boolean;
   thinkingMessage?: string;
-  thinkingProgress?: number; // 🆕 思考进度 0-100
-  showThinkingProgress?: boolean; // 🆕 是否显示进度条
-  estimatedTime?: string; // 🆕 预计时间
+  thinkingProgress?: number; // 思考进度 0-100（模拟用）
+  showThinkingProgress?: boolean; // 是否显示进度条（模拟用）
+  thinkingText?: string; // 🆕 真实的thinking文本流
+  estimatedTime?: string; // 预计时间
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -27,6 +29,7 @@ export function ChatBox({
   thinkingMessage,
   thinkingProgress,
   showThinkingProgress = false,
+  thinkingText,
   estimatedTime,
   disabled = false,
   placeholder,
@@ -80,8 +83,16 @@ export function ChatBox({
               <MessageBubble key={message.id} message={message} />
             ))}
             
-            {/* AI 思考指示器 */}
-            {isThinking && (
+            {/* 🆕 优先显示真实thinking文本流 */}
+            {isThinking && thinkingText && (
+              <ThinkingStream 
+                thinkingText={thinkingText}
+                isComplete={false}
+              />
+            )}
+            
+            {/* AI 思考指示器（降级或补充） */}
+            {isThinking && !thinkingText && (
               <ThinkingIndicator 
                 message={thinkingMessage} 
                 progress={thinkingProgress}

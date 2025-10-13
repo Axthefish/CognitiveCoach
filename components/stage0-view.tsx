@@ -25,26 +25,9 @@ export default function Stage0View() {
   } = useCognitiveCoachStoreV2();
   
   const [isThinking, setIsThinking] = React.useState(false);
-  const [thinkingProgress, setThinkingProgress] = React.useState(0);
+  const [thinkingText, setThinkingText] = React.useState(''); // 🆕 真实的thinking文本
   const [showConfirmation, setShowConfirmation] = React.useState(false);
   const isMobile = useIsMobile();
-  
-  // 模拟thinking进度（Stage0相对快，模拟即可）
-  React.useEffect(() => {
-    if (isThinking) {
-      setThinkingProgress(0);
-      const interval = setInterval(() => {
-        setThinkingProgress(prev => {
-          if (prev >= 90) return prev; // 在90%停住，等真实结果
-          return Math.min(prev + Math.random() * 15, 90);
-        });
-      }, 2000);
-      
-      return () => clearInterval(interval);
-    } else {
-      setThinkingProgress(0);
-    }
-  }, [isThinking]);
   const [retryCount, setRetryCount] = React.useState(0);
   
   // 处理用户发送消息
@@ -63,13 +46,18 @@ export default function Stage0View() {
     
     addStage0Message(userMessage);
     setIsThinking(true);
+    setThinkingText(''); // 重置thinking文本
     
     try {
-      const result = await postJSON<Stage0Response>('/api/stage0', {
-        action: isInitial ? 'initial' : 'continue',
-        userInput: isInitial ? content : undefined,
-        conversationHistory: isInitial ? undefined : stage0Messages,
-        currentDefinition: isInitial ? undefined : {
+      // 🆕 使用streaming API展示思考过程
+      const response = await fetch('/api/stage0-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: isInitial ? 'initial' : 'continue',
+          userInput: isInitial ? content : undefined,
+          conversationHistory: isInitial ? undefined : stage0Messages,
+          currentDefinition: isInitial ? undefined : {
           rawInput: purposeDefinition?.rawInput || stage0Messages[0]?.content || '',
           clarifiedPurpose: purposeDefinition?.clarifiedPurpose || '',
           problemDomain: purposeDefinition?.problemDomain || '',
@@ -81,57 +69,111 @@ export default function Stage0View() {
           confidence: purposeDefinition?.confidence || 0.3,
           clarificationState: purposeDefinition?.clarificationState || 'COLLECTING',
         },
-      }, {
-        timeout: 50000, // Stage0 (Pro): 45秒 + 5秒余量
-        retries: 2,
-        onRetry: (attempt) => {
-          setRetryCount(attempt);
-          logger.info(`[Stage0View] Retrying... (attempt ${attempt})`);
-        },
+        }),
       });
       
-      if (result.success) {
-        // 添加 AI 回复
-        const aiMessage: ChatMessage = {
-          id: `msg-${Date.now()}-ai`,
-          role: 'assistant',
-          content: result.message || '收到，让我继续了解...',
-          timestamp: Date.now(),
-          metadata: { stage: 'STAGE_0_PURPOSE_CLARIFICATION', type: 'question' },
-        };
+      if (!response.ok) {
+        throw new Error('Stream request failed');
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+      
+      let buffer = '';
+      let receivedData: any = null;
+      
+      while (true) {
+        const { done, value } = await reader.read();
         
-        addStage0Message(aiMessage);
+        if (done) break;
         
-        // 更新目的定义
-        if (result.data) {
-          updatePurposeDefinition(result.data);
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              
+              if (event.type === 'thinking' && event.text) {
+                // 🆕 实时累积thinking文本
+                setThinkingText(prev => prev + event.text);
+              } else if (event.type === 'data' && event.data) {
+                receivedData = event.data;
+              } else if (event.type === 'error') {
+                throw new Error(event.error || 'Unknown error');
+              }
+            } catch (parseError) {
+              logger.warn('[Stage0View] Failed to parse event', { parseError });
+            }
+          }
+        }
+      }
+      
+      // Stream完成，处理结果
+      if (receivedData) {
+        // 🔧 防重复：检查最后一条消息是否已经是相同内容
+        const lastMessage = stage0Messages[stage0Messages.length - 1];
+        const shouldAddMessage = 
+          !lastMessage || 
+          lastMessage.role !== 'assistant' || 
+          lastMessage.content !== receivedData.next_question;
+        
+        if (shouldAddMessage && receivedData.next_question) {
+          // 添加 AI 回复
+          const aiMessage: ChatMessage = {
+            id: `msg-${Date.now()}-ai`,
+            role: 'assistant',
+            content: receivedData.next_question,
+            timestamp: Date.now(),
+            metadata: { stage: 'STAGE_0_PURPOSE_CLARIFICATION', type: 'question' },
+          };
+          
+          addStage0Message(aiMessage);
+        }
+        
+        // 更新目的定义（如果有assessment）
+        if (receivedData.assessment) {
+          updatePurposeDefinition({
+            confidence: receivedData.assessment.confidence || 0.5,
+            clarificationState: 'REFINING',
+          });
         }
         
         // 检查是否需要确认
-        if (result.nextAction === 'confirm') {
+        if (receivedData.action === 'confirm') {
           setShowConfirmation(true);
         }
       } else {
-        setError(result.message || '处理失败');
+        // 没有收到数据，可能是错误
+        setError('未收到有效响应，请重试');
       }
     } catch (error) {
-      const apiError = error as ApiError;
-      const errorInfo = getErrorMessage(apiError);
-      setError(errorInfo.message);
+      // 🔧 友好的错误处理
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
+        setError('服务器响应时间过长，请重试或稍后再试');
+      } else if (errorMessage.includes('network') || errorMessage.includes('网络')) {
+        setError('无法连接到服务器，请检查网络后重试');
+      } else {
+        setError('发生未知错误，请稍后重试');
+      }
       
       // 详细的错误日志
-      logger.error('[Stage0View] Error sending message', {
-        error: apiError,
-        errorMessage: apiError?.message,
-        errorCode: apiError?.code,
-        errorStatus: apiError?.status,
-        isNetworkError: apiError?.isNetworkError,
-        isTimeout: apiError?.isTimeout,
-        isRetryable: apiError?.isRetryable,
+      logger.error('[Stage0View] Error in streaming', {
+        error,
+        errorMessage,
         fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
       });
     } finally {
       setIsThinking(false);
+      setThinkingText(''); // 🔧 清理thinking文本
       setRetryCount(0);
     }
   };
@@ -261,10 +303,9 @@ export default function Stage0View() {
           thinkingMessage={
             retryCount > 0 
               ? `正在重试... (第${retryCount}次)`
-              : "🤔 正在深入理解你的目标和边界..."
+              : "🤔 正在连接AI..."
           }
-          thinkingProgress={thinkingProgress}
-          showThinkingProgress={true}
+          thinkingText={thinkingText} // 🆕 传入真实thinking文本
           estimatedTime="30-45秒"
           disabled={showConfirmation}
           placeholder="Please describe the problem you want to solve or the goal you want to achieve..."

@@ -14,42 +14,15 @@ import type { ChatMessage, PurposeDefinition } from '@/lib/types-v2';
 // ============================================
 
 export function getInitialCollectionPrompt(userInput: string): string {
-  return `<workflow_context>
-你在三阶段认知教练系统的 Stage 0 - 目的澄清阶段
+  return `你是目的澄清专家，在三阶段认知教练系统的Stage 0。
 
-你的职责：
-- 通过对话深入理解用户的真实目的（WHY）而非表面内容（WHAT）
-- 明确问题域边界（包括什么、排除什么）
-- 区分两类约束：
-  * 边界约束：影响问题域范围（如"不学机器学习"、"只关注前端"）
-  * 个人约束：影响执行方式（如"每周5小时"、"零基础"、"偏好视频"）
+职责：通过对话理解用户真实目的（WHY），明确问题域边界，区分边界约束（影响范围）vs 个人约束（影响方式）。
 
-你的输出将被用于：
-- Stage 1：使用clarifiedPurpose + boundaryConstraints生成通用框架
-- Stage 2：使用personalConstraints进行个性化调整
-
-因此：准确分类约束至关重要，这直接影响后续两个stage的质量。
-</workflow_context>
+输出用于：Stage1生成通用框架（用clarifiedPurpose+boundaryConstraints），Stage2个性化调整（用personalConstraints）。
 
 用户输入：${userInput}
 
-<task>
-生成一个开放式问题，引导用户说出：
-- 深层动机（WHY）而非表面内容（WHAT）
-- 具体场景和范围
-
-问题设计原则：
-- 开放式，给用户表达空间
-- 自然友好，避免审问感
-- 优先问"为什么"和"希望达到什么"
-</task>
-
-<analysis>
-先快速分析（内部思考）：
-- 可能属于什么领域？
-- 用户最可能的动机？
-- 初步线索？
-</analysis>
+生成一个开放式问题，引导用户说出深层动机和具体场景。优先问"为什么"。
 
 输出JSON：包含analysis（possible_domains, possible_purposes, initial_clues）和next_question`;
 }
@@ -73,51 +46,29 @@ export function getDeepDivePrompt(
     })
     .join('\n\n');
   
-  return `<workflow_context>
-你在三阶段认知教练系统的 Stage 0 - 目的澄清阶段
+  return `你是目的澄清专家（Stage 0 / 共3阶段）。
 
-你的职责：
-- 通过对话深入理解用户的真实目的（WHY）
-- 明确问题域边界（包括什么、排除什么）
-- 区分边界约束（影响问题范围）vs 个人约束（影响执行方式）
-
-你的输出将被用于：
-- Stage 1：使用clarifiedPurpose + boundaryConstraints生成通用框架
-- Stage 2：使用personalConstraints进行个性化调整
-
-因此：准确分类约束至关重要，这直接影响后续两个stage的质量。
-</workflow_context>
+职责：深入理解WHY，明确边界，区分边界约束（影响范围）vs 个人约束（影响方式）。
+输出：Stage1用clarifiedPurpose+boundaryConstraints生成通用框架，Stage2用personalConstraints个性化。
 
 <conversation>
 ${historyText}
 </conversation>
 
-<current_understanding>
+<current>
 原始输入：${currentDefinition.rawInput || '未知'}
-问题域推测：${currentDefinition.problemDomain || '待确定'}
-目的推测：${currentDefinition.clarifiedPurpose || '待明确'}
-已识别约束：${currentDefinition.keyConstraints?.join(', ') || '无'}
-</current_understanding>
+问题域：${currentDefinition.problemDomain || '待确定'}
+目的：${currentDefinition.clarifiedPurpose || '待明确'}
+约束：${currentDefinition.keyConstraints?.join(', ') || '无'}
+</current>
 
-<goal>
-通过对话达成：
-1. 深层动机清晰（WHY重要）
-2. 问题域边界明确（包括/排除什么）
-3. 约束明确（边界约束 vs 个人约束）
+目标：明确WHY、边界、约束分类。优先问WHY而非HOW。
 
-优先追问WHY（动机）而非HOW（执行）。
-</goal>
+评估clarity_score：
+- ≥0.85且missing_info空 → action: "confirm"
+- <0.85 → action: "continue" + next_question
 
-<decision_criteria>
-评估clarity_score（0-1）:
-- ≥0.85 且missing_info为空 → action: "confirm"
-- <0.85 → action: "continue"，生成next_question
-</decision_criteria>
-
-输出JSON：
-- assessment（clarity_score, missing_info, confidence）
-- action（"continue"或"confirm"）
-- next_question（如果continue）`;
+输出JSON：assessment（clarity_score, missing_info, confidence）、action、next_question（如continue）`;
 }
 
 // ============================================
