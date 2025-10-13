@@ -1,15 +1,19 @@
 /**
- * Stage 0 Streaming API - 简化版：直接JSON mode + 前端模拟thinking
+ * Stage 0 Streaming API - 真实思考过程展示
  * 
- * 策略优化：
- * - 直接用JSON mode生成（快速、可靠）
- * - Thinking在前端模拟（不需要等AI生成）
- * - 参考Cursor的设计：快速响应 > 炫技
+ * 设计理念：
+ * - 两阶段输出：先streaming思考过程，再生成JSON结果
+ * - 参考Cursor：展示真实的AI推理，增强可信度
+ * - 参考Anthropic：给模型自主判断空间，通过上下文工程引导而非硬编码规则
  */
 
 import { NextRequest } from 'next/server';
-import { generateJson } from '@/lib/gemini-config';
-import { getDeepDivePrompt, getInitialCollectionPrompt, getStage0GenerationConfig } from '@/lib/prompts/stage0-prompts';
+import { generateJson, generateStreamingText } from '@/lib/gemini-config';
+import { 
+  getThinkingPrompt, 
+  getStructuredOutputPrompt, 
+  getStage0GenerationConfig 
+} from '@/lib/prompts/stage0-prompts';
 import type { ChatMessage } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
@@ -22,7 +26,7 @@ const Stage0StreamRequestSchema = z.object({
 });
 
 export const runtime = 'nodejs';
-export const maxDuration = 30; // 降低到30秒
+export const maxDuration = 45; // 给thinking + JSON两阶段足够时间
 
 export async function POST(request: NextRequest) {
   logger.info('[Stage0 Stream API] Received request');
@@ -35,41 +39,65 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const validated = Stage0StreamRequestSchema.parse(body);
         
-        // 生成简洁的prompt（不要求特殊格式）
-        const prompt = validated.action === 'initial'
-          ? getInitialCollectionPrompt(validated.userInput || '')
-          : getDeepDivePrompt(
-              validated.conversationHistory as ChatMessage[] || [],
-              validated.currentDefinition || {}
-            );
-
-        // 前端模拟thinking效果（立即发送）
-        const thinkingMessages = [
-          '分析用户输入...',
-          '理解问题域...',
-          '准备问题...',
-        ];
+        // 阶段1：生成思考过程（streaming）
+        const thinkingPrompt = getThinkingPrompt(
+          validated.action,
+          validated.userInput,
+          validated.conversationHistory as ChatMessage[] || [],
+          validated.currentDefinition || {}
+        );
         
-        for (const msg of thinkingMessages) {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({
-              type: 'thinking',
-              text: msg,
-            })}\n\n`)
-          );
-          await new Promise(resolve => setTimeout(resolve, 300));
+        logger.info('[Stage0 Stream] Phase 1: Generating thinking process');
+        
+        const thinkingResult = await generateStreamingText(
+          thinkingPrompt,
+          (chunk) => {
+            // 实时发送思考文本
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'thinking',
+                text: chunk,
+              })}\n\n`)
+            );
+          },
+          {
+            temperature: 0.8, // 思考过程可以更自然
+            maxOutputTokens: 1000,
+          },
+          'Pro'
+        );
+        
+        if (!thinkingResult.ok) {
+          throw new Error(`Thinking generation failed: ${thinkingResult.error}`);
         }
-
-        // 直接生成JSON（快速、可靠）
+        
+        // 发送thinking完成信号
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({
+            type: 'thinking_done',
+          })}\n\n`)
+        );
+        
+        // 阶段2：基于思考生成结构化结果（JSON mode）
+        logger.info('[Stage0 Stream] Phase 2: Generating structured output');
+        
+        const structuredPrompt = getStructuredOutputPrompt(
+          validated.action,
+          validated.userInput,
+          validated.conversationHistory as ChatMessage[] || [],
+          validated.currentDefinition || {},
+          thinkingResult.fullText // 传入思考过程作为上下文
+        );
+        
         const result = await generateJson(
-          prompt,
+          structuredPrompt,
           getStage0GenerationConfig(),
           'Pro',
           'S0'
         );
         
         if (result.ok) {
-          // 发送数据
+          // 发送结构化数据
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: 'data',

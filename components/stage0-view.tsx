@@ -100,8 +100,11 @@ export default function Stage0View() {
             const event = JSON.parse(line.slice(6));
             
             if (event.type === 'thinking') {
-              // Cursor风格：实时累加thinking文本
+              // 真实的AI思考过程：实时累加
               setThinkingText(prev => prev + (event.text || ''));
+            } else if (event.type === 'thinking_done') {
+              // 思考完成，准备接收结构化数据
+              logger.info('[Stage0] Thinking phase completed');
             } else if (event.type === 'data') {
               finalData = event.data;
             } else if (event.type === 'error') {
