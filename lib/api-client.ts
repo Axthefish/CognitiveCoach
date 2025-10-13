@@ -30,117 +30,119 @@ export interface ApiError extends Error {
 }
 
 // ============================================
+// 自定义 ApiError 类
+// ============================================
+
+class ApiErrorImpl extends Error implements ApiError {
+  code: string;
+  status?: number;
+  isNetworkError?: boolean;
+  isTimeout?: boolean;
+  isRetryable?: boolean;
+  
+  constructor(message: string, options: Partial<ApiError> = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = options.code || 'UNKNOWN_ERROR';
+    this.status = options.status;
+    this.isNetworkError = options.isNetworkError;
+    this.isTimeout = options.isTimeout;
+    this.isRetryable = options.isRetryable ?? false;
+    
+    // 保持原始错误的堆栈跟踪
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ApiErrorImpl);
+    }
+  }
+}
+
+// ============================================
 // 错误分类
 // ============================================
 
 function classifyError(error: Error, response?: Response): ApiError {
-  // 创建一个新的 ApiError 对象，而不是修改原始 Error
-  const apiError = Object.create(error) as ApiError;
-  
-  // 复制原始错误的属性
-  Object.assign(apiError, {
-    name: error.name,
-    message: error.message,
-    stack: error.stack,
-  });
-  
   // 网络错误
   if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
-    Object.assign(apiError, {
+    return new ApiErrorImpl('无法连接到服务器，请检查网络后重试', {
       code: 'NETWORK_ERROR',
       isNetworkError: true,
       isRetryable: true,
-      message: '无法连接到服务器，请检查网络后重试',
     });
-    return apiError;
   }
   
   // 超时错误
   if (error.name === 'AbortError' || error.message.includes('timeout')) {
-    Object.assign(apiError, {
+    return new ApiErrorImpl('请求超时，请重试或稍后再试', {
       code: 'TIMEOUT',
       isTimeout: true,
       isRetryable: true,
-      message: '请求超时，请重试或稍后再试',
     });
-    return apiError;
   }
   
   // HTTP错误
   if (response) {
-    let errorDetails: Partial<ApiError> = { status: response.status };
+    const status = response.status;
     
-    switch (response.status) {
+    switch (status) {
       case 400:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('请求数据格式有误，请检查后重试', {
           code: 'VALIDATION_ERROR',
+          status,
           isRetryable: false,
-          message: '请求数据格式有误，请检查后重试',
-        };
-        break;
+        });
       
       case 401:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('未授权，请重新登录', {
           code: 'UNAUTHORIZED',
+          status,
           isRetryable: false,
-          message: '未授权，请重新登录',
-        };
-        break;
+        });
       
       case 403:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('没有权限访问此资源', {
           code: 'FORBIDDEN',
+          status,
           isRetryable: false,
-          message: '没有权限访问此资源',
-        };
-        break;
+        });
       
       case 404:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('请求的资源不存在', {
           code: 'NOT_FOUND',
+          status,
           isRetryable: false,
-          message: '请求的资源不存在',
-        };
-        break;
+        });
       
       case 429:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('请求过于频繁，请稍后再试', {
           code: 'RATE_LIMIT',
+          status,
           isRetryable: true,
-          message: '请求过于频繁，请稍后再试',
-        };
-        break;
+        });
       
       case 500:
       case 502:
       case 503:
       case 504:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('服务器错误，请稍后重试', {
           code: 'SERVER_ERROR',
+          status,
           isRetryable: true,
-          message: '服务器错误，请稍后重试',
-        };
-        break;
+        });
       
       default:
-        errorDetails = {
-          ...errorDetails,
+        return new ApiErrorImpl('发生未知错误，请稍后重试', {
           code: 'UNKNOWN_ERROR',
+          status,
           isRetryable: false,
-          message: '发生未知错误，请稍后重试',
-        };
+        });
     }
-    
-    Object.assign(apiError, errorDetails);
   }
   
-  return apiError;
+  // 未知错误
+  return new ApiErrorImpl(error.message || '发生未知错误', {
+    code: 'UNKNOWN_ERROR',
+    isRetryable: false,
+  });
 }
 
 // ============================================
