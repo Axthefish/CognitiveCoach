@@ -9,7 +9,7 @@
 import { NextRequest } from 'next/server';
 import { generateStreamingText, generateJson } from '@/lib/gemini-config';
 import { getDeepDivePrompt, getInitialCollectionPrompt, getStage0GenerationConfig } from '@/lib/prompts/stage0-prompts';
-import type { ChatMessage, PurposeDefinition } from '@/lib/types-v2';
+import type { ChatMessage } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -71,7 +71,6 @@ export async function POST(request: NextRequest) {
 
         // Streaming输出thinking
         let fullText = '';
-        let thinkingText = '';
         let isInThinking = false;
         
         const result = await generateStreamingText(
@@ -86,7 +85,6 @@ export async function POST(request: NextRequest) {
             
             if (isInThinking && !fullText.includes('</thinking>')) {
               // 实时发送thinking内容
-              thinkingText += chunk;
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({
                   type: 'thinking',
@@ -96,8 +94,7 @@ export async function POST(request: NextRequest) {
             }
           },
           getStage0GenerationConfig(),
-          'Pro',
-          'S0'
+          'Pro'
         );
         
         if (!result.ok) {

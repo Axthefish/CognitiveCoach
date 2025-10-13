@@ -207,8 +207,7 @@ export async function generateStreamingText(
   prompt: string,
   onChunk: (text: string) => void,
   overrides?: Partial<GenConfig>,
-  runTier?: 'Lite' | 'Pro' | 'Review',
-  stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'
+  runTier?: 'Lite' | 'Pro' | 'Review'
 ): Promise<{ ok: true; fullText: string } | { ok: false; error: string }> {
   const client = createGeminiClient();
   if (!client) return { ok: false, error: 'NO_API_KEY' };

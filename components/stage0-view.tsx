@@ -84,7 +84,7 @@ export default function Stage0View() {
       }
       
       let buffer = '';
-      let receivedData: any = null;
+      let receivedData: { next_question?: string; assessment?: { confidence?: number }; action?: string } | null = null;
       
       while (true) {
         const { done, value } = await reader.read();

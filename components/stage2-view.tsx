@@ -35,7 +35,7 @@ export default function Stage2View() {
   
   const [isThinking, setIsThinking] = React.useState(false);
   const [thinkingProgress, setThinkingProgress] = React.useState(0);
-  const [thinkingText, setThinkingText] = React.useState(''); // 🆕 真实thinking文本（待实现streaming）
+  const [thinkingText] = React.useState(''); // 🆕 真实thinking文本（暂未实现Stage2 streaming）
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [showPlan, setShowPlan] = React.useState(false);
   const [mobileTab, setMobileTab] = React.useState<'chat' | 'chart'>('chat');
