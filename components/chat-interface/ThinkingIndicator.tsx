@@ -6,7 +6,7 @@ interface ThinkingIndicatorProps {
   message?: string;
 }
 
-export function ThinkingIndicator({ message = 'AI 正在思考...' }: ThinkingIndicatorProps) {
+export const ThinkingIndicator = React.memo(function ThinkingIndicator({ message = 'AI is thinking...' }: ThinkingIndicatorProps) {
   return (
     <div className="flex justify-start w-full mb-4">
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 shadow-sm max-w-[80%]">
@@ -24,7 +24,7 @@ export function ThinkingIndicator({ message = 'AI 正在思考...' }: ThinkingIn
       </div>
     </div>
   );
-}
+});
 
 // ============================================
 // 打字机效果组件（用于流式输出）
@@ -36,7 +36,7 @@ interface TypewriterTextProps {
   onComplete?: () => void;
 }
 
-export function TypewriterText({ text, speed = 30, onComplete }: TypewriterTextProps) {
+export const TypewriterText = React.memo(function TypewriterText({ text, speed = 30, onComplete }: TypewriterTextProps) {
   const [displayedText, setDisplayedText] = React.useState('');
   const [currentIndex, setCurrentIndex] = React.useState(0);
   
@@ -54,5 +54,5 @@ export function TypewriterText({ text, speed = 30, onComplete }: TypewriterTextP
   }, [currentIndex, text, speed, onComplete]);
   
   return <span>{displayedText}</span>;
-}
+});
 

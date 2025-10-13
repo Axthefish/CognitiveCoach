@@ -1,0 +1,262 @@
+/**
+ * 玻璃态设计系统 (Glassmorphism)
+ * 为 CognitiveCoach 提供现代、优雅的玻璃态视觉效果
+ */
+
+:root {
+  /* ========== 玻璃态核心变量 ========== */
+  --glass-bg-primary: rgba(255, 255, 255, 0.08);
+  --glass-bg-secondary: rgba(255, 255, 255, 0.05);
+  --glass-bg-tertiary: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-border-strong: rgba(255, 255, 255, 0.3);
+  
+  /* 玻璃态阴影 - 多层柔和阴影 */
+  --glass-shadow-sm: 0 2px 8px 0 rgba(31, 38, 135, 0.15);
+  --glass-shadow-md: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+  --glass-shadow-lg: 0 16px 48px 0 rgba(31, 38, 135, 0.35);
+  --glass-shadow-xl: 0 24px 64px 0 rgba(31, 38, 135, 0.45);
+  
+  /* ========== 品牌渐变色 ========== */
+  --brand-gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --brand-gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --brand-gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --brand-gradient-success: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  --brand-gradient-warning: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  
+  /* ========== 语义化色彩 ========== */
+  --color-stage-0: #667eea;
+  --color-stage-1: #4facfe;
+  --color-stage-2: #43e97b;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+  
+  /* ========== 强调色（玻璃态友好） ========== */
+  --accent-blue: #4C9AFF;
+  --accent-purple: #9C27B0;
+  --accent-cyan: #00BCD4;
+  --accent-pink: #E91E63;
+  --accent-green: #4CAF50;
+  
+  /* ========== 背景渐变动画 ========== */
+  --animated-gradient: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #667eea 75%,
+    #764ba2 100%
+  );
+}
+
+.dark {
+  /* 暗色模式玻璃态调整 */
+  --glass-bg-primary: rgba(0, 0, 0, 0.3);
+  --glass-bg-secondary: rgba(0, 0, 0, 0.2);
+  --glass-bg-tertiary: rgba(0, 0, 0, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-strong: rgba(255, 255, 255, 0.2);
+}
+
+/* ========== 玻璃态工具类 ========== */
+
+.glass-card-primary {
+  background: var(--glass-bg-primary);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-md);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-secondary {
+  background: var(--glass-bg-secondary);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-tertiary {
+  background: var(--glass-bg-tertiary);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 悬停效果 */
+.glass-card-primary:hover,
+.glass-card-secondary:hover,
+.glass-card-tertiary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow-lg);
+  border-color: var(--glass-border-strong);
+}
+
+/* 玻璃态按钮 */
+.glass-button {
+  background: var(--glass-bg-primary);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-button:hover {
+  background: var(--glass-bg-secondary);
+  transform: translateY(-1px);
+  box-shadow: var(--glass-shadow-md);
+  border-color: var(--glass-border-strong);
+}
+
+.glass-button:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+/* 玻璃态输入框 */
+.glass-input {
+  background: var(--glass-bg-secondary);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  background: var(--glass-bg-primary);
+  border-color: var(--glass-border-strong);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* ========== 渐变背景层 ========== */
+
+.gradient-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--animated-gradient);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* 玻璃态遮罩 */
+.glass-overlay {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ========== 玻璃态进度指示器 ========== */
+
+.glass-progress-bar {
+  background: var(--glass-bg-primary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+  position: relative;
+}
+
+.glass-progress-fill {
+  background: var(--brand-gradient-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ========== 响应式玻璃态调整 ========== */
+
+@media (max-width: 640px) {
+  .glass-card-primary,
+  .glass-card-secondary,
+  .glass-card-tertiary {
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+  }
+}
+
+/* ========== 性能优化 ========== */
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-card-primary,
+  .glass-card-secondary,
+  .glass-card-tertiary,
+  .glass-button {
+    transition: none;
+    animation: none;
+  }
+  
+  .gradient-background {
+    animation: none;
+  }
+}
+
+/* Safari 兼容性 */
+@supports not (backdrop-filter: blur(20px)) {
+  .glass-card-primary,
+  .glass-card-secondary,
+  .glass-card-tertiary {
+    background: rgba(255, 255, 255, 0.9);
+  }
+  
+  .dark .glass-card-primary,
+  .dark .glass-card-secondary,
+  .dark .glass-card-tertiary {
+    background: rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* ========== 文字对比度增强（可访问性） ========== */
+
+.glass-text-primary {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.glass-text-secondary {
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.glass-text-muted {
+  color: rgba(255, 255, 255, 0.6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+

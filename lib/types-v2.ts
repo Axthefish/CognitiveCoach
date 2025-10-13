@@ -38,11 +38,34 @@ export interface ChatMessage {
 // Stage 0: 目的澄清
 // ============================================
 
+/**
+ * Stage1专用的purpose context（不含用户约束）
+ * 用于生成真正的通用框架
+ */
+export interface UniversalPurposeContext {
+  clarifiedPurpose: string;
+  problemDomain: string;
+  domainBoundary: string;
+  // ❌ 不包含keyConstraints - Stage1不考虑个人约束
+}
+
+/**
+ * Stage 0 输出：目的澄清结果
+ * 
+ * 关键设计理念：区分边界约束和个人约束
+ * - 边界约束：定义问题域范围（如"不学机器学习"） → 传给 Stage1
+ * - 个人约束：定义执行条件（如"每周2小时"） → 传给 Stage2
+ */
 export interface PurposeDefinition {
   // 原始输入
   rawInput: string;
   
-  // 澄清后的目的
+  /**
+   * 澄清后的目的
+   * ⚠️ 必须是通用描述，不包含个人情况
+   * 例如："学习 Python 进行数据分析" ✓
+   * 例如："零基础学习 Python" ✗（"零基础"是个人约束）
+   */
   clarifiedPurpose: string;
   
   // 问题域
@@ -51,11 +74,35 @@ export interface PurposeDefinition {
   // 问题域边界描述
   domainBoundary: string;
   
-  // 关键约束条件
+  /**
+   * 边界约束：影响问题域范围的约束
+   * 用途：传递给 Stage1，界定通用框架的范围
+   * 示例：["不学机器学习", "只关注前端开发"]
+   */
+  boundaryConstraints: string[];
+  
+  /**
+   * 个人约束：影响执行方式的个人情况
+   * 用途：保留到 Stage2，用于个性化调整
+   * 示例：["每周5小时", "零基础", "倾向视频学习"]
+   */
+  personalConstraints: string[];
+  
+  /**
+   * @deprecated 仅用于向后兼容，合并了 boundaryConstraints 和 personalConstraints
+   * 新代码应该使用 boundaryConstraints 和 personalConstraints
+   */
   keyConstraints: string[];
   
   // 对话历史
   conversationHistory: ChatMessage[];
+  
+  /**
+   * 对话关键洞察（压缩后）
+   * 从conversationHistory中提取的关键信息摘要
+   * 用于传递给Stage 2进行个性化调整
+   */
+  conversationInsights?: string;
   
   // 置信度 (0-1)
   confidence: number;
@@ -287,8 +334,8 @@ export interface WeightConfig {
 export const COLOR_SCHEME = {
   DEEP_BLUE: '#1e40af',    // 90-100%: 核心必修
   BLUE: '#3b82f6',         // 70-89%: 重要推荐
-  LIGHT_BLUE: '#93c5fd',   // 50-69%: 可选增强
-  GRAY: '#9ca3af',         // <50%: 低优先级
+  LIGHT_BLUE: '#60a5fa',   // 50-69%: 可选增强（改善对比度）
+  GRAY: '#6b7280',         // <50%: 低优先级（改善对比度）
 } as const;
 
 export function getColorForWeight(weight: number): NodeColor {
@@ -341,5 +388,42 @@ export interface StreamEvent {
   type: StreamEventType;
   data: unknown;
   timestamp: number;
+}
+
+// ============================================
+// Cross-Stage Memory System
+// ============================================
+
+export interface Decision {
+  what: string;      // 做了什么决策
+  why: string;       // 为什么这样决策
+  timestamp: number;
+}
+
+export interface StageMemory {
+  sessionId: string;
+  stage: 'stage0' | 'stage1' | 'stage2';
+  keyInsights: string[];           // 关键洞察
+  decisions: Decision[];           // 重要决策
+  constraints: string[];           // 约束条件
+  compactedHistory?: string;       // 压缩后的历史（如果有）
+  rawData?: unknown;               // 原始数据（可选）
+  timestamp: number;
+  expiresAt?: number;              // 过期时间（可选）
+}
+
+export interface MemoryQuery {
+  sessionId: string;
+  stage?: 'stage0' | 'stage1' | 'stage2';
+  keywords?: string[];
+  limit?: number;
+}
+
+export interface MemorySummary {
+  sessionId: string;
+  totalInsights: number;
+  totalDecisions: number;
+  stages: Array<'stage0' | 'stage1' | 'stage2'>;
+  summary: string;  // <100 tokens的简洁摘要
 }
 

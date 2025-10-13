@@ -1,0 +1,22 @@
+{
+  "title": "阶段 0：目的澄清",
+  "subtitle": "让我们通过对话明确你的目标和需求",
+  "placeholder": "请描述你想解决的问题或达成的目标...",
+  "thinking": "正在分析你的需求...",
+  "welcome": "欢迎使用 CognitiveCoach！我会通过对话帮你澄清目标和需求。",
+  "confirmation": {
+    "title": "请确认我的理解",
+    "purpose": "你的目的：",
+    "domain": "问题域：",
+    "boundary": "范围边界：",
+    "constraints": "关键约束：",
+    "confirmButton": "✓ 确认，继续",
+    "adjustButton": "需要调整"
+  },
+  "tips": {
+    "beSpecific": "尽可能具体地描述你的目标",
+    "includeContext": "包含相关的背景信息",
+    "mentionConstraints": "说明你的限制条件"
+  }
+}
+

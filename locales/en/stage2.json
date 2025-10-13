@@ -1,0 +1,40 @@
+{
+  "title": "Stage 2: Personalization",
+  "states": {
+    "questioning": "Answer a few questions to get your personalized plan",
+    "generating": "Generating personalized plan...",
+    "completed": "Personalized plan generated!"
+  },
+  "tabs": {
+    "chat": "💬 Chat",
+    "framework": "📊 Framework"
+  },
+  "placeholder": {
+    "active": "Type your answer...",
+    "waiting": "Waiting for question..."
+  },
+  "thinking": "Analyzing...",
+  "analysisComplete": "Great! I've understood your situation. Now let me generate a personalized action plan for you...",
+  "planReady": "✓ Personalized plan generated! Check the updated framework on the right and action plan below.",
+  "sections": {
+    "adjustedFramework": "Adjusted Framework",
+    "originalFramework": "Original Framework",
+    "adjustmentRationale": "📊 Adjustment Rationale",
+    "actionSteps": "📋 Action Steps",
+    "milestones": "🎯 Milestones",
+    "tips": "💡 Personalized Tips"
+  },
+  "priority": {
+    "high": "High Priority",
+    "medium": "Medium Priority",
+    "low": "Low Priority"
+  },
+  "milestone": {
+    "expectedTime": "Expected: {time}",
+    "criteria": "Success Criteria"
+  },
+  "complete": {
+    "button": "Finish & Take Action 🚀"
+  }
+}
+

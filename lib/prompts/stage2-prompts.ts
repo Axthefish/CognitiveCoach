@@ -1,55 +1,102 @@
 /**
- * Stage 2 Prompt 模板 - 个性化方案生成
+ * Stage 2 Prompt 模板 - 个性化方案生成（优化版）
  * 
- * 动态收集信息并生成个性化方案
+ * 基于Anthropic最佳实践：
+ * - 简化问题生成指导
+ * - 信任模型判断
+ * - 明确决策标准
  */
 
 import type { UniversalFramework } from '@/lib/types-v2';
 
 // ============================================
-// 信息缺口分析
+// 信息缺口分析（优化版）
 // ============================================
 
-export function getMissingInfoAnalysisPrompt(framework: UniversalFramework): string {
-  return `你是一个专业的需求分析师。基于已生成的通用框架，分析"要生成个性化方案，还缺少哪些关键用户信息"。
+export function getMissingInfoAnalysisPrompt(
+  framework: UniversalFramework,
+  personalConstraints: string[],
+  conversationInsights?: string
+): string {
+  return `<workflow_context>
+你在三阶段认知教练系统的 Stage 2 - 个性化适配阶段（问题设计）
 
-**通用框架：**
-目的：${framework.purpose}
-问题域：${framework.domain}
+前置阶段（Stage 0和1已完成）：
 
-节点列表：
-${framework.nodes.map(n => `- ${n.title} (权重: ${n.weight}%)`).join('\n')}
+<stage0_context>
+用户目的：「${framework.purpose}」
+问题域：「${framework.domain}」
 
-**你的任务：**
-分析需要收集的关键信息，生成3-5个问题。
+个人约束：
+${personalConstraints.length > 0 ? personalConstraints.map(c => `- ${c}`).join('\n') : '（暂无）'}
 
-**信息类型：**
-1. **baseline**: 基础水平（用户当前在哪些节点已有基础？）
-2. **resource**: 资源约束（时间、金钱、工具等限制？）
-3. **context**: 情境信息（特殊情况、优先级、偏好？）
-4. **motivation**: 动机深度（为什么做、紧迫度、期望？）
+${conversationInsights ? `对话关键洞察：
+${conversationInsights}` : ''}
+</stage0_context>
 
-**问题设计原则：**
-- 每个问题都要说明"为什么这个信息重要"
-- 问题要开放式，让用户有表达空间
-- 按影响力排序（影响最大的排在前面）
+<stage1_framework>
+通用框架已生成，包含${framework.nodes.length}个节点
+权重设计思路：${framework.weightingLogic}
 
-请严格按照以下JSON格式输出：
-\`\`\`json
-{
-  "questions": [
-    {
-      "id": "q1",
-      "question": "具体问题文本",
-      "whyMatters": "为什么这个问题重要，会如何影响方案",
-      "affects": ["node-id-1", "node-id-2"],
-      "impactLevel": 5,
-      "questionType": "baseline"
-    }
-  ],
-  "rationale": "为什么选择这些问题的简要说明"
-}
-\`\`\``;
+核心节点（权重≥70%）：
+${framework.nodes
+  .filter(n => n.weight >= 70)
+  .map(n => `- ${n.title} (${n.weight}%): ${n.description.substring(0, 100)}...`)
+  .join('\n')}
+</stage1_framework>
+
+你的职责：
+- 设计3-5个高质量问题，收集个性化信息
+- 基于用户回答，后续将调整通用框架的权重
+- 生成具体的行动步骤和时间线
+
+关键要求：
+- 问题必须能直接影响权重调整决策
+- 避免询问Stage 0已经确认的信息
+- 每个问题应该影响多个节点（高信息密度）
+</workflow_context>
+
+<personal_constraints_usage>
+**如何基于个人约束设计高质量问题**：
+
+设计原则：
+1. **深入挖掘**：不要重复问已知信息，而是基于已知约束问"如何应对"
+   - 已知"零基础" → 问"你倾向通过什么方式学习新知识？（视频/文字/实践）"
+   - 已知"每周5小时" → 问"如果某个核心模块需要10小时，你愿意延长时间线还是降低深度？"
+   - 已知"工作需要" → 问"你希望在多久内能应用到工作中？有具体的应用场景吗？"
+
+2. **影响权重调整**：每个问题必须能直接指导权重调整
+   - 好问题："你的首要目标是快速上手还是系统掌握？" → 影响timeROI的权重系数
+   - 好问题："你已有哪些相关知识或技能？" → 可以降低某些前置节点的权重
+   - 差问题："你叫什么名字？" → 无法影响任何决策
+
+3. **高信息密度**：一个问题影响多个节点
+   - "你更看重理论理解还是实践能力？" → 影响多个节点的学习深度
+   - "你有多少时间可以持续投入？" → 影响所有节点的feasibility
+
+你的问题应该"深入"这些约束，挖掘背后的决策信息。
+</personal_constraints_usage>
+
+<task>
+基于上述context，设计3-5个高质量问题。
+
+问题应该帮助你：
+- 评估用户当前水平（已有基础→降低某些节点权重）
+- 了解资源限制（时间/精力→调整优先级）
+- 识别学习偏好（深度/广度→调整路径）
+- 明确应用场景（实际需求→聚焦关键模块）
+
+好问题的特征：
+✓ 回答能直接指导权重调整或路径选择
+✓ 一个问题影响多个节点（高信息密度）
+✓ 开放但有清晰的决策空间
+
+避免：
+✗ Stage 0已经问过的信息
+✗ 纯粹信息收集而无法指导调整
+</task>
+
+输出JSON：questions数组（每个问题含id, question, whyMatters, affects, impactLevel, questionType）`;
 }
 
 // ============================================
@@ -64,82 +111,80 @@ export function getPersonalizedPlanPrompt(
     .map(info => `Q: ${info.questionId}\nA: ${info.answer}`)
     .join('\n\n');
   
-  return `你是一个专业的方案规划师。基于通用框架和用户的个性化信息，生成定制化方案。
+  return `<workflow_context>
+你在三阶段认知教练系统的 Stage 2 - 个性化适配阶段（方案生成）
 
-**通用框架：**
+前置阶段（Stage 0和1已完成，用户已回答个性化问题）：
+
+<stage1_universal_framework>
+通用框架（为标准学习者设计）：
+- 目的：${framework.purpose}
+- 节点数：${framework.nodes.length}
+- 权重基于客观重要性，未考虑个人因素
+
+核心节点（权重≥70%）：
+${framework.nodes
+  .filter(n => n.weight >= 70)
+  .map(n => `- ${n.title} (${n.weight}%): ${n.weightBreakdown?.necessity ? `necessity=${n.weightBreakdown.necessity.toFixed(2)}` : ''}`)
+  .join('\n')}
+</stage1_universal_framework>
+
+你的职责：
+- 基于用户的个人情况，调整通用框架的权重
+- 生成具体可执行的行动步骤
+- 提供个性化建议和里程碑
+
+关键原则：
+- 权重调整必须有明确的reasoning（基于用户回答）
+- 行动步骤必须具体、可执行、有时间线
+- 保持框架的整体逻辑，只调整优先级和路径
+</workflow_context>
+
+<universal_framework>
 ${JSON.stringify(framework, null, 2)}
+</universal_framework>
 
-**用户信息：**
+<user_info>
+用户个性化信息（基于问题回答）：
 ${infoText}
+</user_info>
 
-**你的任务：**
-1. **调整框架权重**
-   - 基于用户的实际情况，重新评估每个节点的必要性、影响力、时间ROI
-   - 某些节点可能因为用户已有基础而降低权重
-   - 某些节点可能因为用户的特殊需求而提升权重
+<task>
+基于用户的实际情况，调整通用框架并生成具体行动计划。
 
-2. **生成行动步骤**
-   - 将框架转化为具体的、可执行的步骤
-   - 每个步骤关联到框架节点
-   - 包含时间安排和优先级
+**1. 调整节点权重**
+根据用户情况重新评估每个节点的necessity/impact/timeROI：
+- 用户已有基础的部分 → 降低necessity和weight
+- 用户特别需要的部分 → 提升impact和weight
+- 资源受限时 → 提高timeROI权重，优先高效模块
 
-3. **设置里程碑**
-   - 关键的检查点和成功标准
-   - 帮助用户追踪进度
+**调整示例**：
+- 用户回答"已掌握Python基础" → 降低"Python语法基础"节点weight（如90%→60%）
+- 用户回答"主要用于工作数据分析" → 提升"实战项目"节点weight（如75%→85%）
+- 用户回答"每周只有5小时" → 重新计算timeROI，优先高ROI节点
 
-4. **个性化建议**
-   - 基于用户情况的针对性tips
-   - 3-5条具体建议
+**2. 生成行动步骤**
+将框架节点转化为具体可执行步骤：
+- 关联到具体节点
+- 包含时间线和优先级
+- 考虑依赖关系
+- 具体到"做什么"而非"学什么"
 
-请严格按照以下JSON格式输出：
-\`\`\`json
-{
-  "adjustedFramework": {
-    "purpose": "...",
-    "domain": "...",
-    "nodes": [
-      {
-        "id": "...",
-        "title": "...",
-        "weight": 85,
-        "weightBreakdown": {
-          "necessity": 0.9,
-          "impact": 0.8,
-          "timeROI": 0.85
-        },
-        "... (其他字段保持原样)"
-      }
-    ],
-    "... (edges, mainPath等保持原样)"
-  },
-  "actionSteps": [
-    {
-      "id": "step-1",
-      "title": "步骤标题",
-      "description": "详细说明",
-      "relatedNodeId": "node-id",
-      "startTime": "第1周",
-      "endTime": "第2周",
-      "priority": "high",
-      "prerequisites": []
-    }
-  ],
-  "milestones": [
-    {
-      "id": "milestone-1",
-      "title": "里程碑标题",
-      "successCriteria": ["标准1", "标准2"],
-      "expectedTime": "第4周",
-      "relatedSteps": ["step-1", "step-2"]
-    }
-  ],
-  "personalizedTips": [
-    "针对性建议1",
-    "针对性建议2"
-  ],
-  "adjustmentRationale": "简要说明为什么这样调整"
-}
-\`\`\``;
+**3. 设置里程碑**
+标识关键检查点和成功标准
+
+**4. 个性化建议**
+3-5条针对用户情况的具体tips（基于用户回答）
+</task>
+
+输出JSON格式，包含：
+- adjustedFramework（调整后的框架，nodes的weight和weightBreakdown会变化）
+- actionSteps（行动步骤数组）
+- milestones（里程碑数组）
+- personalizedTips（建议数组）
+- adjustmentRationale（调整说明，必须提到具体的用户回答和权重变化）
+
+用你的专业判断决定具体的权重调整幅度和行动步骤设计。`;
 }
 
 // ============================================

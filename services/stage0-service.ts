@@ -15,6 +15,10 @@ import {
   isVagueInput,
   getGuidanceForVagueInput,
 } from '@/lib/prompts/stage0-prompts';
+import { contextManager } from '@/lib/context-manager';
+import { contextMonitor } from '@/lib/context-monitor';
+import { tokenBudgetManager } from '@/lib/token-budget-manager';
+import { validateStage0Output, canProceedToStage1 } from '@/lib/output-validator';
 import { logger } from '@/lib/logger';
 import { handleError } from '@/lib/app-errors';
 
@@ -50,6 +54,8 @@ export class Stage0Service {
             clarifiedPurpose: '',
             problemDomain: '',
             domainBoundary: '',
+            boundaryConstraints: [],
+            personalConstraints: [],
             keyConstraints: [],
             conversationHistory: [],
             confidence: 0,
@@ -80,6 +86,17 @@ export class Stage0Service {
       // AI 响应已经是解析后的对象
       const analysis = aiResponse.data;
       
+      // 记录token使用
+      contextMonitor.recordGeneration(
+        'stage0',
+        prompt,
+        JSON.stringify(analysis),
+        {
+          runTier: 'Pro',
+          sessionId: userInput.substring(0, 20),  // 使用输入前20字符作为临时ID
+        }
+      );
+      
       return NextResponse.json({
         success: true,
         data: {
@@ -87,6 +104,8 @@ export class Stage0Service {
           clarifiedPurpose: analysis.analysis.possible_purposes[0] || '',
           problemDomain: analysis.analysis.possible_domains[0] || '',
           domainBoundary: '',
+          boundaryConstraints: [],
+          personalConstraints: [],
           keyConstraints: analysis.analysis.initial_clues || [],
           conversationHistory: [],
           confidence: 0.3,
@@ -106,18 +125,80 @@ export class Stage0Service {
   }
   
   /**
-   * 处理后续对话轮次
+   * 处理后续对话轮次（增强版）
    */
   async processContinuation(
     conversationHistory: ChatMessage[],
-    currentDefinition: Partial<PurposeDefinition>
+    currentDefinition: Partial<PurposeDefinition>,
+    sessionId?: string
   ): Promise<NextResponse<Stage0Response>> {
     logger.info('[Stage0Service] Processing continuation', {
       historyLength: conversationHistory.length,
+      sessionId,
     });
     
     try {
-      const prompt = getDeepDivePrompt(conversationHistory, currentDefinition);
+      // 🆕 评估Context质量
+      const contextQuality = contextMonitor.assessContextQuality(conversationHistory);
+      
+      logger.debug('[Stage0Service] Context quality assessed', {
+        tokenCount: contextQuality.tokenCount,
+        attentionScore: contextQuality.attentionScore,
+        informationDensity: contextQuality.informationDensity,
+      });
+      
+      // 🆕 Token预算管理
+      const estimate = tokenBudgetManager.estimateStage0NextTurn(
+        conversationHistory,
+        currentDefinition
+      );
+      
+      const budget = tokenBudgetManager.getRemainingBudget(
+        'stage0',
+        sessionId || 'default'
+      );
+      
+      const strategy = tokenBudgetManager.suggestOptimization(estimate, budget);
+      
+      logger.info('[Stage0Service] Token budget check', {
+        estimate: estimate.total,
+        remaining: budget.remaining,
+        strategyAction: strategy.action,
+      });
+      
+      // 应用上下文压缩
+      let processedHistory = conversationHistory;
+      let compactionInfo = null;
+      let compactionSummary: string | undefined = undefined;
+      
+      // 🆕 智能触发压缩：基于token预算或context质量
+      const shouldCompactByBudget = strategy.action === 'compact_now';
+      const shouldCompactByQuality = contextQuality.attentionScore < 0.6;
+      const shouldCompactByLength = conversationHistory.length > 10;
+      
+      if (shouldCompactByBudget || shouldCompactByQuality || shouldCompactByLength) {
+        const reason = shouldCompactByBudget 
+          ? 'token预算即将超限' 
+          : shouldCompactByQuality 
+          ? 'context质量下降（注意力得分<0.6）'
+          : '对话轮次过多';
+        
+        logger.info('[Stage0Service] Triggering compaction', { reason });
+        
+        const compactionResult = await contextManager.smartCompact(conversationHistory);
+        if (compactionResult.wasCompacted) {
+          processedHistory = compactionResult.compactedMessages;
+          compactionSummary = compactionResult.summary;
+          compactionInfo = {
+            originalTokens: compactionResult.originalTokens,
+            compactedTokens: compactionResult.compactedTokens,
+            compressionRatio: compactionResult.compressionRatio,
+          };
+          logger.info('[Stage0Service] History compacted', compactionInfo);
+        }
+      }
+      
+      const prompt = getDeepDivePrompt(processedHistory, currentDefinition);
       const config = getStage0GenerationConfig();
       
       const aiResponse = await generateJson<{
@@ -137,18 +218,44 @@ export class Stage0Service {
       // AI 响应已经是解析后的对象
       const result = aiResponse.data;
       
+      // 🆕 记录token使用（包含压缩信息）
+      const actualTokensUsed = estimate.total;
+      
+      contextMonitor.recordGeneration(
+        'stage0',
+        prompt,
+        JSON.stringify(result),
+        {
+          runTier: 'Pro',
+          wasCompacted: compactionInfo !== null,
+          compressionRatio: compactionInfo?.compressionRatio,
+          sessionId: sessionId || currentDefinition.rawInput?.substring(0, 20),
+        }
+      );
+      
+      // 注意：contextQuality可以单独记录或在后续版本中添加到TokenUsageRecord
+      
+      // 🆕 跟踪session的token使用
+      if (sessionId) {
+        tokenBudgetManager.trackSessionUsage(sessionId, 'stage0', actualTokensUsed);
+      }
+      
       // 根据 AI 的判断决定下一步
       if (result.action === 'confirm') {
-        // 进入确认阶段
-        return this.generateConfirmation(conversationHistory);
+        // 进入确认阶段，传递可能的compaction insights
+        return this.generateConfirmation(
+          processedHistory, 
+          compactionSummary
+        );
       } else {
-        // 继续追问
+        // 继续追问，保存可能的compaction insights
         return NextResponse.json({
           success: true,
           data: {
             ...currentDefinition,
             confidence: result.assessment.confidence,
             clarificationState: 'REFINING',
+            conversationInsights: compactionSummary || currentDefinition.conversationInsights,
           } as PurposeDefinition,
           message: result.next_question,
           nextAction: 'continue_dialogue',
@@ -168,21 +275,24 @@ export class Stage0Service {
    * 生成最终确认
    */
   async generateConfirmation(
-    conversationHistory: ChatMessage[]
+    conversationHistory: ChatMessage[],
+    conversationInsights?: string
   ): Promise<NextResponse<Stage0Response>> {
-    logger.info('[Stage0Service] Generating confirmation');
+    logger.info('[Stage0Service] Generating confirmation', {
+      hasInsights: !!conversationInsights
+    });
     
     try {
       const prompt = getConfirmationPrompt(conversationHistory);
       const config = getStage0GenerationConfig(); // 最后一轮
       
       const aiResponse = await generateJson<{
-        final_understanding: {
-          clarified_purpose: string;
-          problem_domain: string;
-          domain_boundary: string;
-          key_constraints: string[];
-        };
+        clarified_purpose: string;
+        problem_domain: string;
+        domain_boundary: string;
+        boundary_constraints: string[];
+        personal_constraints: string[];
+        confidence: number;
         confirmation_message: string;
       }>(prompt, config, 'Pro', 'S0');
       
@@ -194,20 +304,45 @@ export class Stage0Service {
       const responseData = aiResponse.data;
       const finalDefinition: PurposeDefinition = {
         rawInput: conversationHistory[0]?.content || '',
-        clarifiedPurpose: responseData.final_understanding.clarified_purpose,
-        problemDomain: responseData.final_understanding.problem_domain,
-        domainBoundary: responseData.final_understanding.domain_boundary,
-        keyConstraints: responseData.final_understanding.key_constraints,
+        clarifiedPurpose: responseData.clarified_purpose,
+        problemDomain: responseData.problem_domain,
+        domainBoundary: responseData.domain_boundary,
+        boundaryConstraints: responseData.boundary_constraints || [],
+        personalConstraints: responseData.personal_constraints || [],
+        keyConstraints: [
+          ...responseData.boundary_constraints || [],
+          ...responseData.personal_constraints || []
+        ], // 向后兼容：合并两类约束
         conversationHistory,
-        confidence: 1.0,
+        conversationInsights, // 🆕 保存压缩后的insights
+        confidence: responseData.confidence || 1.0,
         clarificationState: 'COMPLETED',
       };
+      
+      // 🆕 验证输出质量
+      const validation = validateStage0Output(finalDefinition);
+      
+      if (!validation.isValid) {
+        logger.warn('[Stage0Service] Output validation failed', {
+          errorCount: validation.errorCount,
+          issues: validation.issues.map(i => i.checkName),
+        });
+      }
+      
+      // 检查是否可以进入Stage 1
+      const canProceed = canProceedToStage1(finalDefinition);
+      if (!canProceed.canProceed) {
+        logger.warn('[Stage0Service] Cannot proceed to Stage 1', {
+          reason: canProceed.reason,
+          blockingIssues: canProceed.blockingIssues.map(i => i.checkName),
+        });
+      }
       
       return NextResponse.json({
         success: true,
         data: finalDefinition,
         message: finalDefinition.clarifiedPurpose,
-        nextAction: 'confirm',
+        nextAction: 'confirm', // 总是返回confirm，验证issues只是警告
       });
       
     } catch (error) {
@@ -252,100 +387,6 @@ export class Stage0Service {
     }
   }
   
-  // ========================================
-  // 解析函数
-  // ========================================
-  
-  private parseInitialResponse(aiResponse: string) {
-    try {
-      // 提取 JSON（可能在代码块中）
-      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || aiResponse.match(/{[\s\S]*}/);
-      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : aiResponse;
-      const parsed = JSON.parse(jsonStr);
-      
-      return {
-        possible_domains: parsed.analysis?.possible_domains || [],
-        possible_purposes: parsed.analysis?.possible_purposes || [],
-        initial_clues: parsed.analysis?.initial_clues || [],
-        next_question: parsed.next_question || '能否详细说说你的情况？',
-      };
-    } catch (error) {
-      logger.error('[Stage0Service] Failed to parse initial response', { error, aiResponse });
-      
-      // 降级：提取文本
-      return {
-        possible_domains: ['未分类'],
-        possible_purposes: ['待明确'],
-        initial_clues: [],
-        next_question: '能否详细说说你想做什么？以及为什么想做这件事？',
-      };
-    }
-  }
-  
-  private parseContinuationResponse(aiResponse: string) {
-    try {
-      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || aiResponse.match(/{[\s\S]*}/);
-      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : aiResponse;
-      const parsed = JSON.parse(jsonStr);
-      
-      return {
-        assessment: {
-          clarity_score: parsed.assessment?.clarity_score || 0.5,
-          missing_info: parsed.assessment?.missing_info || [],
-          confidence: parsed.assessment?.confidence || 0.5,
-        },
-        action: parsed.action || 'continue',
-        next_question: parsed.next_question || '还有什么补充的吗？',
-      };
-    } catch (error) {
-      logger.error('[Stage0Service] Failed to parse continuation response', { error, aiResponse });
-      
-      return {
-        assessment: {
-          clarity_score: 0.5,
-          missing_info: ['需要更多信息'],
-          confidence: 0.5,
-        },
-        action: 'continue' as const,
-        next_question: '能否再详细说明一下？',
-      };
-    }
-  }
-  
-  private parseConfirmationResponse(
-    aiResponse: string,
-    conversationHistory: ChatMessage[]
-  ): PurposeDefinition {
-    try {
-      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || aiResponse.match(/{[\s\S]*}/);
-      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : aiResponse;
-      const parsed = JSON.parse(jsonStr);
-      
-      return {
-        rawInput: conversationHistory[0]?.content || '',
-        clarifiedPurpose: parsed.clarified_purpose || '',
-        problemDomain: parsed.problem_domain || '',
-        domainBoundary: parsed.domain_boundary || '',
-        keyConstraints: parsed.key_constraints || [],
-        conversationHistory,
-        confidence: parsed.confidence || 0.8,
-        clarificationState: 'CONFIRMING',
-      };
-    } catch (error) {
-      logger.error('[Stage0Service] Failed to parse confirmation response', { error, aiResponse });
-      
-      // 降级：基于对话历史生成简单总结
-      return {
-        rawInput: conversationHistory[0]?.content || '',
-        clarifiedPurpose: '基于对话的目的（AI生成失败）',
-        problemDomain: '待确认',
-        domainBoundary: '待确认',
-        keyConstraints: [],
-        conversationHistory,
-        confidence: 0.5,
-        clarificationState: 'CONFIRMING',
-      };
-    }
-  }
+  // Note: AI response parsing is now handled by generateJson() which returns parsed objects directly
 }
 

@@ -1,0 +1,43 @@
+{
+  "app": {
+    "title": "CognitiveCoach - AI Cognitive Coaching Platform",
+    "description": "AI-powered personalized cognitive coaching platform"
+  },
+  "navigation": {
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip",
+    "finish": "Finish",
+    "restart": "Restart",
+    "help": "Help"
+  },
+  "actions": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "retry": "Retry",
+    "close": "Close",
+    "send": "Send"
+  },
+  "status": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "success": "Success",
+    "error": "Error",
+    "processing": "Processing..."
+  },
+  "errors": {
+    "network": "Network connection failed. Please check your connection.",
+    "server": "Server error occurred. Please try again later.",
+    "unknown": "An unknown error occurred",
+    "tryAgain": "Please try again"
+  },
+  "accessibility": {
+    "skipToMain": "Skip to main content",
+    "closeDialog": "Press Escape to close",
+    "loading": "Loading content"
+  }
+}
+

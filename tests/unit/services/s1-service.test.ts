@@ -1,7 +1,7 @@
 // S1 Service 单元测试
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { S1Service } from '@/services/s1-service';
+import { Stage1Service } from '@/services/stage1-service';
 
 // Mock dependencies
 jest.mock('@/lib/gemini-config');
@@ -9,16 +9,16 @@ jest.mock('@/lib/ai-retry-handler');
 jest.mock('@/lib/qa');
 jest.mock('@/lib/logger');
 
-describe('S1Service', () => {
-  let service: S1Service;
+describe('Stage1Service', () => {
+  let service: Stage1Service;
   
   beforeEach(() => {
-    service = S1Service.getInstance();
+    service = Stage1Service.getInstance();
   });
   
   it('should be a singleton', () => {
-    const instance1 = S1Service.getInstance();
-    const instance2 = S1Service.getInstance();
+    const instance1 = Stage1Service.getInstance();
+    const instance2 = Stage1Service.getInstance();
     
     expect(instance1).toBe(instance2);
   });

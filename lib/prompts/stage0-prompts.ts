@@ -14,31 +14,44 @@ import type { ChatMessage, PurposeDefinition } from '@/lib/types-v2';
 // ============================================
 
 export function getInitialCollectionPrompt(userInput: string): string {
-  return `你是一个专业的问题澄清专家。用户给了你一个初步的问题或目标，你的任务是通过对话深入理解他们的真实需求。
+  return `<workflow_context>
+你在三阶段认知教练系统的 Stage 0 - 目的澄清阶段
+
+你的职责：
+- 通过对话深入理解用户的真实目的（WHY）而非表面内容（WHAT）
+- 明确问题域边界（包括什么、排除什么）
+- 区分两类约束：
+  * 边界约束：影响问题域范围（如"不学机器学习"、"只关注前端"）
+  * 个人约束：影响执行方式（如"每周5小时"、"零基础"、"偏好视频"）
+
+你的输出将被用于：
+- Stage 1：使用clarifiedPurpose + boundaryConstraints生成通用框架
+- Stage 2：使用personalConstraints进行个性化调整
+
+因此：准确分类约束至关重要，这直接影响后续两个stage的质量。
+</workflow_context>
 
 用户输入：${userInput}
 
-请分析：
-1. **可能的问题域**：这个问题可能属于哪2-3个领域？（如：技能学习、职业发展、问题解决、决策支持等）
-2. **可能的目的**：用户为什么想做这件事？列出3种最可能的动机
-3. **初步线索**：从输入中能看出什么约束条件或特殊情况吗？
+<task>
+生成一个开放式问题，引导用户说出：
+- 深层动机（WHY）而非表面内容（WHAT）
+- 具体场景和范围
 
-然后，生成一个**自然、友好的问题**来进一步了解用户的需求。这个问题应该：
-- 聚焦在"为什么"（动机）或"具体是什么"（范围）
-- 开放式，让用户有空间详细说明
-- 避免让用户感到被审问
+问题设计原则：
+- 开放式，给用户表达空间
+- 自然友好，避免审问感
+- 优先问"为什么"和"希望达到什么"
+</task>
 
-请严格按照以下JSON格式输出：
-\`\`\`json
-{
-  "analysis": {
-    "possible_domains": ["领域1", "领域2", "领域3"],
-    "possible_purposes": ["目的1", "目的2", "目的3"],
-    "initial_clues": ["线索1", "线索2"]
-  },
-  "next_question": "你的开放式问题"
-}
-\`\`\``;
+<analysis>
+先快速分析（内部思考）：
+- 可能属于什么领域？
+- 用户最可能的动机？
+- 初步线索？
+</analysis>
+
+输出JSON：包含analysis（possible_domains, possible_purposes, initial_clues）和next_question`;
 }
 
 // ============================================
@@ -49,57 +62,62 @@ export function getDeepDivePrompt(
   conversationHistory: ChatMessage[],
   currentDefinition: Partial<PurposeDefinition>
 ): string {
+  // 处理可能包含压缩摘要的历史记录
   const historyText = conversationHistory
-    .map(msg => `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`)
-    .join('\n');
+    .map(msg => {
+      // 保留系统消息中的summary标签
+      if (msg.role === 'system') {
+        return msg.content;
+      }
+      return `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`;
+    })
+    .join('\n\n');
   
-  return `你是一个专业的问题澄清专家。你正在与用户对话，深入了解他们的需求。
+  return `<workflow_context>
+你在三阶段认知教练系统的 Stage 0 - 目的澄清阶段
 
-**对话历史：**
+你的职责：
+- 通过对话深入理解用户的真实目的（WHY）
+- 明确问题域边界（包括什么、排除什么）
+- 区分边界约束（影响问题范围）vs 个人约束（影响执行方式）
+
+你的输出将被用于：
+- Stage 1：使用clarifiedPurpose + boundaryConstraints生成通用框架
+- Stage 2：使用personalConstraints进行个性化调整
+
+因此：准确分类约束至关重要，这直接影响后续两个stage的质量。
+</workflow_context>
+
+<conversation>
 ${historyText}
+</conversation>
 
-**当前理解：**
-- 原始输入：${currentDefinition.rawInput || '未知'}
-- 问题域推测：${currentDefinition.problemDomain || '尚未确定'}
-- 目的推测：${currentDefinition.clarifiedPurpose || '尚未明确'}
-- 已识别约束：${currentDefinition.keyConstraints?.join(', ') || '无'}
+<current_understanding>
+原始输入：${currentDefinition.rawInput || '未知'}
+问题域推测：${currentDefinition.problemDomain || '待确定'}
+目的推测：${currentDefinition.clarifiedPurpose || '待明确'}
+已识别约束：${currentDefinition.keyConstraints?.join(', ') || '无'}
+</current_understanding>
 
-**你的任务：**
-评估当前信息的完整度，然后决定：
-1. 如果信息已经足够（目的清晰、范围明确、约束已知），输出 action: "confirm"
-2. 如果还需要更多信息，生成下一个追问，输出 action: "continue"
+<goal>
+通过对话达成：
+1. 深层动机清晰（WHY重要）
+2. 问题域边界明确（包括/排除什么）
+3. 约束明确（边界约束 vs 个人约束）
 
-追问策略：
-- **如果目的模糊**：追问"为什么想做这件事？达成这个目标对你意味着什么？"
-- **如果范围不清**：追问"具体包括哪些方面？不包括哪些？"
-- **如果约束未知**：追问"有什么限制或特殊情况？时间、资源、背景等"
-- **如果动机浅层**：追问更深层的动机和期望
+优先追问WHY（动机）而非HOW（执行）。
+</goal>
 
-请严格按照以下JSON格式输出：
-\`\`\`json
-{
-  "assessment": {
-    "clarity_score": 0.7,
-    "missing_info": ["缺失信息1", "缺失信息2"],
-    "confidence": 0.8
-  },
-  "action": "continue",
-  "next_question": "你的追问"
-}
-\`\`\`
+<decision_criteria>
+评估clarity_score（0-1）:
+- ≥0.85 且missing_info为空 → action: "confirm"
+- <0.85 → action: "continue"，生成next_question
+</decision_criteria>
 
-或者：
-
-\`\`\`json
-{
-  "assessment": {
-    "clarity_score": 0.95,
-    "missing_info": [],
-    "confidence": 0.9
-  },
-  "action": "confirm"
-}
-\`\`\``;
+输出JSON：
+- assessment（clarity_score, missing_info, confidence）
+- action（"continue"或"confirm"）
+- next_question（如果continue）`;
 }
 
 // ============================================
@@ -113,50 +131,74 @@ export function getConfirmationPrompt(
     .map(msg => `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`)
     .join('\n');
   
-  return `你是一个专业的问题澄清专家。基于完整的对话历史，现在需要生成最终的总结和确认。
+  return `<workflow_context>
+你在三阶段认知教练系统的 Stage 0 - 目的澄清阶段（最终确认）
 
-**完整对话历史：**
+你的职责：
+- 基于完整对话，生成结构化的目的定义
+- **准确分类约束**：边界约束 vs 个人约束（这是关键！）
+
+你的输出将被用于：
+- Stage 1：使用clarifiedPurpose + boundaryConstraints生成通用框架
+  * 通用框架适用于该领域的"标准学习者"
+  * 权重反映客观重要性，不考虑个人因素
+- Stage 2：使用personalConstraints进行个性化调整
+  * 基于用户的具体情况调整权重和路径
+  * 生成针对性的行动计划
+
+因此：约束分类的准确性直接决定后续两个stage的质量。
+</workflow_context>
+
+<conversation>
 ${historyText}
+</conversation>
 
-**你的任务：**
-综合所有对话，提取并总结：
+<task>
+综合对话，提取关键信息并分类：
 
-1. **澄清后的目的** (clarified_purpose)
-   - 用户的真实目标是什么？
-   - 为什么要做这件事？（核心动机）
-   - 1-2句话，清晰、可操作
+**1. 澄清后的目的** (clarified_purpose)
+- 用户的核心目标是什么？为什么重要？
+- ⚠️ 必须是通用描述，剥离个人情况（不含"零基础"/"每周X小时"等）
+- 示例好："掌握Python进行数据分析" ✓
+- 示例差："零基础学Python每周2小时" ✗
 
-2. **问题域** (problem_domain)
-   - 这个问题属于什么领域？
-   - 用专业术语精确描述
-   - 1句话
+**2. 问题域** (problem_domain)
+- 用一个专业术语精确描述领域
 
-3. **问题域边界** (domain_boundary)
-   - 明确包括什么、不包括什么
-   - 具体的范围界定
-   - 2-3句话
+**3. 问题域边界** (domain_boundary) ⭐
+明确范围：
+- 包括哪些子领域？
+- 明确排除什么？
+- 为什么这样划分？
 
-4. **关键约束** (key_constraints)
-   - 时间、资源、背景等限制
-   - 影响方案的重要因素
-   - 列表形式
+这个边界定义了Stage 1通用框架的生成范围。
 
-5. **确认消息** (confirmation_message)
-   - 一段友好的总结，用于向用户确认理解是否准确
-   - 包含以上所有要点
-   - 自然、专业的语气
+**4. 约束分类** ⚠️ 关键区分
 
-请严格按照以下JSON格式输出：
-\`\`\`json
-{
-  "clarified_purpose": "...",
-  "problem_domain": "...",
-  "domain_boundary": "...",
-  "key_constraints": ["约束1", "约束2", "约束3"],
-  "confidence": 0.9,
-  "confirmation_message": "根据我们的对话，我理解你的情况是：\\n\\n..."
-}
-\`\`\``;
+分为两类：
+
+**边界约束** (boundary_constraints):
+- 定义问题域范围的硬性限制
+- 例如："不涉及机器学习"、"仅前端不含后端"
+- 作用：缩小通用框架的覆盖范围
+- 传递：Stage 1会用这些约束界定框架边界
+
+**个人约束** (personal_constraints):
+- 影响执行方式的个人情况
+- 例如："每周5小时"、"零基础"、"偏好视频"
+- 作用：个性化调整优先级和路径
+- 传递：Stage 2才使用，不影响通用框架
+
+**区分标准**：
+- 问自己：这个约束是"改变问题本身"还是"改变解决方式"？
+- 前者→边界约束，后者→个人约束
+
+**5. 确认消息** (confirmation_message)
+- 友好地总结理解，供用户确认
+- 包含目的、边界、关键约束
+</task>
+
+输出JSON格式，包含上述所有字段。用你的判断决定每个约束应归入哪一类。`;
 }
 
 // ============================================

@@ -1,9 +1,11 @@
 /**
  * 新产品架构的状态管理 (V2)
  * 使用 Zustand 管理全局状态
+ * 集成persist中间件实现会话持久化
  */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   StageState,
   ChatMessage,
@@ -14,6 +16,7 @@ import type {
   UserContextInfo,
   Stage2State,
 } from './types-v2';
+import { logger } from './logger';
 
 // ============================================
 // Store 接口定义
@@ -43,6 +46,10 @@ interface CognitiveCoachStoreV2 {
   // 通用状态
   isLoading: boolean;
   error: string | null;
+  
+  // 会话状态
+  hasRestoredSession: boolean;
+  sessionSavedAt: number | null;
   
   // ========== Stage 0 Actions ==========
   
@@ -89,6 +96,9 @@ interface CognitiveCoachStoreV2 {
   // 完成整个流程
   completeFlow: () => void;
   
+  // 不进入Stage2直接完成
+  completeWithoutStage2: () => void;
+  
   // ========== 通用 Actions ==========
   
   // 设置加载状态
@@ -102,6 +112,10 @@ interface CognitiveCoachStoreV2 {
   
   // 返回上一阶段
   goBack: () => void;
+  
+  // 会话管理
+  acknowledgeSessionRestore: () => void;
+  clearSession: () => void;
 }
 
 // ============================================
@@ -121,13 +135,17 @@ const initialState = {
   personalizedPlan: null,
   isLoading: false,
   error: null,
+  hasRestoredSession: false,
+  sessionSavedAt: null,
 };
 
 // ============================================
 // Store 实现
 // ============================================
 
-export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>((set, get) => ({
+export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>()(
+  persist(
+    (set, get) => ({
   ...initialState,
   
   // ========== Stage 0 Actions ==========
@@ -157,7 +175,9 @@ export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>((set, get)
         clarifiedPurpose: '',
         problemDomain: '',
         domainBoundary: '',
-        keyConstraints: [],
+        boundaryConstraints: [],
+        personalConstraints: [],
+        keyConstraints: [], // 保留向后兼容
         conversationHistory: [userMessage],
         confidence: 0,
         clarificationState: 'INIT',
@@ -251,6 +271,13 @@ export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>((set, get)
     });
   },
   
+  completeWithoutStage2: () => {
+    set({
+      currentStage: 'COMPLETED',
+      // 保留framework，但标记为未经过Stage2个性化
+    });
+  },
+  
   // ========== 通用 Actions ==========
   
   setLoading: (loading: boolean) => {
@@ -277,7 +304,69 @@ export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>((set, get)
       });
     }
   },
-}));
+  
+  acknowledgeSessionRestore: () => {
+    set({ hasRestoredSession: false });
+  },
+  
+  clearSession: () => {
+    set(initialState);
+  },
+}),
+    {
+      name: 'cognitive-coach-session-v2',
+      storage: createJSONStorage(() => {
+        // 仅在浏览器环境使用localStorage
+        if (typeof window !== 'undefined') {
+          return localStorage;
+        }
+        // 服务端返回null存储（不持久化）
+        return {
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+        };
+      }),
+      // 过滤掉不需要持久化的字段
+      partialize: (state) => ({
+        currentStage: state.currentStage,
+        purposeDefinition: state.purposeDefinition,
+        stage0Messages: state.stage0Messages,
+        universalFramework: state.universalFramework,
+        stage1Paused: state.stage1Paused,
+        stage2State: state.stage2State,
+        dynamicQuestions: state.dynamicQuestions,
+        collectedInfo: state.collectedInfo,
+        stage2Messages: state.stage2Messages,
+        personalizedPlan: state.personalizedPlan,
+        sessionSavedAt: Date.now(),
+        // 不持久化临时状态
+        // isLoading: false,
+        // error: null,
+      }),
+      // 会话恢复后的回调
+      onRehydrateStorage: () => (state) => {
+        if (state && state.sessionSavedAt) {
+          const hoursSinceLastSave = (Date.now() - state.sessionSavedAt) / (1000 * 60 * 60);
+          
+          // 如果超过24小时，清除会话
+          if (hoursSinceLastSave > 24) {
+            logger.info('[Store] Session expired, clearing');
+            state.clearSession();
+            return;
+          }
+          
+          // 标记会话已恢复
+          state.hasRestoredSession = true;
+          logger.info('[Store] Session restored', {
+            stage: state.currentStage,
+            hoursSinceLastSave: hoursSinceLastSave.toFixed(1),
+          });
+        }
+      },
+    }
+  )
+);
 
 // ============================================
 // 选择器 Hooks（优化性能）

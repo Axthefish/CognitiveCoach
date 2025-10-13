@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { HydrationMonitor } from "@/components/hydration-monitor";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,13 +14,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "CognitiveCoach - AI认知教练平台",
+    default: "CognitiveCoach - AI Cognitive Coaching Platform",
     template: "%s | CognitiveCoach"
   },
-  description: "基于AI的个性化认知教练平台，提供目标精炼、知识框架构建、系统动力学分析、行动计划制定和进度跟踪等全方位学习支持。",
+  description: "AI-powered personalized cognitive coaching platform providing goal refinement, knowledge framework building, system dynamics analysis, action planning, and progress tracking.",
   keywords: [
-    "AI教练", "认知教练", "学习规划", "知识框架", "系统动力学", 
-    "行动计划", "进度跟踪", "个性化学习", "AI学习助手", "认知科学"
+    "AI coach", "cognitive coaching", "learning planning", "knowledge framework", "system dynamics", 
+    "action plan", "progress tracking", "personalized learning", "AI learning assistant", "cognitive science"
   ],
   authors: [{ name: "CognitiveCoach Team" }],
   creator: "CognitiveCoach",
@@ -39,16 +38,17 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    locale: "zh_CN",
+    locale: "en_US",
+    alternateLocale: ["zh_CN"],
     url: "https://cognitivecoach.ai",
-    title: "CognitiveCoach - AI认知教练平台",
-    description: "基于AI的个性化认知教练平台，助力高效学习与成长",
+    title: "CognitiveCoach - AI Cognitive Coaching Platform",
+    description: "AI-powered personalized cognitive coaching platform for effective learning and growth",
     siteName: "CognitiveCoach",
   },
   twitter: {
     card: "summary",
-    title: "CognitiveCoach - AI认知教练平台",
-    description: "基于AI的个性化认知教练平台，助力高效学习与成长",
+    title: "CognitiveCoach - AI Cognitive Coaching Platform",
+    description: "AI-powered personalized cognitive coaching platform for effective learning and growth",
   },
   alternates: {
     canonical: "https://cognitivecoach.ai",
@@ -67,12 +67,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <HydrationMonitor />
         {children}
       </body>
     </html>

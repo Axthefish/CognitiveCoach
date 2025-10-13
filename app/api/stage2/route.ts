@@ -43,6 +43,12 @@ const Stage2RequestSchema = z.object({
     generatedAt: z.number(),
   }),
   
+  // ⭐️ 用户约束（从Stage0传递过来，用于个性化）
+  constraints: z.array(z.string()),
+  
+  // 🆕 对话关键洞察（从Stage0传递过来，压缩的summary）
+  conversationInsights: z.string().optional(),
+  
   // 收集的用户信息（generate 操作需要）
   collectedInfo: z.array(z.object({
     questionId: z.string(),
@@ -69,8 +75,11 @@ export async function POST(request: NextRequest) {
     switch (validated.action) {
       case 'analyze':
         // 分析缺失信息并生成问题
+        // ⭐️ 传入constraints和conversationInsights用于个性化
         return await service.analyzeMissingInfo(
-          validated.framework as UniversalFramework
+          validated.framework as UniversalFramework,
+          validated.constraints,
+          validated.conversationInsights
         );
       
       case 'generate':

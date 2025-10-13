@@ -1,0 +1,43 @@
+{
+  "title": "Stage 1: Universal Framework",
+  "subtitle": "Based on your purpose「{purpose}」, I've generated a weighted solution framework for you.",
+  "loading": {
+    "title": "Generating Framework...",
+    "description": "AI is analyzing your purpose, calculating module weights and priorities.",
+    "estimatedTime": "This may take 10-30 seconds",
+    "steps": {
+      "analyzing": "Analyzing problem domain...",
+      "calculating": "Calculating module weights...",
+      "generating": "Generating relationship graph..."
+    }
+  },
+  "legend": {
+    "title": "Legend:",
+    "core": "Core Required (90-100%)",
+    "important": "Important (70-89%)",
+    "optional": "Optional (50-69%)",
+    "low": "Low Priority (<50%)"
+  },
+  "hints": {
+    "title": "💡 Tips:",
+    "drag": "Drag to move, scroll to zoom",
+    "click": "Click nodes for details",
+    "size": "Node size represents weight",
+    "connection": "Line thickness represents dependency"
+  },
+  "pause": {
+    "title": "💡 Please Take 2-3 Minutes to Think",
+    "questions": [
+      "Which parts do you already have foundation in?",
+      "Which parts do you need most currently?",
+      "Which areas can you dive deep into given your time and resources?"
+    ],
+    "button": "I've Thought, Continue →"
+  },
+  "details": {
+    "title": "Framework Details",
+    "weight": "Weight",
+    "time": "Estimated Time"
+  }
+}
+

@@ -3,6 +3,7 @@
 import React from 'react';
 import type { UniversalFramework } from '@/lib/types-v2';
 import { generateGraphConfig } from './graph-config';
+import { logger } from '@/lib/logger';
 
 // ECharts 动态导入（减少首次加载体积）
 let EChartsReact: React.ComponentType<{
@@ -40,7 +41,7 @@ export function LogicFlowChart({
         setEcharts(() => echartsModule.default);
         setIsLoading(false);
       } catch (error) {
-        console.error('Failed to load ECharts:', error);
+        logger.error('Failed to load ECharts:', error);
         setIsLoading(false);
       }
     };
@@ -144,27 +145,53 @@ export function LogicFlowChart({
  */
 export function ChartLegend() {
   return (
-    <div className="flex items-center gap-6 text-sm text-gray-600 bg-white rounded-lg border border-gray-200 px-4 py-3">
-      <div className="font-semibold text-gray-900">图例：</div>
-      
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-full bg-[#1e40af]" />
-        <span>核心必修 (90-100%)</span>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-full bg-[#3b82f6]" />
-        <span>重要推荐 (70-89%)</span>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-full bg-[#93c5fd]" />
-        <span>可选增强 (50-69%)</span>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-full bg-[#9ca3af]" />
-        <span>低优先级 (&lt;50%)</span>
+    <div className="glass-card-secondary rounded-lg px-6 py-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 权重颜色编码 */}
+        <div>
+          <div className="font-semibold text-white text-sm mb-3">节点颜色 = 权重等级</div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              <div className="w-4 h-4 rounded-full bg-[#1e40af]" />
+              <span>核心必修 (90-100%)</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              <div className="w-4 h-4 rounded-full bg-[#3b82f6]" />
+              <span>重要推荐 (70-89%)</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              <div className="w-4 h-4 rounded-full bg-[#93c5fd]" />
+              <span>可选增强 (50-69%)</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-300">
+              <div className="w-4 h-4 rounded-full bg-[#9ca3af]" />
+              <span>低优先级 (&lt;50%)</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* 其他视觉编码 */}
+        <div>
+          <div className="font-semibold text-white text-sm mb-3">其他视觉编码</div>
+          <div className="space-y-2 text-sm text-gray-300">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-400">⭐</span>
+              <span>金色边框 = 核心主路径</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>●</span>
+              <span>节点大小 = 权重高低</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>━</span>
+              <span>连线粗细 = 关联强度</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>🖱️</span>
+              <span>悬停节点 = 显示详细信息</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -175,13 +202,13 @@ export function ChartLegend() {
  */
 export function ChartHints() {
   return (
-    <div className="text-xs text-gray-500 space-y-1">
-      <p>💡 提示：</p>
-      <ul className="list-disc list-inside space-y-1">
-        <li>拖拽可移动图表，滚轮可缩放</li>
-        <li>点击节点查看详细信息</li>
-        <li>节点大小代表权重高低</li>
-        <li>连线粗细代表依赖强度</li>
+    <div className="glass-card-tertiary rounded-lg p-4">
+      <p className="text-sm text-gray-400 mb-2">💡 交互提示：</p>
+      <ul className="text-xs text-gray-400 space-y-1.5 list-disc list-inside">
+        <li>拖拽画布可移动，滚轮可缩放</li>
+        <li>悬停节点查看权重分解详情</li>
+        <li>金色高亮路径是推荐的核心学习顺序</li>
+        <li>节点越大表示权重越高，越重要</li>
       </ul>
     </div>
   );

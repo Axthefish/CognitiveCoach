@@ -15,7 +15,7 @@ interface NodeTooltipProps {
  * 
  * 可以作为自定义 tooltip 使用，提供比 ECharts 默认 tooltip 更丰富的展示
  */
-export function NodeTooltip({ node, visible, position }: NodeTooltipProps) {
+export const NodeTooltip = React.memo(function NodeTooltip({ node, visible, position }: NodeTooltipProps) {
   if (!visible) return null;
   
   const colorScheme = getColorScheme(node.color);
@@ -65,24 +65,24 @@ export function NodeTooltip({ node, visible, position }: NodeTooltipProps) {
           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="text-gray-600">预计时间: {node.estimatedTime}</span>
+          <span className="text-gray-600">Estimated Time: {node.estimatedTime}</span>
         </div>
         
         {/* 权重明细 */}
         {node.weightBreakdown && (
           <div className="border-t border-gray-100 pt-2 mt-2">
-            <div className="text-xs text-gray-500 mb-1">权重构成:</div>
+            <div className="text-xs text-gray-500 mb-1">Weight Breakdown:</div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
-                <div className="text-gray-400">必要性</div>
+                <div className="text-gray-400">Necessity</div>
                 <div className="font-medium">{Math.round(node.weightBreakdown.necessity * 100)}%</div>
               </div>
               <div>
-                <div className="text-gray-400">影响力</div>
+                <div className="text-gray-400">Impact</div>
                 <div className="font-medium">{Math.round(node.weightBreakdown.impact * 100)}%</div>
               </div>
               <div>
-                <div className="text-gray-400">性价比</div>
+                <div className="text-gray-400">ROI</div>
                 <div className="font-medium">{Math.round(node.weightBreakdown.timeROI * 100)}%</div>
               </div>
             </div>
@@ -92,7 +92,7 @@ export function NodeTooltip({ node, visible, position }: NodeTooltipProps) {
         {/* 前置依赖 */}
         {node.dependencies.length > 0 && (
           <div className="border-t border-gray-100 pt-2 mt-2">
-            <div className="text-xs text-gray-500 mb-1">前置依赖:</div>
+            <div className="text-xs text-gray-500 mb-1">Prerequisites:</div>
             <ul className="list-disc list-inside text-xs text-gray-600 space-y-1">
               {node.dependencies.map((dep, index) => (
                 <li key={index}>{dep}</li>
@@ -103,12 +103,12 @@ export function NodeTooltip({ node, visible, position }: NodeTooltipProps) {
       </div>
     </div>
   );
-}
+});
 
 /**
  * 简化版提示气泡
  */
-export function SimpleNodeTooltip({ node }: { node: FrameworkNode }) {
+export const SimpleNodeTooltip = React.memo(function SimpleNodeTooltip({ node }: { node: FrameworkNode }) {
   const colorScheme = getColorScheme(node.color);
   const icon = getWeightIcon(node.weight);
   
@@ -120,9 +120,9 @@ export function SimpleNodeTooltip({ node }: { node: FrameworkNode }) {
       </div>
       <p className="text-xs text-gray-600">{node.description}</p>
       <div className="mt-2 text-xs text-gray-400">
-        预计: {node.estimatedTime} | 权重: {node.weight}%
+        Est: {node.estimatedTime} | Weight: {node.weight}%
       </div>
     </div>
   );
-}
+});
 

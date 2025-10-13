@@ -1,6 +1,6 @@
 // S2 Service 单元测试 - 系统动力学生成测试
 
-import { S2Service } from '@/services/s2-service';
+import { Stage2Service } from '@/services/stage2-service';
 import { generateJsonWithRetry } from '@/lib/ai-retry-handler';
 import { runQualityGates } from '@/lib/qa';
 import type { SystemDynamics } from '@/lib/schemas';
@@ -13,18 +13,18 @@ jest.mock('@/lib/logger');
 const mockGenerateJsonWithRetry = generateJsonWithRetry as jest.MockedFunction<typeof generateJsonWithRetry>;
 const mockRunQualityGates = runQualityGates as jest.MockedFunction<typeof runQualityGates>;
 
-describe('S2Service', () => {
-  let service: S2Service;
+describe('Stage2Service', () => {
+  let service: Stage2Service;
 
   beforeEach(() => {
-    service = S2Service.getInstance();
+    service = Stage2Service.getInstance();
     jest.clearAllMocks();
   });
 
   describe('singleton pattern', () => {
     it('should return the same instance', () => {
-      const instance1 = S2Service.getInstance();
-      const instance2 = S2Service.getInstance();
+      const instance1 = Stage2Service.getInstance();
+      const instance2 = Stage2Service.getInstance();
       expect(instance1).toBe(instance2);
     });
   });

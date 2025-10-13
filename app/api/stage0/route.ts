@@ -10,6 +10,7 @@ import type { ChatMessage, PurposeDefinition } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
 import { handleError } from '@/lib/app-errors';
 import { z } from 'zod';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // ============================================
 // 请求 Schema
@@ -50,6 +51,29 @@ export async function POST(request: NextRequest) {
   logger.info('[Stage0 API] Received request');
   
   try {
+    // 检查速率限制
+    const ip = request.headers.get('x-forwarded-for') || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    
+    const rateLimitResult = checkRateLimit(ip);
+    if (!rateLimitResult.allowed) {
+      logger.warn('[Stage0 API] Rate limit exceeded', { ip });
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: '请求过于频繁，请稍后再试',
+          retryAfter: rateLimitResult.retryAfter
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': rateLimitResult.retryAfter?.toString() || '60'
+          }
+        }
+      );
+    }
+    
     // 解析请求体
     const body = await request.json();
     const validated = Stage0RequestSchema.parse(body);

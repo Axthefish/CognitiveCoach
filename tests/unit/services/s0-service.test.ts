@@ -1,6 +1,6 @@
 // S0 服务测试
 
-import { S0Service } from '@/services/s0-service';
+import { Stage0Service } from '@/services/stage0-service';
 
 // Mock dependencies
 jest.mock('@/lib/ai-retry-handler', () => ({
@@ -22,17 +22,17 @@ jest.mock('@/lib/logger', () => ({
   }
 }));
 
-describe('S0Service', () => {
-  let service: S0Service;
+describe('Stage0Service', () => {
+  let service: Stage0Service;
   
   beforeEach(() => {
-    service = S0Service.getInstance();
+    service = Stage0Service.getInstance();
     jest.clearAllMocks();
   });
   
   it('should be a singleton', () => {
-    const instance1 = S0Service.getInstance();
-    const instance2 = S0Service.getInstance();
+    const instance1 = Stage0Service.getInstance();
+    const instance2 = Stage0Service.getInstance();
     
     expect(instance1).toBe(instance2);
   });

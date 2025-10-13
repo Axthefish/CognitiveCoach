@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./glassmorphism.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -263,6 +264,41 @@
   @media (prefers-reduced-motion: reduce) {
     .orbit, .pulse-ring {
       animation: none !important;
+    }
+  }
+  
+  /* 打印优化 */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    .print-page-break {
+      page-break-after: always;
+    }
+    
+    body {
+      background: white !important;
+    }
+    
+    /* 隐藏不必要的元素 */
+    button, .border, .shadow {
+      border: none !important;
+      box-shadow: none !important;
+    }
+    
+    /* 保持文本颜色 */
+    * {
+      color: black !important;
+    }
+    
+    /* 展开所有折叠内容 */
+    details {
+      display: block !important;
+    }
+    
+    details > summary {
+      display: none;
     }
   }
 }

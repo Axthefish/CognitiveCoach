@@ -1,10 +1,16 @@
 {
   "functions": {
-    "app/api/coach/route.ts": {
+    "app/api/stage0/route.ts": {
       "maxDuration": 60
     },
-    "app/api/coach-stream/route.ts": {
-      "maxDuration": 300
+    "app/api/stage1/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/stage2/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/health/route.ts": {
+      "maxDuration": 10
     }
   },
   "env": {

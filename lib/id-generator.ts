@@ -1,5 +1,7 @@
 // 唯一ID生成器 - 避免 hydration 不匹配
 
+import { logger } from './logger';
+
 /**
  * 生成客户端安全的唯一ID
  * 使用自增计数器 + 会话标识，确保不会在服务器端和客户端产生不同的ID
@@ -45,7 +47,7 @@ export function generateVersionId(): string {
   if (typeof window === 'undefined') {
     // 服务器端，返回占位符ID（不应该在服务器端创建版本）
     // 使用明显的前缀避免与客户端ID冲突
-    console.warn('⚠️ generateVersionId called on server side - this should only be called on client');
+    logger.warn('generateVersionId called on server side - this should only be called on client');
     return `v-server-${Date.now()}-${counter++}`;
   }
   
