@@ -43,11 +43,21 @@ export function createS0FallbackResponse(): NextResponse {
   logger.info('Using S0 fallback response due to missing API key');
   
   return NextResponse.json({
-    status: 'success',
+    success: true,
     data: {
-      status: 'clarification_needed',
-      ai_question: '为加速明确目标，请一次性回答：1) 具体学习主题；2) 期望产出；3) 时间范围。（若已有部分明确，仅补充缺失项即可。）'
-    }
+      rawInput: '',
+      clarifiedPurpose: '',
+      problemDomain: '',
+      domainBoundary: '',
+      boundaryConstraints: [],
+      personalConstraints: [],
+      keyConstraints: [],
+      conversationHistory: [],
+      confidence: 0,
+      clarificationState: 'COLLECTING',
+    },
+    message: '为加速明确目标，请一次性回答：1) 具体学习主题；2) 期望产出；3) 时间范围。（若已有部分明确，仅补充缺失项即可。）',
+    nextAction: 'continue_dialogue',
   });
 }
 

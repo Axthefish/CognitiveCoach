@@ -26,6 +26,7 @@ import { tokenBudgetManager } from '@/lib/token-budget-manager';
 import { validateStage2Questions, validateStage2Plan } from '@/lib/output-validator';
 import { logger } from '@/lib/logger';
 import { handleError } from '@/lib/app-errors';
+import { handleNoApiKeyResult } from '@/lib/api-fallback';
 
 export class Stage2Service {
   private static instance: Stage2Service;
@@ -98,6 +99,12 @@ export class Stage2Service {
           priority: 'high' | 'medium' | 'low';
         }>;
       }>(prompt, config, 'Pro', 'S2');
+      
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const questionsFallbackResponse = handleNoApiKeyResult(aiResponse, 'S2');
+      if (questionsFallbackResponse) {
+        return questionsFallbackResponse as NextResponse<Stage2Response>;
+      }
       
       if (!aiResponse.ok) {
         throw new Error(`AI generation failed: ${aiResponse.error}`);
@@ -216,6 +223,12 @@ export class Stage2Service {
           tip: string;
         }>;
       }>(prompt, config, 'Pro', 'S2');
+      
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const planFallbackResponse = handleNoApiKeyResult(aiResponse, 'S2');
+      if (planFallbackResponse) {
+        return planFallbackResponse as NextResponse<Stage2Response>;
+      }
       
       if (!aiResponse.ok) {
         throw new Error(`AI generation failed: ${aiResponse.error}`);

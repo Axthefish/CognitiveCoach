@@ -13,6 +13,7 @@ import { memoryStore, createStage0Memory, createStage1Memory } from '@/lib/memor
 import { contextMonitor } from '@/lib/context-monitor';
 import { tokenBudgetManager } from '@/lib/token-budget-manager';
 import { logger } from '@/lib/logger';
+import { handleNoApiKeyResult } from '@/lib/api-fallback';
 
 export class Stage1Service {
   private static instance: Stage1Service;
@@ -97,6 +98,12 @@ export class Stage1Service {
           relationshipType: string;
         }>;
       }>(prompt, config, runTier, 'S1');
+      
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const fallbackResponse = handleNoApiKeyResult(aiResponse, 'S1');
+      if (fallbackResponse) {
+        return fallbackResponse as NextResponse<Stage1Response>;
+      }
       
       if (!aiResponse.ok) {
         throw new Error(`AI generation failed: ${aiResponse.error}`);

@@ -89,42 +89,57 @@ function truncate(text: string, max = 300): string {
   return text.slice(0, max) + '...<truncated>';
 }
 
+// 序列化和清理日志参数
+function serializeLogArg(arg: unknown): string | Error {
+  // Error对象直接返回，让console保持原生处理
+  if (arg instanceof Error) return arg;
+  
+  // 对象类型尝试序列化
+  if (typeof arg === 'object' && arg !== null) {
+    try {
+      const serialized = JSON.stringify(arg, null, 2);
+      return truncate(maskSecrets(serialized));
+    } catch {
+      return '[unserializable object]';
+    }
+  }
+  
+  // 其他类型转字符串
+  const str = String(arg);
+  return truncate(maskSecrets(str));
+}
+
 // 创建统一的logger接口，支持动态日志级别
 export const logger = {
   debug: (...args: unknown[]) => {
     // 每次调用时动态获取日志级别
     if (getCurrentLogLevel() <= LogLevel.DEBUG) {
-      console.debug(...args.map(maskSecrets));
+      console.debug(...args.map(serializeLogArg));
     }
   },
   
   info: (...args: unknown[]) => {
     if (getCurrentLogLevel() <= LogLevel.INFO) {
-      console.info(...args.map(maskSecrets));
+      console.info(...args.map(serializeLogArg));
     }
   },
   
   warn: (...args: unknown[]) => {
     if (getCurrentLogLevel() <= LogLevel.WARN) {
-      console.warn(...args.map(maskSecrets));
+      console.warn(...args.map(serializeLogArg));
     }
   },
   
   error: (...args: unknown[]) => {
     if (getCurrentLogLevel() <= LogLevel.ERROR) {
-      const mapped = args.map(a => {
-        if (a instanceof Error) return a;
-        const s = String(a);
-        return truncate(maskSecrets(s));
-      });
-      console.error(...mapped);
+      console.error(...args.map(serializeLogArg));
     }
   },
   
   // 兼容性方法
   log: (...args: unknown[]) => {
     if (getCurrentLogLevel() <= LogLevel.INFO) {
-      console.log(...args.map(maskSecrets));
+      console.log(...args.map(serializeLogArg));
     }
   },
   

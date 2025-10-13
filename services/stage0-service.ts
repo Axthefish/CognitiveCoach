@@ -21,6 +21,7 @@ import { tokenBudgetManager } from '@/lib/token-budget-manager';
 import { validateStage0Output, canProceedToStage1 } from '@/lib/output-validator';
 import { logger } from '@/lib/logger';
 import { handleError } from '@/lib/app-errors';
+import { handleNoApiKeyResult } from '@/lib/api-fallback';
 
 export class Stage0Service {
   private static instance: Stage0Service;
@@ -78,6 +79,12 @@ export class Stage0Service {
         };
         next_question: string;
       }>(prompt, config, 'Pro', 'S0');
+      
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const fallbackResponse = handleNoApiKeyResult(aiResponse, 'S0');
+      if (fallbackResponse) {
+        return fallbackResponse as NextResponse<Stage0Response>;
+      }
       
       if (!aiResponse.ok) {
         throw new Error(`AI generation failed: ${aiResponse.error}`);
@@ -211,6 +218,12 @@ export class Stage0Service {
         next_question?: string;
       }>(prompt, config, 'Pro', 'S0');
       
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const fallbackResponse = handleNoApiKeyResult(aiResponse, 'S0');
+      if (fallbackResponse) {
+        return fallbackResponse as NextResponse<Stage0Response>;
+      }
+      
       if (!aiResponse.ok) {
         throw new Error(`AI generation failed: ${aiResponse.error}`);
       }
@@ -295,6 +308,12 @@ export class Stage0Service {
         confidence: number;
         confirmation_message: string;
       }>(prompt, config, 'Pro', 'S0');
+      
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const fallbackResponse = handleNoApiKeyResult(aiResponse, 'S0');
+      if (fallbackResponse) {
+        return fallbackResponse as NextResponse<Stage0Response>;
+      }
       
       if (!aiResponse.ok) {
         throw new Error(`AI generation failed: ${aiResponse.error}`);
