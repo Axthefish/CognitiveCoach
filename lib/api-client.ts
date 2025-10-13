@@ -34,75 +34,110 @@ export interface ApiError extends Error {
 // ============================================
 
 function classifyError(error: Error, response?: Response): ApiError {
-  const apiError = error as ApiError;
+  // 创建一个新的 ApiError 对象，而不是修改原始 Error
+  const apiError = Object.create(error) as ApiError;
+  
+  // 复制原始错误的属性
+  Object.assign(apiError, {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  });
   
   // 网络错误
   if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
-    apiError.code = 'NETWORK_ERROR';
-    apiError.isNetworkError = true;
-    apiError.isRetryable = true;
-    apiError.message = '无法连接到服务器，请检查网络后重试';
+    Object.assign(apiError, {
+      code: 'NETWORK_ERROR',
+      isNetworkError: true,
+      isRetryable: true,
+      message: '无法连接到服务器，请检查网络后重试',
+    });
     return apiError;
   }
   
   // 超时错误
   if (error.name === 'AbortError' || error.message.includes('timeout')) {
-    apiError.code = 'TIMEOUT';
-    apiError.isTimeout = true;
-    apiError.isRetryable = true;
-    apiError.message = '请求超时，请重试或稍后再试';
+    Object.assign(apiError, {
+      code: 'TIMEOUT',
+      isTimeout: true,
+      isRetryable: true,
+      message: '请求超时，请重试或稍后再试',
+    });
     return apiError;
   }
   
   // HTTP错误
   if (response) {
-    apiError.status = response.status;
+    let errorDetails: Partial<ApiError> = { status: response.status };
     
     switch (response.status) {
       case 400:
-        apiError.code = 'VALIDATION_ERROR';
-        apiError.isRetryable = false;
-        apiError.message = '请求数据格式有误，请检查后重试';
+        errorDetails = {
+          ...errorDetails,
+          code: 'VALIDATION_ERROR',
+          isRetryable: false,
+          message: '请求数据格式有误，请检查后重试',
+        };
         break;
       
       case 401:
-        apiError.code = 'UNAUTHORIZED';
-        apiError.isRetryable = false;
-        apiError.message = '未授权，请重新登录';
+        errorDetails = {
+          ...errorDetails,
+          code: 'UNAUTHORIZED',
+          isRetryable: false,
+          message: '未授权，请重新登录',
+        };
         break;
       
       case 403:
-        apiError.code = 'FORBIDDEN';
-        apiError.isRetryable = false;
-        apiError.message = '没有权限访问此资源';
+        errorDetails = {
+          ...errorDetails,
+          code: 'FORBIDDEN',
+          isRetryable: false,
+          message: '没有权限访问此资源',
+        };
         break;
       
       case 404:
-        apiError.code = 'NOT_FOUND';
-        apiError.isRetryable = false;
-        apiError.message = '请求的资源不存在';
+        errorDetails = {
+          ...errorDetails,
+          code: 'NOT_FOUND',
+          isRetryable: false,
+          message: '请求的资源不存在',
+        };
         break;
       
       case 429:
-        apiError.code = 'RATE_LIMIT';
-        apiError.isRetryable = true;
-        apiError.message = '请求过于频繁，请稍后再试';
+        errorDetails = {
+          ...errorDetails,
+          code: 'RATE_LIMIT',
+          isRetryable: true,
+          message: '请求过于频繁，请稍后再试',
+        };
         break;
       
       case 500:
       case 502:
       case 503:
       case 504:
-        apiError.code = 'SERVER_ERROR';
-        apiError.isRetryable = true;
-        apiError.message = '服务器错误，请稍后重试';
+        errorDetails = {
+          ...errorDetails,
+          code: 'SERVER_ERROR',
+          isRetryable: true,
+          message: '服务器错误，请稍后重试',
+        };
         break;
       
       default:
-        apiError.code = 'UNKNOWN_ERROR';
-        apiError.isRetryable = false;
-        apiError.message = '发生未知错误，请稍后重试';
+        errorDetails = {
+          ...errorDetails,
+          code: 'UNKNOWN_ERROR',
+          isRetryable: false,
+          message: '发生未知错误，请稍后重试',
+        };
     }
+    
+    Object.assign(apiError, errorDetails);
   }
   
   return apiError;
