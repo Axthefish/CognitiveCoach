@@ -67,13 +67,14 @@ ${historyText}
 /**
  * 基于思考过程生成结构化输出
  * 这个prompt更简洁，因为思考已经完成
+ * 注：thinkingContext暂时保留用于未来可能的优化
  */
 export function getStructuredOutputPrompt(
   action: 'initial' | 'continue',
   userInput?: string,
   conversationHistory?: ChatMessage[],
   currentDefinition?: Partial<PurposeDefinition>,
-  thinkingContext?: string
+  _thinkingContext?: string // 前缀下划线标记为预留参数
 ): string {
   if (action === 'initial') {
     return getInitialCollectionPrompt(userInput || '');
