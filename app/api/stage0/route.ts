@@ -35,8 +35,13 @@ const Stage0RequestSchema = z.object({
     clarifiedPurpose: z.string(),
     problemDomain: z.string(),
     domainBoundary: z.string(),
+    boundaryConstraints: z.array(z.string()),
+    personalConstraints: z.array(z.string()),
     keyConstraints: z.array(z.string()),
+    conversationHistory: z.array(z.any()),
+    conversationInsights: z.string().optional(),
     confidence: z.number(),
+    clarificationState: z.enum(['COLLECTING', 'REFINING', 'COMPLETED']).optional(),
   }).optional(),
   
   // 确认

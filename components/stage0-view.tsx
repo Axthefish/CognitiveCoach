@@ -56,8 +56,12 @@ export default function Stage0View() {
           clarifiedPurpose: purposeDefinition?.clarifiedPurpose || '',
           problemDomain: purposeDefinition?.problemDomain || '',
           domainBoundary: purposeDefinition?.domainBoundary || '',
+          boundaryConstraints: purposeDefinition?.boundaryConstraints || [],
+          personalConstraints: purposeDefinition?.personalConstraints || [],
           keyConstraints: purposeDefinition?.keyConstraints || [],
+          conversationHistory: purposeDefinition?.conversationHistory || [],
           confidence: purposeDefinition?.confidence || 0.3,
+          clarificationState: purposeDefinition?.clarificationState || 'COLLECTING',
         },
       }, {
         timeout: 30000,
