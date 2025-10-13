@@ -5,13 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useCognitiveCoachStoreV2 } from '@/lib/store-v2';
 import { LogicFlowChart, ChartLegend } from './logic-flow-chart/LogicFlowChart';
 import { GlassCard } from './ui/glass-card';
-import { SmartLoading } from './ui/smart-loading';
 import { Button } from './ui/button';
 import { Download, Sparkles } from 'lucide-react';
-import { postJSON, type ApiError, getErrorMessage } from '@/lib/api-client';
-import type { Stage1Response } from '@/lib/types-v2';
+import type { UniversalFramework } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
 import { exportFrameworkAsMarkdown } from '@/lib/export-utils';
+import { THINKING_STEPS, type ThinkingProgress, type StreamEvent } from '@/lib/streaming-types';
 
 export default function Stage1View() {
   const {
@@ -27,6 +26,7 @@ export default function Stage1View() {
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
   const [showDecisionArea, setShowDecisionArea] = React.useState(false);
+  const [thinkingProgress, setThinkingProgress] = React.useState<ThinkingProgress | null>(null);
   const decisionRef = React.useRef<HTMLDivElement>(null);
   
   const generateFramework = React.useCallback(async () => {
@@ -34,29 +34,74 @@ export default function Stage1View() {
     
     setIsGenerating(true);
     setLoading(true);
+    setThinkingProgress(null);
     
     try {
-      const result = await postJSON<Stage1Response>('/api/stage1', {
-        purposeDefinition,
-        runTier: 'Pro',
-      }, {
-        timeout: 45000, // 框架生成可能需要更长时间
-        retries: 2,
+      // 使用streaming API
+      const response = await fetch('/api/stage1-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purposeDefinition: {
+            clarifiedPurpose: purposeDefinition.clarifiedPurpose,
+            problemDomain: purposeDefinition.problemDomain,
+            domainBoundary: purposeDefinition.domainBoundary,
+            boundaryConstraints: purposeDefinition.boundaryConstraints,
+            personalConstraints: purposeDefinition.personalConstraints,
+          },
+          runTier: 'Pro',
+        }),
       });
       
-      if (result.success && result.data) {
-        setUniversalFramework(result.data);
-      } else {
-        setError(result.message || 'Framework generation failed');
+      if (!response.ok) {
+        throw new Error('Stream request failed');
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+      
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event: StreamEvent = JSON.parse(line.slice(6));
+              
+              if (event.type === 'thinking' && event.thinking) {
+                setThinkingProgress(event.thinking);
+              } else if (event.type === 'data' && event.data) {
+                setUniversalFramework(event.data as UniversalFramework);
+              } else if (event.type === 'error') {
+                throw new Error(event.error || 'Unknown error');
+              } else if (event.type === 'done') {
+                setThinkingProgress(null);
+              }
+            } catch (parseError) {
+              logger.warn('[Stage1View] Failed to parse event', { parseError });
+            }
+          }
+        }
       }
     } catch (error) {
-      const apiError = error as ApiError;
-      const errorInfo = getErrorMessage(apiError);
-      setError(errorInfo.message);
-      logger.error('[Stage1View] Error generating framework', { error: apiError });
+      setError(error instanceof Error ? error.message : 'Framework generation failed');
+      logger.error('[Stage1View] Error generating framework', { error });
     } finally {
       setIsGenerating(false);
       setLoading(false);
+      setThinkingProgress(null);
     }
   }, [purposeDefinition, setLoading, setUniversalFramework, setError]);
   
@@ -112,26 +157,96 @@ export default function Stage1View() {
   if (isGenerating || !universalFramework) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
-        <SmartLoading
-          steps={[
-            {
-              label: 'Analyzing problem domain...',
-              percentage: 40,
-              tip: '💡 Cognitive Load Theory: AI is breaking down complex problems into manageable modules',
-            },
-            {
-              label: 'Calculating module weights...',
-              percentage: 70,
-              tip: '🎯 Pareto Principle: Identifying the 20% of key modules that bring 80% of value',
-            },
-            {
-              label: 'Generating relationship graph...',
-              percentage: 100,
-              tip: '🔄 Systems Thinking: Establishing dependency networks between modules',
-            },
-          ]}
-          estimatedTime="10-30 seconds"
-        />
+        <GlassCard priority="primary" className="p-8 max-w-2xl w-full">
+          <motion.div
+            className="space-y-6"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            {/* 标题 */}
+            <div className="text-center">
+              <motion.div
+                className="inline-block"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              >
+                <Sparkles className="w-12 h-12 text-blue-400 mx-auto mb-4" />
+              </motion.div>
+              <h3 className="text-2xl font-bold text-white mb-2">
+                AI正在思考中...
+              </h3>
+              <p className="text-gray-400 text-sm">
+                预计需要 60-90 秒
+              </p>
+            </div>
+            
+            {/* 进度条 */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-300">
+                  {thinkingProgress?.message || '🔍 正在初始化...'}
+                </span>
+                <span className="text-blue-400 font-semibold">
+                  {thinkingProgress?.progress || 0}%
+                </span>
+              </div>
+              
+              <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+                  initial={{ width: '0%' }}
+                  animate={{ width: `${thinkingProgress?.progress || 0}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                />
+                
+                {/* 动画光效 */}
+                <motion.div
+                  className="absolute inset-y-0 left-0 right-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                  animate={{ x: ['0%', '100%'] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  style={{ width: '30%' }}
+                />
+              </div>
+            </div>
+            
+            {/* 思考步骤列表 */}
+            <div className="space-y-2 mt-6">
+              {Object.entries(THINKING_STEPS).map(([key, step]) => {
+                const currentProgress = thinkingProgress?.progress || 0;
+                const isCompleted = currentProgress > step.progress;
+                const isCurrent = currentProgress >= step.progress && currentProgress < step.progress + 15;
+                
+                return (
+                  <motion.div
+                    key={key}
+                    className={`flex items-center gap-3 text-sm p-2 rounded transition-colors ${
+                      isCurrent ? 'bg-blue-500/10 text-blue-300' :
+                      isCompleted ? 'text-gray-400' :
+                      'text-gray-600'
+                    }`}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: Object.keys(THINKING_STEPS).indexOf(key) * 0.1 }}
+                  >
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      isCompleted ? 'bg-green-500' :
+                      isCurrent ? 'bg-blue-500 animate-pulse' :
+                      'bg-gray-600'
+                    }`} />
+                    <span>{step.message}</span>
+                  </motion.div>
+                );
+              })}
+            </div>
+            
+            {/* 小贴士 */}
+            <div className="mt-6 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+              <p className="text-xs text-gray-400 leading-relaxed">
+                💡 <strong className="text-blue-300">Cognitive Load Theory</strong>: AI正在将复杂问题拆解为可管理的模块，并基于Pareto原则识别核心20%的关键模块
+              </p>
+            </div>
+          </motion.div>
+        </GlassCard>
       </div>
     );
   }

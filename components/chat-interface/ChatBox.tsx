@@ -12,6 +12,9 @@ interface ChatBoxProps {
   onSendMessage: (content: string) => void;
   isThinking?: boolean;
   thinkingMessage?: string;
+  thinkingProgress?: number; // 🆕 思考进度 0-100
+  showThinkingProgress?: boolean; // 🆕 是否显示进度条
+  estimatedTime?: string; // 🆕 预计时间
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -22,6 +25,9 @@ export function ChatBox({
   onSendMessage,
   isThinking = false,
   thinkingMessage,
+  thinkingProgress,
+  showThinkingProgress = false,
+  estimatedTime,
   disabled = false,
   placeholder,
   className,
@@ -75,7 +81,14 @@ export function ChatBox({
             ))}
             
             {/* AI 思考指示器 */}
-            {isThinking && <ThinkingIndicator message={thinkingMessage} />}
+            {isThinking && (
+              <ThinkingIndicator 
+                message={thinkingMessage} 
+                progress={thinkingProgress}
+                showProgress={showThinkingProgress}
+                estimatedTime={estimatedTime}
+              />
+            )}
             
             {/* 滚动锚点 */}
             <div ref={messagesEndRef} />

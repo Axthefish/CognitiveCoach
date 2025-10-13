@@ -25,8 +25,26 @@ export default function Stage0View() {
   } = useCognitiveCoachStoreV2();
   
   const [isThinking, setIsThinking] = React.useState(false);
+  const [thinkingProgress, setThinkingProgress] = React.useState(0);
   const [showConfirmation, setShowConfirmation] = React.useState(false);
   const isMobile = useIsMobile();
+  
+  // 模拟thinking进度（Stage0相对快，模拟即可）
+  React.useEffect(() => {
+    if (isThinking) {
+      setThinkingProgress(0);
+      const interval = setInterval(() => {
+        setThinkingProgress(prev => {
+          if (prev >= 90) return prev; // 在90%停住，等真实结果
+          return Math.min(prev + Math.random() * 15, 90);
+        });
+      }, 2000);
+      
+      return () => clearInterval(interval);
+    } else {
+      setThinkingProgress(0);
+    }
+  }, [isThinking]);
   const [retryCount, setRetryCount] = React.useState(0);
   
   // 处理用户发送消息
@@ -64,7 +82,7 @@ export default function Stage0View() {
           clarificationState: purposeDefinition?.clarificationState || 'COLLECTING',
         },
       }, {
-        timeout: 30000,
+        timeout: 50000, // Stage0 (Pro): 45秒 + 5秒余量
         retries: 2,
         onRetry: (attempt) => {
           setRetryCount(attempt);
@@ -128,7 +146,7 @@ export default function Stage0View() {
         currentDefinition: purposeDefinition,
         userConfirmed: confirmed,
       }, {
-        timeout: 30000,
+        timeout: 50000, // Stage0 (Pro): 45秒 + 5秒余量
         retries: 2,
       });
       
@@ -242,9 +260,12 @@ export default function Stage0View() {
           isThinking={isThinking}
           thinkingMessage={
             retryCount > 0 
-              ? `Retrying... (Attempt ${retryCount})`
-              : "Analyzing your needs..."
+              ? `正在重试... (第${retryCount}次)`
+              : "🤔 正在深入理解你的目标和边界..."
           }
+          thinkingProgress={thinkingProgress}
+          showThinkingProgress={true}
+          estimatedTime="30-45秒"
           disabled={showConfirmation}
           placeholder="Please describe the problem you want to solve or the goal you want to achieve..."
         />

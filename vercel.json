@@ -4,10 +4,10 @@
       "maxDuration": 60
     },
     "app/api/stage1/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "app/api/stage2/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "app/api/health/route.ts": {
       "maxDuration": 10
