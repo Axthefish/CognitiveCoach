@@ -51,6 +51,8 @@ export function getInitialCollectionPrompt(userInput: string): string {
 </task>
 
 <output_format>
+请严格按照以下格式输出，不要有任何偏差：
+
 <thinking>
 你的分析过程
 </thinking>
@@ -65,6 +67,12 @@ export function getInitialCollectionPrompt(userInput: string): string {
   "next_question": "你的问题"
 }
 \`\`\`
+
+关键要求：
+1. 必须先输出<thinking>标签包裹的分析
+2. 然后输出\`\`\`json code block包裹的JSON对象
+3. JSON必须是有效的、可解析的
+4. 不要在JSON外添加任何额外文字
 </output_format>`;
 }
 
@@ -156,6 +164,8 @@ ${historyText}
 </decision_criteria>
 
 <output_format>
+请严格按照以下格式输出：
+
 <thinking>
 你的分析过程
 </thinking>
@@ -171,6 +181,12 @@ ${historyText}
   "next_question": "你的问题（如果action是continue）"
 }
 \`\`\`
+
+关键要求：
+1. 必须先输出<thinking>标签包裹的分析
+2. 然后输出\`\`\`json code block包裹的JSON对象
+3. JSON必须是有效的、可解析的
+4. 不要在JSON外添加任何额外文字
 </output_format>`;
 }
 
