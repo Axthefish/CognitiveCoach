@@ -27,7 +27,7 @@ const Stage0StreamRequestSchema = z.object({
 });
 
 export const runtime = 'nodejs';
-export const maxDuration = 30; // 单次生成，30秒足够
+export const maxDuration = 60; // 为thinking mode预留足够时间
 
 export async function POST(request: NextRequest) {
   logger.info('[Stage0 Stream API] Received request');

@@ -50,7 +50,7 @@ function getTimeoutConfig(runTier?: 'Lite' | 'Pro' | 'Review', stage?: 'S0' | 'S
   
   // 阶段复杂度系数（相对于基础值的倍数）
   const stageComplexity: Record<string, number> = {
-    'S0': 0.8,  // S0：对话式，应该快速
+    'S0': 1.5,  // S0：thinking mode需要更多时间
     'S1': 2.0,  // S1：框架生成，允许更长时间
     'S2': 1.5,  // S2：个性化方案
     'S3': 2.5,  // S3：策略生成，最复杂
