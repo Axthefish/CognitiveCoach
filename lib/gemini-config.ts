@@ -291,8 +291,7 @@ export async function generateJsonWithStreamingThinking<T>(
     topK: 40,
     topP: 0.95,
     maxOutputTokens: 65536,
-    // 不使用JSON模式 - text模式与thinking streaming兼容性更好
-    // responseMimeType: 'application/json',
+    responseMimeType: 'application/json', // JSON模式更可靠
     // 启用thinking mode
     ...(stage === 'S0' && runTier === 'Pro' ? {
       thinkingConfig: {
@@ -306,131 +305,76 @@ export async function generateJsonWithStreamingThinking<T>(
   const model = client.getGenerativeModel({ model: getModelName(runTier) });
   
   try {
-    logger.info('[Gemini] Starting generateContentStream', { 
+    logger.info('[Gemini] Using non-streaming generateContent with simulated thinking stream', { 
       hasThinkingConfig: !!(config as { thinkingConfig?: unknown }).thinkingConfig,
       timeout: timeoutMs 
     });
     
-    // 使用真正的streaming API - 这是实现0延迟的关键
-    // 注意：不对generateContentStream本身做timeout包装，因为它返回stream对象不是promise
-    const result = await model.generateContentStream({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: config,
-    });
+    // 使用非streaming API获取完整thinking + JSON
+    // Gemini的streaming API不支持thought parts的实时传输
+    const res = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: config,
+      }),
+      timeoutMs
+    );
     
-    let jsonText = '';
-    let hasThinkingEnded = false;
-    let thinkingChunkCount = 0;
-    let textChunkCount = 0;
-    const startTime = Date.now();
+    // 提取thinking text
+    const candidates = res.response.candidates;
+    let thinkingText: string | undefined;
     
-    // 实时处理stream chunks
-    for await (const chunk of result.stream) {
-      // 检查超时
-      if (Date.now() - startTime > timeoutMs) {
-        logger.warn('[Gemini] Stream timeout exceeded');
-        throw new Error('Request timeout');
+    if (candidates && candidates[0]?.content?.parts) {
+      const parts = candidates[0].content.parts;
+      const thoughtPart = parts.find((p: { thought?: boolean; text?: string }) => p.thought === true);
+      if (thoughtPart && 'text' in thoughtPart && thoughtPart.text) {
+        thinkingText = thoughtPart.text;
+        logger.info('[Gemini] Thinking text found', { length: thinkingText.length });
       }
-      
-      const candidates = chunk.candidates;
-      if (candidates && candidates[0]?.content?.parts) {
-        const parts = candidates[0].content.parts;
-        
-        // 调试：打印parts结构
-        logger.info('[Gemini] Received parts:', { 
-          count: parts.length,
-          structure: parts.map(p => ({
-            hasThought: 'thought' in p,
-            thoughtValue: 'thought' in p ? (p as { thought?: boolean }).thought : undefined,
-            hasText: 'text' in p,
-            textLength: 'text' in p ? (p as { text?: string }).text?.length : 0
-          }))
-        });
-        
-        for (const part of parts) {
-          // Thought part - 实时发送thinking
-          if ('thought' in part && part.thought === true && 'text' in part && part.text) {
-            thinkingChunkCount++;
-            logger.info(`[Gemini] Thinking chunk #${thinkingChunkCount}:`, { 
-              length: part.text.length,
-              sample: truncate(part.text, 50)
-            });
-            onThinkingChunk(part.text);
-          } 
-          // Text part - 累积JSON内容
-          else if ('text' in part && part.text) {
-            if (!hasThinkingEnded) {
-              logger.info('[Gemini] Thinking phase ended, starting JSON content');
-              onThinkingDone();
-              hasThinkingEnded = true;
-            }
-            textChunkCount++;
-            logger.info(`[Gemini] Text chunk #${textChunkCount}:`, { 
-              length: part.text.length,
-              sample: truncate(part.text, 50)
-            });
-            jsonText += part.text;
-          }
+    }
+    
+    // 模拟streaming：将thinking文本分块发送（每30个字符一块，每块延迟5ms）
+    if (thinkingText) {
+      const chunkSize = 30;
+      for (let i = 0; i < thinkingText.length; i += chunkSize) {
+        const chunk = thinkingText.slice(i, i + chunkSize);
+        onThinkingChunk(chunk);
+        // 微小延迟模拟streaming效果（非阻塞）
+        if (i + chunkSize < thinkingText.length) {
+          await new Promise(resolve => setTimeout(resolve, 5));
         }
       }
     }
     
-    logger.info('[Gemini] Stream completed:', { 
-      thinkingChunks: thinkingChunkCount,
-      textChunks: textChunkCount,
-      totalJsonLength: jsonText.length
-    });
+    // 标记thinking完成
+    onThinkingDone();
     
-    // 确保thinking结束回调
-    if (!hasThinkingEnded) {
-      onThinkingDone();
-    }
-    
-    // 解析JSON（支持多种格式）
-    if (!jsonText.trim()) {
-      logger.warn('Empty JSON text received from Gemini');
+    // 解析JSON
+    const text = res.response.text();
+    if (!text) {
+      logger.warn('[Gemini] Empty response text');
       return { ok: false, error: 'EMPTY_RESPONSE' };
     }
     
-    // 提取JSON内容
-    let extracted = jsonText.trim();
-    
-    logger.info('[Gemini] Raw response text:', { sample: truncate(extracted, 200) });
-    
-    // 尝试多种JSON提取方式
-    // 1. 移除markdown code block（如果有）
-    const jsonBlockMatch = extracted.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonBlockMatch) {
-      extracted = jsonBlockMatch[1].trim();
-      logger.info('[Gemini] Extracted from ```json``` block');
-    }
-    
-    // 2. 尝试提取第一个完整的JSON对象
-    const jsonObjectMatch = extracted.match(/\{[\s\S]*\}/);
-    if (!jsonBlockMatch && jsonObjectMatch) {
-      extracted = jsonObjectMatch[0].trim();
-      logger.info('[Gemini] Extracted first JSON object');
-    }
-    
     try {
-      const data = JSON.parse(extracted) as T;
+      const data = JSON.parse(text) as T;
       logger.info('[Gemini] JSON parsed successfully');
       return { ok: true, data };
     } catch (parseError) {
-      logger.error('Gemini JSON parse failed:', {
+      logger.error('[Gemini] JSON parse failed:', {
         error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        extracted: truncate(extracted, 500),
-        rawText: truncate(jsonText, 500)
+        sample: truncate(text, 500)
       });
       return { ok: false, error: 'PARSE_ERROR' };
     }
     
   } catch (error) {
     if (error instanceof Error && error.message.includes('Request timeout')) {
+      logger.warn('[Gemini] Request timeout');
       return { ok: false, error: 'TIMEOUT' };
     }
-    logger.warn('Gemini streaming API error', { 
-      error: error instanceof Error ? error.message : String(error) 
+    logger.error('[Gemini] API error:', {
+      error: error instanceof Error ? error.message : String(error)
     });
     return { ok: false, error: 'API_ERROR' };
   }
