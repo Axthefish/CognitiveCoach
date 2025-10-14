@@ -317,6 +317,8 @@ export async function generateJsonWithStreamingThinking<T>(
     
     let jsonText = '';
     let hasThinkingEnded = false;
+    let thinkingChunkCount = 0;
+    let textChunkCount = 0;
     
     // 实时处理stream chunks
     for await (const chunk of result.stream) {
@@ -327,47 +329,77 @@ export async function generateJsonWithStreamingThinking<T>(
         for (const part of parts) {
           // Thought part - 实时发送thinking
           if ('thought' in part && part.thought === true && 'text' in part && part.text) {
+            thinkingChunkCount++;
+            logger.info(`[Gemini] Thinking chunk #${thinkingChunkCount}:`, { 
+              length: part.text.length,
+              sample: truncate(part.text, 50)
+            });
             onThinkingChunk(part.text);
           } 
           // Text part - 累积JSON内容
           else if ('text' in part && part.text) {
             if (!hasThinkingEnded) {
+              logger.info('[Gemini] Thinking phase ended, starting JSON content');
               onThinkingDone();
               hasThinkingEnded = true;
             }
+            textChunkCount++;
+            logger.info(`[Gemini] Text chunk #${textChunkCount}:`, { 
+              length: part.text.length,
+              sample: truncate(part.text, 50)
+            });
             jsonText += part.text;
           }
         }
       }
     }
     
+    logger.info('[Gemini] Stream completed:', { 
+      thinkingChunks: thinkingChunkCount,
+      textChunks: textChunkCount,
+      totalJsonLength: jsonText.length
+    });
+    
     // 确保thinking结束回调
     if (!hasThinkingEnded) {
       onThinkingDone();
     }
     
-    // 解析JSON（支持```json```包裹）
+    // 解析JSON（支持多种格式）
     if (!jsonText.trim()) {
+      logger.warn('Empty JSON text received from Gemini');
       return { ok: false, error: 'EMPTY_RESPONSE' };
     }
     
     // 提取JSON内容
     let extracted = jsonText.trim();
     
-    // 移除markdown code block（如果有）
+    logger.info('[Gemini] Raw response text:', { sample: truncate(extracted, 200) });
+    
+    // 尝试多种JSON提取方式
+    // 1. 移除markdown code block（如果有）
     const jsonBlockMatch = extracted.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonBlockMatch) {
       extracted = jsonBlockMatch[1].trim();
+      logger.info('[Gemini] Extracted from ```json``` block');
+    }
+    
+    // 2. 尝试提取第一个完整的JSON对象
+    const jsonObjectMatch = extracted.match(/\{[\s\S]*\}/);
+    if (!jsonBlockMatch && jsonObjectMatch) {
+      extracted = jsonObjectMatch[0].trim();
+      logger.info('[Gemini] Extracted first JSON object');
     }
     
     try {
       const data = JSON.parse(extracted) as T;
+      logger.info('[Gemini] JSON parsed successfully');
       return { ok: true, data };
     } catch (parseError) {
-      logger.warn('Gemini JSON parse failed:', {
+      logger.error('Gemini JSON parse failed:', {
         error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        sample: truncate(extracted),
-        rawText: truncate(jsonText)
+        extracted: truncate(extracted, 500),
+        rawText: truncate(jsonText, 500)
       });
       return { ok: false, error: 'PARSE_ERROR' };
     }
