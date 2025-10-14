@@ -33,7 +33,7 @@ export type CoachAction =
 // 任务规格配置
 export interface TaskSpec {
   decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan';
-  runTier?: 'Lite' | 'Pro' | 'Review';
+  runTier?: 'Pro' | 'Review';
   riskPreference?: 'low' | 'medium' | 'high';
   seed?: number;
 }

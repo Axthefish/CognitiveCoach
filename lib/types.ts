@@ -88,7 +88,7 @@ export interface UserContext {
   reviewWindow?: string;
   // Task spec / preferences
   decisionType?: 'explore' | 'compare' | 'troubleshoot' | 'plan';
-  runTier?: 'Lite' | 'Pro' | 'Review';
+  runTier?: 'Pro' | 'Review';
   // @deprecated Low usage - planned for removal in v2.0
   riskPreference?: 'low' | 'medium' | 'high';
   // @deprecated Low usage - planned for removal in v2.0

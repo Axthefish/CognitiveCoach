@@ -27,7 +27,7 @@ const Stage0StreamRequestSchema = z.object({
 });
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 为thinking mode预留足够时间
+export const maxDuration = 120; // 为thinking mode预留足够时间（Gemini思考+生成需要更多时间）
 
 export async function POST(request: NextRequest) {
   logger.info('[Stage0 Stream API] Received request');

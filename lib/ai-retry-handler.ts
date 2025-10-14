@@ -240,7 +240,7 @@ export async function generateJsonWithRetry<T>(
   prompt: string,
   validator: (data: unknown) => data is T,
   options?: RetryOptions,
-  runTier?: 'Lite' | 'Pro' | 'Review',
+  runTier?: 'Pro' | 'Review',
   stage?: string
 ): Promise<{ ok: true; data: T; attempts: number } | { ok: false; error: string; attempts: number; errorContext?: ReturnType<typeof analyzeErrorContext> }> {
   const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
@@ -306,7 +306,7 @@ export async function generateJsonWithRetry<T>(
 export async function generateTextWithRetry(
   prompt: string,
   options?: RetryOptions,
-  runTier?: 'Lite' | 'Pro' | 'Review'
+  runTier?: 'Pro' | 'Review'
 ): Promise<{ ok: true; text: string } | { ok: false; error: string; attempts: number }> {
   const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
   let currentPrompt = prompt;
@@ -354,7 +354,7 @@ export async function generateBestOf<T>(
   prompts: string[],
   validator: (data: unknown) => data is T,
   scorer: (data: T) => number,
-  runTier?: 'Lite' | 'Pro' | 'Review'
+  runTier?: 'Pro' | 'Review'
 ): Promise<{ ok: true; data: T; score: number } | { ok: false; error: string }> {
   const results = await Promise.allSettled(
     prompts.map(prompt => 

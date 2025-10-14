@@ -123,7 +123,7 @@ export class ContextMonitor {
     promptText: string,
     outputText: string,
     options: {
-      runTier?: 'Lite' | 'Pro' | 'Review';
+      runTier?: 'Pro' | 'Review';
       wasCompacted?: boolean;
       compressionRatio?: number;
       sessionId?: string;

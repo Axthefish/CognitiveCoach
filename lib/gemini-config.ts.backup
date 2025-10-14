@@ -32,7 +32,6 @@ type GenConfig = {
   responseMimeType?: string;
   thinkingConfig?: {
     thinkingBudget?: number;
-    includeThoughts?: boolean;  // 关键：启用思考内容返回
   };
 };
 
@@ -114,7 +113,6 @@ export async function generateJson<T>(
     ...(stage === 'S0' && runTier === 'Pro' ? {
       thinkingConfig: {
         thinkingBudget: 8192, // 给足够的thinking token
-        includeThoughts: true, // 关键：启用思考内容返回
       }
     } : {}),
     ...overrides,
@@ -123,7 +121,7 @@ export async function generateJson<T>(
   const timeoutMs = getTimeoutConfig(runTier, stage);
   
   const run = async (temperature: number) => {
-    const model = client.getGenerativeModel({ model: getModelName() });
+    const model = client.getGenerativeModel({ model: getModelName(runTier) });
     try {
       const res = await withTimeout(
         model.generateContent({
@@ -195,7 +193,7 @@ export async function generateText(
   const timeoutMs = getTimeoutConfig(runTier, stage);
   
   const run = async (temperature: number) => {
-    const model = client.getGenerativeModel({ model: getModelName() });
+    const model = client.getGenerativeModel({ model: getModelName(runTier) });
     try {
       const res = await withTimeout(
         model.generateContent({
@@ -226,7 +224,8 @@ export async function generateText(
 export async function generateStreamingText(
   prompt: string,
   onChunk: (text: string) => void,
-  overrides?: Partial<GenConfig>
+  overrides?: Partial<GenConfig>,
+  runTier?: 'Pro' | 'Review'
 ): Promise<{ ok: true; fullText: string } | { ok: false; error: string }> {
   const client = createGeminiClient();
   if (!client) return { ok: false, error: 'NO_API_KEY' };
@@ -239,7 +238,7 @@ export async function generateStreamingText(
     ...overrides,
   };
 
-  const model = client.getGenerativeModel({ model: getModelName() });
+  const model = client.getGenerativeModel({ model: getModelName(runTier) });
   
   try {
     const result = await model.generateContentStream({
@@ -293,14 +292,13 @@ export async function generateJsonWithStreamingThinking<T>(
     ...(stage === 'S0' && runTier === 'Pro' ? {
       thinkingConfig: {
         thinkingBudget: 8192,
-        includeThoughts: true, // 关键：启用思考内容返回
       }
     } : {}),
     ...overrides,
   };
 
   const timeoutMs = getTimeoutConfig(runTier, stage);
-  const model = client.getGenerativeModel({ model: getModelName() });
+  const model = client.getGenerativeModel({ model: getModelName(runTier) });
   
   try {
     logger.info('[Gemini] Attempting real streaming with updated SDK', { 
