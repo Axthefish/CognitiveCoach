@@ -46,12 +46,21 @@ export const CollapsibleThinking = React.memo(function CollapsibleThinking({
             Thinking
           </span>
           
-          {/* streaming指示器 */}
+          {/* streaming指示器 - Cursor风格跳动动画 */}
           {isStreaming && (
-            <div className="flex items-center gap-1 ml-auto">
-              <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse" />
-              <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-100" />
-              <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-200" />
+            <div className="flex items-center gap-0.5 ml-auto">
+              <div 
+                className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" 
+                style={{ animationDuration: '1s', animationDelay: '0ms' }}
+              />
+              <div 
+                className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" 
+                style={{ animationDuration: '1s', animationDelay: '150ms' }}
+              />
+              <div 
+                className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" 
+                style={{ animationDuration: '1s', animationDelay: '300ms' }}
+              />
             </div>
           )}
         </button>

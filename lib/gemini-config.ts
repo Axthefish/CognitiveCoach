@@ -326,6 +326,17 @@ export async function generateJsonWithStreamingThinking<T>(
       if (candidates && candidates[0]?.content?.parts) {
         const parts = candidates[0].content.parts;
         
+        // 调试：打印parts结构
+        logger.info('[Gemini] Received parts:', { 
+          count: parts.length,
+          structure: parts.map(p => ({
+            hasThought: 'thought' in p,
+            thoughtValue: 'thought' in p ? (p as { thought?: boolean }).thought : undefined,
+            hasText: 'text' in p,
+            textLength: 'text' in p ? (p as { text?: string }).text?.length : 0
+          }))
+        });
+        
         for (const part of parts) {
           // Thought part - 实时发送thinking
           if ('thought' in part && part.thought === true && 'text' in part && part.text) {
