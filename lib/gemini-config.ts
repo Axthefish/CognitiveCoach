@@ -110,13 +110,7 @@ export async function generateJson<T>(
     topP: 0.95,
     maxOutputTokens: 65536,
     responseMimeType: 'application/json',
-    // 对于Stage 0启用thinking mode
-    ...(stage === 'S0' && runTier === 'Pro' ? {
-      thinkingConfig: {
-        thinkingBudget: 8192, // 给足够的thinking token
-        includeThoughts: true, // 关键：启用思考内容返回
-      }
-    } : {}),
+    // 不使用thinkingConfig - 通过prompt引导实现0延迟thinking
     ...overrides,
   };
 
@@ -288,14 +282,7 @@ export async function generateJsonWithStreamingThinking<T>(
     topP: 0.95,
     maxOutputTokens: 65536,
     // 不使用responseMimeType - streaming模式下会导致空响应
-    // responseMimeType: 'application/json',
-    // 启用thinking mode
-    ...(stage === 'S0' && runTier === 'Pro' ? {
-      thinkingConfig: {
-        thinkingBudget: 8192,
-        includeThoughts: true, // 关键：启用思考内容返回
-      }
-    } : {}),
+    // 不使用thinkingConfig - 通过prompt引导实现0延迟thinking
     ...overrides,
   };
 
@@ -315,14 +302,14 @@ export async function generateJsonWithStreamingThinking<T>(
       generationConfig: config,
     });
     
-    let jsonText = '';
-    let thinkingText = '';
-    let hasThinkingEnded = false;
-    let thinkingChunkCount = 0;
-    let textChunkCount = 0;
+    let fullText = '';
+    let inThinkingSection = false;
+    let thinkingBuffer = '';
+    let jsonBuffer = '';
+    let chunkCount = 0;
     const startTime = Date.now();
     
-    // Stream处理
+    // Stream处理 - 解析<thinking>标签
     for await (const chunk of result.stream) {
       // 检查超时
       if (Date.now() - startTime > timeoutMs) {
@@ -330,85 +317,96 @@ export async function generateJsonWithStreamingThinking<T>(
         throw new Error('Request timeout');
       }
       
-      const candidates = chunk.candidates;
-      if (candidates && candidates[0]?.content?.parts) {
-        const parts = candidates[0].content.parts;
-        
-        for (const part of parts) {
-          logger.info('[Gemini] Part received:', {
-            hasThought: 'thought' in part,
-            thoughtValue: 'thought' in part ? (part as { thought?: boolean }).thought : undefined,
-            hasText: 'text' in part,
-            textLength: 'text' in part ? (part as { text?: string }).text?.length : 0
+      const chunkText = chunk.text();
+      if (!chunkText) continue;
+      
+      chunkCount++;
+      fullText += chunkText;
+      
+      // 实时解析<thinking>标签
+      if (chunkText.includes('<thinking>')) {
+        inThinkingSection = true;
+        const afterTag = chunkText.split('<thinking>')[1] || '';
+        if (afterTag) {
+          onThinkingChunk(afterTag);
+          thinkingBuffer += afterTag;
+          logger.info('[Gemini] Thinking started, first chunk:', {
+            length: afterTag.length,
+            sample: truncate(afterTag, 50)
           });
-          
-          // Thought part - 实时发送thinking
-          if ('thought' in part && part.thought === true && 'text' in part && part.text) {
-            thinkingChunkCount++;
-            const chunkText = part.text;
-            thinkingText += chunkText;
-            logger.info(`[Gemini] Thinking chunk #${thinkingChunkCount}:`, {
-              length: chunkText.length,
-              sample: truncate(chunkText, 50)
-            });
-            onThinkingChunk(chunkText);
-          }
-          // Text part - 累积JSON内容
-          else if ('text' in part && part.text) {
-            if (!hasThinkingEnded) {
-              logger.info('[Gemini] Thinking phase ended, starting JSON content');
-              onThinkingDone();
-              hasThinkingEnded = true;
-            }
-            textChunkCount++;
-            jsonText += part.text;
-            logger.info(`[Gemini] Text chunk #${textChunkCount}:`, {
-              length: part.text.length,
-              sample: truncate(part.text, 50)
-            });
-          }
         }
+      } else if (chunkText.includes('</thinking>')) {
+        const beforeTag = chunkText.split('</thinking>')[0] || '';
+        if (beforeTag) {
+          onThinkingChunk(beforeTag);
+          thinkingBuffer += beforeTag;
+        }
+        inThinkingSection = false;
+        onThinkingDone();
+        logger.info('[Gemini] Thinking completed, total length:', thinkingBuffer.length);
+        
+        const afterTag = chunkText.split('</thinking>')[1] || '';
+        jsonBuffer += afterTag;
+      } else if (inThinkingSection) {
+        // 在thinking区间内，实时发送
+        onThinkingChunk(chunkText);
+        thinkingBuffer += chunkText;
+        logger.info(`[Gemini] Thinking chunk #${chunkCount}:`, {
+          length: chunkText.length,
+          sample: truncate(chunkText, 50)
+        });
+      } else {
+        // thinking之后的JSON内容
+        jsonBuffer += chunkText;
       }
     }
     
     logger.info('[Gemini] Stream completed:', {
-      thinkingChunks: thinkingChunkCount,
-      textChunks: textChunkCount,
-      thinkingLength: thinkingText.length,
-      jsonLength: jsonText.length
+      totalChunks: chunkCount,
+      thinkingLength: thinkingBuffer.length,
+      jsonLength: jsonBuffer.length,
+      fullLength: fullText.length
     });
     
-    // 确保thinking结束回调
-    if (!hasThinkingEnded) {
+    // 确保thinking已结束
+    if (inThinkingSection) {
       onThinkingDone();
+      logger.warn('[Gemini] Thinking section not properly closed');
     }
     
-    // 如果没有thinking chunks但有非streaming API的fallback
-    if (thinkingChunkCount === 0 && thinkingText.length === 0) {
-      logger.warn('[Gemini] No thinking chunks in stream, likely streaming mode doesnt support thought parts');
+    // 解析JSON部分
+    let extracted = jsonBuffer.trim();
+    
+    // 如果jsonBuffer为空，尝试从fullText中提取
+    if (!extracted && fullText) {
+      const thinkingMatch = fullText.match(/<thinking>[\s\S]*?<\/thinking>\s*([\s\S]*)/);
+      if (thinkingMatch) {
+        extracted = thinkingMatch[1].trim();
+        logger.info('[Gemini] Extracted JSON from full text after thinking tag');
+      } else {
+        // 没有thinking标签，尝试提取JSON部分
+        extracted = fullText.trim();
+        logger.warn('[Gemini] No thinking tags found, using full text');
+      }
     }
     
-    // 解析JSON（支持多种格式）
-    if (!jsonText.trim()) {
+    if (!extracted) {
       logger.warn('[Gemini] Empty JSON text from stream');
       return { ok: false, error: 'EMPTY_RESPONSE' };
     }
+    logger.info('[Gemini] Raw JSON text:', { sample: truncate(extracted, 200) });
     
-    let extracted = jsonText.trim();
-    logger.info('[Gemini] Raw JSON text from stream:', { sample: truncate(extracted, 200) });
-    
-    // 1. 尝试移除markdown code block（如果有）
+    // 移除markdown code block（如果有）
     const jsonBlockMatch = extracted.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonBlockMatch) {
       extracted = jsonBlockMatch[1].trim();
       logger.info('[Gemini] Extracted from ```json``` block');
     }
     
-    // 2. 尝试提取第一个完整的JSON对象
+    // 提取第一个完整的JSON对象
     const jsonObjectMatch = extracted.match(/\{[\s\S]*\}/);
-    if (!jsonBlockMatch && jsonObjectMatch) {
+    if (jsonObjectMatch) {
       extracted = jsonObjectMatch[0].trim();
-      logger.info('[Gemini] Extracted first JSON object');
     }
     
     try {
@@ -419,7 +417,7 @@ export async function generateJsonWithStreamingThinking<T>(
       logger.error('[Gemini] JSON parse failed:', {
         error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
         extracted: truncate(extracted, 500),
-        rawText: truncate(jsonText, 500)
+        fullText: truncate(fullText, 500)
       });
       return { ok: false, error: 'PARSE_ERROR' };
     }

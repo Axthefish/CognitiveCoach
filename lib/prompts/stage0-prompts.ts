@@ -32,7 +32,14 @@ export function getInitialCollectionPrompt(userInput: string): string {
 </principles>
 
 <task>
-生成一个精准的问题，引导用户说出：
+请一步一步思考，然后生成一个精准的问题。
+
+先在<thinking>标签中展示你的分析：
+- 用户输入包含哪些关键信息？
+- 可能的问题域是什么？
+- 应该问什么问题来深入理解用户的WHY（深层动机）？
+
+然后生成引导用户说出：
 1. **深层动机（WHY）**：为什么想做这件事？
 2. **具体场景**：在什么情况下需要？
 3. **初步边界**：想包括什么、排除什么？
@@ -43,7 +50,11 @@ export function getInitialCollectionPrompt(userInput: string): string {
 - 优先探索WHY而非HOW
 </task>
 
-请用JSON格式输出（用\`\`\`json包裹）：
+<output_format>
+<thinking>
+你的分析过程
+</thinking>
+
 \`\`\`json
 {
   "analysis": {
@@ -53,7 +64,8 @@ export function getInitialCollectionPrompt(userInput: string): string {
   },
   "next_question": "你的问题"
 }
-\`\`\``;
+\`\`\`
+</output_format>`;
 }
 
 // ============================================
@@ -113,6 +125,13 @@ ${historyText}
 </current_understanding>
 
 <goal>
+请一步一步思考，然后决定下一步。
+
+先在<thinking>标签中展示你的分析：
+- 评估对话历史，当前理解的清晰度如何？
+- 还缺少哪些关键信息（WHY/边界/约束）？
+- 下一步应该问什么？
+
 通过对话达成三个目标：
 1. **深层动机清晰**：理解WHY（为什么重要），而非只知道WHAT
 2. **问题域边界明确**：清楚包括什么、排除什么
@@ -136,7 +155,11 @@ ${historyText}
 - 约束未分类 → 继续澄清约束性质
 </decision_criteria>
 
-请用JSON格式输出（用\`\`\`json包裹）：
+<output_format>
+<thinking>
+你的分析过程
+</thinking>
+
 \`\`\`json
 {
   "assessment": {
@@ -147,7 +170,8 @@ ${historyText}
   "action": "continue" 或 "confirm",
   "next_question": "你的问题（如果action是continue）"
 }
-\`\`\``;
+\`\`\`
+</output_format>`;
 }
 
 // ============================================
