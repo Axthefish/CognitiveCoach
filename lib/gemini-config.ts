@@ -281,7 +281,7 @@ export async function generateJsonWithStreamingThinking<T>(
     topK: 40,
     topP: 0.95,
     maxOutputTokens: 65536,
-    // 不设置responseMimeType - 需要输出thinking标签+JSON的混合格式
+    responseMimeType: 'text/plain', // 使用text/plain支持thinking标签+JSON混合格式
     // 不使用thinkingConfig - 通过prompt引导实现0延迟thinking
     ...overrides,
   };
