@@ -38,15 +38,15 @@ type GenConfig = {
 
 // 获取超时配置 - 按阶段动态调整
 function getTimeoutConfig(runTier?: 'Pro' | 'Review', stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): number {
-  // 基础超时配置（毫秒）
+  // 基础超时配置（毫秒）- thinking mode需要更长时间
   const baseTimeouts = {
-    'Pro': 30000,   // 30秒 (thinking streaming应该很快开始)
-    'Review': 45000 // 45秒
+    'Pro': 120000,  // 120秒 (2分钟) - thinking可能需要较长时间
+    'Review': 180000 // 180秒 (3分钟)
   };
   
   // 阶段复杂度系数
   const stageComplexity: Record<string, number> = {
-    'S0': 1.0,  // S0：thinking streaming快速
+    'S0': 1.0,  // S0：目的澄清，thinking较复杂
     'S1': 1.5,  // S1：框架生成
     'S2': 1.2,  // S2：动态分析
     'S3': 1.0,  // S3：行动计划

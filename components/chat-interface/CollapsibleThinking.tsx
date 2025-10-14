@@ -69,7 +69,7 @@ export const CollapsibleThinking = React.memo(function CollapsibleThinking({
         {isExpanded && (
           <div className="px-3 py-2 border-t border-gray-200/30">
             <div className="text-[11px] text-gray-500 leading-relaxed font-mono whitespace-pre-wrap">
-              {thinkingText}
+              {thinkingText || (isStreaming ? 'Analyzing your request...' : '')}
               {/* Cursor风格的闪烁光标 */}
               {isStreaming && (
                 <span className="inline-block w-[2px] h-3 bg-gray-400 ml-0.5 animate-pulse" />
