@@ -22,7 +22,7 @@ const Stage1RequestSchema = z.object({
     keyConstraints: z.array(z.string()),
     confidence: z.number(),
   }),
-  runTier: z.enum(['Lite', 'Pro']).optional(),
+  runTier: z.enum(['Pro', 'Review']).optional(),
 });
 
 // ============================================

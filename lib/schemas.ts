@@ -195,7 +195,7 @@ export const AnalyzeProgressSchema = z.object({
 // Input schemas
 export const TaskSpecSchema = z.object({
   decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
-  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  runTier: z.enum(['Pro', 'Review']).optional(),
   riskPreference: z.enum(['low', 'medium', 'high']).optional(),
   seed: z.number().int().optional(),
 });
@@ -241,7 +241,7 @@ export const RefineGoalPayloadSchema = z.object({
 export const GenerateFrameworkPayloadSchema = z.object({
   userGoal: z.string(),
   decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
-  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  runTier: z.enum(['Pro', 'Review']).optional(),
   riskPreference: z.enum(['low', 'medium', 'high']).optional(),
   seed: z.number().int().optional(),
 }).strict();
@@ -249,7 +249,7 @@ export const GenerateFrameworkPayloadSchema = z.object({
 export const GenerateSystemDynamicsPayloadSchema = z.object({
   framework: KnowledgeFrameworkSchema,
   decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
-  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  runTier: z.enum(['Pro', 'Review']).optional(),
   riskPreference: z.enum(['low', 'medium', 'high']).optional(),
   seed: z.number().int().optional(),
 }).strict();
@@ -259,7 +259,7 @@ export const GenerateActionPlanPayloadSchema = z.object({
   framework: KnowledgeFrameworkSchema,
   systemNodes: z.array(z.object({ id: z.string(), title: z.string().optional() })).optional(),
   decisionType: z.enum(['explore', 'compare', 'troubleshoot', 'plan']).optional(),
-  runTier: z.enum(['Lite', 'Pro', 'Review']).optional(),
+  runTier: z.enum(['Pro', 'Review']).optional(),
   riskPreference: z.enum(['low', 'medium', 'high']).optional(),
   seed: z.number().int().optional(),
 }).strict();

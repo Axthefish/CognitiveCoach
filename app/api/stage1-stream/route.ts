@@ -17,7 +17,7 @@ const Stage1StreamRequestSchema = z.object({
     boundaryConstraints: z.array(z.string()),
     personalConstraints: z.array(z.string()),
   }),
-  runTier: z.enum(['Lite', 'Pro']).optional(),
+  runTier: z.enum(['Pro', 'Review']).optional(),
 });
 
 export const runtime = 'nodejs';

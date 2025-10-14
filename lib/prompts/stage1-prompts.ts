@@ -130,10 +130,10 @@ export function getFrameworkGenerationPrompt(purpose: Stage1Context): string {
 // AI 配置
 // ============================================
 
-export function getStage1GenerationConfig(runTier: 'Lite' | 'Pro' = 'Pro') {
+export function getStage1GenerationConfig() {
   return {
-    temperature: runTier === 'Lite' ? 0.6 : 0.8,
-    maxOutputTokens: runTier === 'Lite' ? 8000 : 16000,
+    temperature: 0.8,
+    maxOutputTokens: 16000,
     topP: 0.95,
     topK: 40,
   };

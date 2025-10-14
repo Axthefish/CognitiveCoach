@@ -36,7 +36,7 @@ export class Stage1Service {
    */
   async generateFramework(
     purpose: PurposeDefinition,
-    runTier: 'Lite' | 'Pro' = 'Pro',
+    runTier: 'Pro' | 'Review' = 'Pro',
     sessionId?: string
   ): Promise<NextResponse<Stage1Response>> {
     logger.info('[Stage1Service] Generating framework', {
@@ -77,7 +77,7 @@ export class Stage1Service {
       this.validateUniversalContext(purpose);
       
       const prompt = getFrameworkGenerationPrompt(universalContext);
-      const config = getStage1GenerationConfig(runTier);
+      const config = getStage1GenerationConfig();
       
       // 调用 AI 生成框架
       const aiResponse = await generateJson<{
