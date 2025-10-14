@@ -61,24 +61,15 @@ export async function POST(request: NextRequest) {
         if (result.ok) {
           const data = result.data as Record<string, unknown>;
           
-          // 如果有thinking字段，逐字展示
+          // 如果有thinking字段，一次性发送完整thinking（前端做打字效果）
           if (data.thinking && typeof data.thinking === 'string') {
-            const thinking = data.thinking;
-            const chunkSize = 3; // 每次发送3个字符，模拟打字效果
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'thinking',
+                text: data.thinking, // 完整发送
+              })}\n\n`)
+            );
             
-            for (let i = 0; i < thinking.length; i += chunkSize) {
-              const chunk = thinking.slice(i, i + chunkSize);
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({
-                  type: 'thinking',
-                  text: chunk,
-                })}\n\n`)
-              );
-              // 小延迟模拟打字效果
-              await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            
-            // thinking完成
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'thinking_done',

@@ -26,8 +26,28 @@ export default function Stage0View() {
   
   const [isThinking, setIsThinking] = React.useState(false);
   const [thinkingText, setThinkingText] = React.useState(''); // streaming thinking文本
+  const [fullThinkingText, setFullThinkingText] = React.useState(''); // 完整thinking文本
   const [showConfirmation, setShowConfirmation] = React.useState(false);
   const isMobile = useIsMobile();
+  
+  // 打字机效果：逐步显示thinking文本
+  React.useEffect(() => {
+    if (!fullThinkingText) return;
+    
+    let currentIndex = 0;
+    setThinkingText('');
+    
+    const interval = setInterval(() => {
+      if (currentIndex < fullThinkingText.length) {
+        setThinkingText(fullThinkingText.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 30); // 30ms per character 打字速度
+    
+    return () => clearInterval(interval);
+  }, [fullThinkingText]);
   
   // 处理用户发送消息
   const handleSendMessage = async (content: string) => {
@@ -46,6 +66,7 @@ export default function Stage0View() {
     addStage0Message(userMessage);
     setIsThinking(true);
     setThinkingText('');
+    setFullThinkingText('');
     
     try {
       // 使用streaming API - Cursor风格
@@ -100,8 +121,8 @@ export default function Stage0View() {
             const event = JSON.parse(line.slice(6));
             
             if (event.type === 'thinking') {
-              // 真实的AI思考过程：实时累加
-              setThinkingText(prev => prev + (event.text || ''));
+              // 保存完整thinking文本（服务端一次性发送）
+              setFullThinkingText(event.text || '');
             } else if (event.type === 'thinking_done') {
               // 思考完成，准备接收结构化数据
               logger.info('[Stage0] Thinking phase completed');
@@ -164,7 +185,7 @@ export default function Stage0View() {
       });
     } finally {
       setIsThinking(false);
-      setThinkingText('');
+      // 不立即清空thinkingText，让打字效果完成
     }
   };
   

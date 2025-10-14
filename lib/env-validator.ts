@@ -38,6 +38,16 @@ export function clearEnvCache(): void {
  * @throws 如果环境变量无效
  */
 export function validateEnv(forceRevalidate = false): ValidatedEnv {
+  // 客户端不需要验证环境变量（环境变量只在服务端可用）
+  if (typeof window !== 'undefined') {
+    // 返回一个安全的默认值给客户端
+    return {
+      NODE_ENV: 'production',
+      LOG_LEVEL: 'info',
+      MAX_REQUESTS_PER_MINUTE: 60,
+    } as ValidatedEnv;
+  }
+  
   // 在开发环境或测试环境，或者强制重新验证时，不使用缓存
   const shouldSkipCache = 
     forceRevalidate || 
@@ -54,7 +64,7 @@ export function validateEnv(forceRevalidate = false): ValidatedEnv {
   
   const env = parsed.data;
   
-  // 检查 AI API key 配置
+  // 检查 AI API key 配置（只在服务端检查）
   if (!env.GOOGLE_AI_API_KEY && !env.GEMINI_API_KEY) {
     logger.warn('⚠️ No AI API keys configured. AI features will use fallback data.');
   }
