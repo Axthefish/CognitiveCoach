@@ -33,25 +33,24 @@ export function getInitialCollectionPrompt(userInput: string): string {
 </principles>
 
 <task>
-首先，简短说明你的思考（2-3句话，用第一人称）。然后生成一个开放、精准的问题，引导用户说出：
-1. **深层动机（WHY）**：为什么想做这件事？背后的真实需求是什么？
-2. **具体场景**：在什么情况下需要？有什么具体触发点？
+首先，用1句话简短说明你的思考。然后生成一个精准的问题，引导用户说出：
+1. **深层动机（WHY）**：为什么想做这件事？
+2. **具体场景**：在什么情况下需要？
 3. **初步边界**：想包括什么、排除什么？
 
 问题设计要求：
 - 简洁直接（1-2句话）
 - 开放式，给用户充分表达空间
-- 避免假设和猜测
 - 优先探索WHY而非HOW
 </task>
 
-输出JSON格式：
+输出JSON格式（保持简洁）：
 {
-  "thinking": "你的简短思考过程（2-3句话，例如：我注意到用户提到了X，这可能意味着...为了更好理解需求，我应该询问...）",
+  "thinking": "你的思考（1句话，如：用户提到X，我需要了解其动机）",
   "analysis": {
-    "possible_domains": ["领域1", "领域2"],
-    "possible_purposes": ["目的1", "目的2"],
-    "initial_clues": ["线索1", "线索2"]
+    "possible_domains": ["领域1"],
+    "possible_purposes": ["目的1"],
+    "initial_clues": ["线索1"]
   },
   "next_question": "你的问题"
 }`;
@@ -137,12 +136,12 @@ ${historyText}
 - 约束未分类 → 继续澄清约束性质
 </decision_criteria>
 
-输出JSON格式：
+输出JSON格式（保持简洁）：
 {
-  "thinking": "你的简短思考（2-3句话，例如：从对话来看，用户真正关心的是...我注意到还缺少X信息...）",
+  "thinking": "你的思考（1句话，如：用户关心X，还需了解Y）",
   "assessment": {
     "clarity_score": 0.0-1.0,
-    "missing_info": ["缺失的信息点"],
+    "missing_info": ["缺失点"],
     "confidence": 0.0-1.0
   },
   "action": "continue" 或 "confirm",
@@ -237,9 +236,9 @@ ${historyText}
 
 export function getStage0GenerationConfig() {
   return {
-    temperature: 0.7, // 适中的创造性，保持对话自然
-    maxOutputTokens: 2000,
-    topP: 0.95,
+    temperature: 0.6, // 降低温度，加快生成速度
+    maxOutputTokens: 1000, // 限制输出长度，减少生成时间
+    topP: 0.9,
     topK: 40,
   };
 }
