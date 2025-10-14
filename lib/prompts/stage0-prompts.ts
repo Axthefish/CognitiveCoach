@@ -43,7 +43,8 @@ export function getInitialCollectionPrompt(userInput: string): string {
 - 优先探索WHY而非HOW
 </task>
 
-输出JSON格式：
+请用JSON格式输出（用\`\`\`json包裹）：
+\`\`\`json
 {
   "analysis": {
     "possible_domains": ["领域1"],
@@ -51,7 +52,8 @@ export function getInitialCollectionPrompt(userInput: string): string {
     "initial_clues": ["线索1"]
   },
   "next_question": "你的问题"
-}`;
+}
+\`\`\``;
 }
 
 // ============================================
@@ -134,7 +136,8 @@ ${historyText}
 - 约束未分类 → 继续澄清约束性质
 </decision_criteria>
 
-输出JSON格式：
+请用JSON格式输出（用\`\`\`json包裹）：
+\`\`\`json
 {
   "assessment": {
     "clarity_score": 0.0-1.0,
@@ -143,7 +146,8 @@ ${historyText}
   },
   "action": "continue" 或 "confirm",
   "next_question": "你的问题（如果action是continue）"
-}`;
+}
+\`\`\``;
 }
 
 // ============================================
@@ -224,7 +228,18 @@ ${historyText}
 - 包含目的、边界、关键约束
 </task>
 
-输出JSON格式，包含上述所有字段。用你的判断决定每个约束应归入哪一类。`;
+请用JSON格式输出（用\`\`\`json包裹），包含上述所有字段。用你的判断决定每个约束应归入哪一类。
+\`\`\`json
+{
+  "clarified_purpose": "...",
+  "problem_domain": "...",
+  "domain_boundary": "...",
+  "boundary_constraints": ["..."],
+  "personal_constraints": ["..."],
+  "confidence": 0.0-1.0,
+  "confirmation_message": "..."
+}
+\`\`\``;
 }
 
 // ============================================
