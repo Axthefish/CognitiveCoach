@@ -306,22 +306,32 @@ export async function generateJsonWithStreamingThinking<T>(
   const model = client.getGenerativeModel({ model: getModelName(runTier) });
   
   try {
+    logger.info('[Gemini] Starting generateContentStream', { 
+      hasThinkingConfig: !!(config as { thinkingConfig?: unknown }).thinkingConfig,
+      timeout: timeoutMs 
+    });
+    
     // 使用真正的streaming API - 这是实现0延迟的关键
-    const result = await withTimeout(
-      model.generateContentStream({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: config,
-      }),
-      timeoutMs
-    );
+    // 注意：不对generateContentStream本身做timeout包装，因为它返回stream对象不是promise
+    const result = await model.generateContentStream({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: config,
+    });
     
     let jsonText = '';
     let hasThinkingEnded = false;
     let thinkingChunkCount = 0;
     let textChunkCount = 0;
+    const startTime = Date.now();
     
     // 实时处理stream chunks
     for await (const chunk of result.stream) {
+      // 检查超时
+      if (Date.now() - startTime > timeoutMs) {
+        logger.warn('[Gemini] Stream timeout exceeded');
+        throw new Error('Request timeout');
+      }
+      
       const candidates = chunk.candidates;
       if (candidates && candidates[0]?.content?.parts) {
         const parts = candidates[0].content.parts;
