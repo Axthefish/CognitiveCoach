@@ -388,20 +388,38 @@ export async function generateJsonWithStreamingThinking<T>(
       logger.warn('[Gemini] No thinking chunks in stream, likely streaming mode doesnt support thought parts');
     }
     
-    // 解析JSON
+    // 解析JSON（支持多种格式）
     if (!jsonText.trim()) {
       logger.warn('[Gemini] Empty JSON text from stream');
       return { ok: false, error: 'EMPTY_RESPONSE' };
     }
     
+    let extracted = jsonText.trim();
+    logger.info('[Gemini] Raw JSON text from stream:', { sample: truncate(extracted, 200) });
+    
+    // 1. 尝试移除markdown code block（如果有）
+    const jsonBlockMatch = extracted.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+      extracted = jsonBlockMatch[1].trim();
+      logger.info('[Gemini] Extracted from ```json``` block');
+    }
+    
+    // 2. 尝试提取第一个完整的JSON对象
+    const jsonObjectMatch = extracted.match(/\{[\s\S]*\}/);
+    if (!jsonBlockMatch && jsonObjectMatch) {
+      extracted = jsonObjectMatch[0].trim();
+      logger.info('[Gemini] Extracted first JSON object');
+    }
+    
     try {
-      const data = JSON.parse(jsonText) as T;
+      const data = JSON.parse(extracted) as T;
       logger.info('[Gemini] JSON parsed successfully from stream');
       return { ok: true, data };
     } catch (parseError) {
       logger.error('[Gemini] JSON parse failed:', {
         error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-        sample: truncate(jsonText, 500)
+        extracted: truncate(extracted, 500),
+        rawText: truncate(jsonText, 500)
       });
       return { ok: false, error: 'PARSE_ERROR' };
     }
