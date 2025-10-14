@@ -34,6 +34,9 @@ type GenConfig = {
   topP?: number;
   maxOutputTokens?: number;
   responseMimeType?: string;
+  thinkingConfig?: {
+    thinkingBudget?: number;
+  };
 };
 
 // 获取超时配置 - 按阶段和档位动态调整
@@ -101,7 +104,7 @@ export async function generateJson<T>(
   overrides?: Partial<GenConfig>,
   runTier?: 'Lite' | 'Pro' | 'Review',
   stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'
-): Promise<{ ok: true; data: T } | { ok: false; error: string; raw?: string }> {
+): Promise<{ ok: true; data: T; thinking?: string } | { ok: false; error: string; raw?: string }> {
   const client = createGeminiClient();
   if (!client) return { ok: false, error: 'NO_API_KEY' };
 
@@ -111,6 +114,12 @@ export async function generateJson<T>(
     topP: 0.95,
     maxOutputTokens: 65536,
     responseMimeType: 'application/json',
+    // 对于Stage 0启用thinking mode
+    ...(stage === 'S0' && runTier === 'Pro' ? {
+      thinkingConfig: {
+        thinkingBudget: 8192, // 给足够的thinking token
+      }
+    } : {}),
     ...overrides,
   };
 
@@ -126,11 +135,25 @@ export async function generateJson<T>(
         }),
         timeoutMs
       );
+      
+      // 提取thinking和主要内容
+      const candidates = res.response.candidates;
+      let thinkingText: string | undefined;
+      
+      if (candidates && candidates[0]?.content?.parts) {
+        const parts = candidates[0].content.parts;
+        // 查找thought part
+        const thoughtPart = parts.find((p: any) => p.thought === true);
+        if (thoughtPart && 'text' in thoughtPart) {
+          thinkingText = thoughtPart.text;
+        }
+      }
+      
       const text = res.response.text();
       if (!text) return { ok: false as const, error: 'EMPTY_RESPONSE' };
       try {
         const data = JSON.parse(text) as T;
-        return { ok: true as const, data };
+        return { ok: true as const, data, thinking: thinkingText };
       } catch (parseError) {
         logger.warn('Gemini JSON parse failed:', {
           error: parseError instanceof Error ? parseError.message : 'Unknown parse error',

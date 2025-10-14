@@ -50,23 +50,21 @@ export async function POST(request: NextRequest) {
         
         logger.info('[Stage0 Stream] Generating response with thinking');
         
-        // 生成包含thinking的JSON
+        // 使用Gemini原生thinking mode生成
         const result = await generateJson(
           prompt,
           getStage0GenerationConfig(),
-          'Pro',
+          'Pro', // 使用Pro档位启用thinking
           'S0'
         );
         
         if (result.ok) {
-          const data = result.data as Record<string, unknown>;
-          
-          // 如果有thinking字段，一次性发送完整thinking（前端做打字效果）
-          if (data.thinking && typeof data.thinking === 'string') {
+          // 如果有thinking（从Gemini的thought part提取），发送给前端
+          if (result.thinking) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'thinking',
-                text: data.thinking, // 完整发送
+                text: result.thinking, // Gemini原生thinking
               })}\n\n`)
             );
             

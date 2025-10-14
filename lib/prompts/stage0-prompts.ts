@@ -29,11 +29,10 @@ export function getInitialCollectionPrompt(userInput: string): string {
 1. 给模型自主判断空间：不要过度硬编码规则，通过清晰的目标引导
 2. 保持上下文精简：只问最关键的问题
 3. 优先WHY而非WHAT：理解深层动机比表面需求更重要
-4. 展示推理过程：让用户看到你的思考，增强信任感
 </principles>
 
 <task>
-首先，用1句话简短说明你的思考。然后生成一个精准的问题，引导用户说出：
+生成一个精准的问题，引导用户说出：
 1. **深层动机（WHY）**：为什么想做这件事？
 2. **具体场景**：在什么情况下需要？
 3. **初步边界**：想包括什么、排除什么？
@@ -44,9 +43,8 @@ export function getInitialCollectionPrompt(userInput: string): string {
 - 优先探索WHY而非HOW
 </task>
 
-输出JSON格式（保持简洁）：
+输出JSON格式：
 {
-  "thinking": "你的思考（1句话，如：用户提到X，我需要了解其动机）",
   "analysis": {
     "possible_domains": ["领域1"],
     "possible_purposes": ["目的1"],
@@ -136,9 +134,8 @@ ${historyText}
 - 约束未分类 → 继续澄清约束性质
 </decision_criteria>
 
-输出JSON格式（保持简洁）：
+输出JSON格式：
 {
-  "thinking": "你的思考（1句话，如：用户关心X，还需了解Y）",
   "assessment": {
     "clarity_score": 0.0-1.0,
     "missing_info": ["缺失点"],
@@ -236,9 +233,9 @@ ${historyText}
 
 export function getStage0GenerationConfig() {
   return {
-    temperature: 0.6, // 降低温度，加快生成速度
-    maxOutputTokens: 1000, // 限制输出长度，减少生成时间
-    topP: 0.9,
+    temperature: 0.7,
+    maxOutputTokens: 2000,
+    topP: 0.95,
     topK: 40,
   };
 }
