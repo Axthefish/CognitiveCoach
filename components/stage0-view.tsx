@@ -289,9 +289,7 @@ export default function Stage0View() {
           messages={stage0Messages}
           onSendMessage={handleSendMessage}
           isThinking={isThinking}
-          thinkingMessage="..." // Cursor风格
-          thinkingText={thinkingText} // streaming文本
-          estimatedTime={undefined} // 不显示时间
+          thinkingText={thinkingText}
           disabled={showConfirmation}
           placeholder="Please describe the problem you want to solve or the goal you want to achieve..."
         />

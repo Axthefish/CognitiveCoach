@@ -34,29 +34,11 @@ export default function Stage2View() {
   } = useCognitiveCoachStoreV2();
   
   const [isThinking, setIsThinking] = React.useState(false);
-  const [thinkingProgress, setThinkingProgress] = React.useState(0);
-  const [thinkingText] = React.useState(''); // 🆕 真实thinking文本（暂未实现Stage2 streaming）
+  const [thinkingText] = React.useState(''); // 真实thinking文本（Stage2暂未实现streaming）
   const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
   const [showPlan, setShowPlan] = React.useState(false);
   const [mobileTab, setMobileTab] = React.useState<'chat' | 'chart'>('chat');
   const [copySuccess, setCopySuccess] = React.useState(false);
-  
-  // 模拟thinking进度（Stage2生成方案时）
-  React.useEffect(() => {
-    if (isThinking && stage2State === 'GENERATING') {
-      setThinkingProgress(0);
-      const interval = setInterval(() => {
-        setThinkingProgress(prev => {
-          if (prev >= 85) return prev; // 在85%停住，等真实结果
-          return Math.min(prev + Math.random() * 12, 85);
-        });
-      }, 3000);
-      
-      return () => clearInterval(interval);
-    } else {
-      setThinkingProgress(0);
-    }
-  }, [isThinking, stage2State]);
   
   // 分析缺失信息并生成问题
   const analyzeMissingInfo = React.useCallback(async () => {
@@ -358,15 +340,7 @@ export default function Stage2View() {
             messages={stage2Messages}
             onSendMessage={handleSendMessage}
             isThinking={isThinking}
-            thinkingMessage={
-              stage2State === 'GENERATING' 
-                ? '🎨 正在生成个性化方案...' 
-                : '🤔 正在分析你的需求...'
-            }
-            thinkingProgress={thinkingProgress}
-            showThinkingProgress={stage2State === 'GENERATING'}
-            thinkingText={thinkingText} // 🆕 传入thinking文本（Stage2暂时仍用模拟）
-            estimatedTime={stage2State === 'GENERATING' ? '80-100秒' : '20-30秒'}
+            thinkingText={thinkingText}
             disabled={stage2State !== 'QUESTIONING'}
             placeholder={
               stage2State === 'QUESTIONING' 
@@ -711,15 +685,7 @@ export default function Stage2View() {
                 messages={stage2Messages}
                 onSendMessage={handleSendMessage}
                 isThinking={isThinking}
-                thinkingMessage={
-                  stage2State === 'GENERATING' 
-                    ? '🎨 正在生成个性化方案...' 
-                    : '🤔 正在分析你的需求...'
-                }
-                thinkingProgress={thinkingProgress}
-                showThinkingProgress={stage2State === 'GENERATING'}
-                thinkingText={thinkingText} // 🆕 传入thinking文本
-                estimatedTime={stage2State === 'GENERATING' ? '80-100秒' : '20-30秒'}
+                thinkingText={thinkingText}
                 disabled={stage2State !== 'QUESTIONING'}
                 placeholder={
                   stage2State === 'QUESTIONING' 

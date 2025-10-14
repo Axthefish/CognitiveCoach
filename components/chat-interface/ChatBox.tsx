@@ -3,7 +3,6 @@
 import React from 'react';
 import type { ChatMessage } from '@/lib/types-v2';
 import { MessageBubble } from './MessageBubble';
-import { ThinkingIndicator } from './ThinkingIndicator';
 import { CollapsibleThinking } from './CollapsibleThinking';
 import { InputArea } from './InputArea';
 import { cn } from '@/lib/utils';
@@ -12,11 +11,7 @@ interface ChatBoxProps {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   isThinking?: boolean;
-  thinkingMessage?: string;
-  thinkingProgress?: number; // 思考进度 0-100（模拟用）
-  showThinkingProgress?: boolean; // 是否显示进度条（模拟用）
-  thinkingText?: string; // 🆕 真实的thinking文本流
-  estimatedTime?: string; // 预计时间
+  thinkingText?: string; // 真实的thinking文本流
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -26,11 +21,7 @@ export function ChatBox({
   messages,
   onSendMessage,
   isThinking = false,
-  thinkingMessage,
-  thinkingProgress,
-  showThinkingProgress = false,
   thinkingText,
-  estimatedTime,
   disabled = false,
   placeholder,
   className,
