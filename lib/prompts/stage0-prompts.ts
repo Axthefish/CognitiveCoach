@@ -34,12 +34,12 @@ export function getInitialCollectionPrompt(userInput: string): string {
 <task>
 请一步一步思考，然后生成一个精准的问题。
 
-先在<thinking>标签中展示你的分析：
+分析重点：
 - 用户输入包含哪些关键信息？
 - 可能的问题域是什么？
 - 应该问什么问题来深入理解用户的WHY（深层动机）？
 
-然后生成引导用户说出：
+生成引导用户说出：
 1. **深层动机（WHY）**：为什么想做这件事？
 2. **具体场景**：在什么情况下需要？
 3. **初步边界**：想包括什么、排除什么？
@@ -51,13 +51,7 @@ export function getInitialCollectionPrompt(userInput: string): string {
 </task>
 
 <output_format>
-请严格按照以下格式输出，不要有任何偏差：
-
-<thinking>
-你的分析过程
-</thinking>
-
-\`\`\`json
+请输出JSON格式：
 {
   "analysis": {
     "possible_domains": ["领域1"],
@@ -66,13 +60,6 @@ export function getInitialCollectionPrompt(userInput: string): string {
   },
   "next_question": "你的问题"
 }
-\`\`\`
-
-关键要求：
-1. 必须先输出<thinking>标签包裹的分析
-2. 然后输出\`\`\`json code block包裹的JSON对象
-3. JSON必须是有效的、可解析的
-4. 不要在JSON外添加任何额外文字
 </output_format>`;
 }
 
@@ -135,7 +122,7 @@ ${historyText}
 <goal>
 请一步一步思考，然后决定下一步。
 
-先在<thinking>标签中展示你的分析：
+分析要点：
 - 评估对话历史，当前理解的清晰度如何？
 - 还缺少哪些关键信息（WHY/边界/约束）？
 - 下一步应该问什么？
@@ -164,13 +151,7 @@ ${historyText}
 </decision_criteria>
 
 <output_format>
-请严格按照以下格式输出：
-
-<thinking>
-你的分析过程
-</thinking>
-
-\`\`\`json
+请输出JSON格式：
 {
   "assessment": {
     "clarity_score": 0.0-1.0,
@@ -180,13 +161,6 @@ ${historyText}
   "action": "continue" 或 "confirm",
   "next_question": "你的问题（如果action是continue）"
 }
-\`\`\`
-
-关键要求：
-1. 必须先输出<thinking>标签包裹的分析
-2. 然后输出\`\`\`json code block包裹的JSON对象
-3. JSON必须是有效的、可解析的
-4. 不要在JSON外添加任何额外文字
 </output_format>`;
 }
 
