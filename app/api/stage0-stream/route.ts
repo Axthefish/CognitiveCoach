@@ -48,13 +48,23 @@ export async function POST(request: NextRequest) {
               validated.currentDefinition || {}
             );
         
-        logger.info('[Stage0 Stream] Generating with streaming thinking (Cursor-style)');
+        logger.info('[Stage0 Stream] Generating with streaming thinking (Cursor-style)', {
+          promptLength: prompt.length,
+          action: validated.action
+        });
+        
+        let thinkingChunksSent = 0;
         
         // 使用streaming thinking - 实时传输每个thinking chunk
         const result = await generateJsonWithStreamingThinking(
           prompt,
           // onThinkingChunk: 实时发送thinking片段
           (chunk: string) => {
+            thinkingChunksSent++;
+            logger.info(`[Stage0 Stream API] Sending thinking chunk #${thinkingChunksSent}`, { 
+              length: chunk.length,
+              sample: chunk.substring(0, 30)
+            });
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'thinking_chunk',
@@ -64,6 +74,7 @@ export async function POST(request: NextRequest) {
           },
           // onThinkingDone: thinking完成
           () => {
+            logger.info(`[Stage0 Stream API] Thinking done, sent ${thinkingChunksSent} chunks`);
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'thinking_done',
@@ -74,6 +85,11 @@ export async function POST(request: NextRequest) {
           'Pro',
           'S0'
         );
+        
+        logger.info('[Stage0 Stream API] Generation completed', { 
+          ok: result.ok,
+          error: result.ok ? undefined : result.error
+        });
         
         if (result.ok) {
           // 发送结构化数据

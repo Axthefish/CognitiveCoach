@@ -48,6 +48,11 @@ export default function Stage0View() {
     setThinkingText(''); // 清空thinking文本
     
     try {
+      logger.info('[Stage0View] Sending request to /api/stage0-stream', { 
+        action: isInitial ? 'initial' : 'continue',
+        hasInput: !!content 
+      });
+      
       // 使用streaming API - Cursor风格
       const response = await fetch('/api/stage0-stream', {
         method: 'POST',
@@ -72,22 +77,34 @@ export default function Stage0View() {
       });
       
       if (!response.ok) {
+        logger.error('[Stage0View] HTTP error:', { status: response.status });
         throw new Error(`HTTP ${response.status}`);
       }
+      
+      logger.info('[Stage0View] Response OK, starting to read stream');
       
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       
       if (!reader) {
+        logger.error('[Stage0View] No stream reader available');
         throw new Error('No stream reader');
       }
       
       let buffer = '';
       let finalData: { next_question?: string; assessment?: { confidence?: number }; action?: string } | null = null;
+      let chunkCount = 0;
       
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        chunkCount++;
+        
+        if (done) {
+          logger.info('[Stage0View] Stream done', { totalChunks: chunkCount });
+          break;
+        }
+        
+        logger.info(`[Stage0View] Received chunk #${chunkCount}`, { size: value?.length });
         
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
@@ -99,16 +116,23 @@ export default function Stage0View() {
           try {
             const event = JSON.parse(line.slice(6));
             
+            logger.info('[Stage0View] Parsed event:', { type: event.type, hasText: !!event.text, hasData: !!event.data });
+            
             if (event.type === 'thinking_chunk') {
               // 实时追加thinking片段 - Cursor风格
+              logger.info('[Stage0View] Thinking chunk received', { length: event.text?.length });
               setThinkingText(prev => prev + (event.text || ''));
             } else if (event.type === 'thinking_done') {
               // 思考完成，准备接收结构化数据
               logger.info('[Stage0] Thinking phase completed');
             } else if (event.type === 'data') {
+              logger.info('[Stage0View] Data event received', { data: event.data });
               finalData = event.data;
             } else if (event.type === 'error') {
+              logger.error('[Stage0View] Error event received', { error: event.error });
               throw new Error(event.error);
+            } else if (event.type === 'done') {
+              logger.info('[Stage0View] Done event received');
             }
           } catch (e) {
             logger.warn('[Stage0] Parse event failed', { line, error: e });
