@@ -27,20 +27,17 @@ export default function Stage0View() {
   const [isThinking, setIsThinking] = React.useState(false);
   const [thinkingText, setThinkingText] = React.useState(''); // streaming thinking文本
   const [fullThinkingText, setFullThinkingText] = React.useState(''); // 完整thinking文本
-  const [isTyping, setIsTyping] = React.useState(false); // 打字中
   const [showConfirmation, setShowConfirmation] = React.useState(false);
   const isMobile = useIsMobile();
   
   // 打字机效果：逐步显示thinking文本
   React.useEffect(() => {
     if (!fullThinkingText) {
-      setIsTyping(false);
       return;
     }
     
     let currentIndex = 0;
     setThinkingText('');
-    setIsTyping(true);
     
     const interval = setInterval(() => {
       if (currentIndex < fullThinkingText.length) {
@@ -48,7 +45,6 @@ export default function Stage0View() {
         currentIndex++;
       } else {
         clearInterval(interval);
-        setIsTyping(false); // 打字完成
       }
     }, 30); // 30ms per character 打字速度
     

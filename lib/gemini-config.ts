@@ -143,8 +143,8 @@ export async function generateJson<T>(
       if (candidates && candidates[0]?.content?.parts) {
         const parts = candidates[0].content.parts;
         // 查找thought part
-        const thoughtPart = parts.find((p: any) => p.thought === true);
-        if (thoughtPart && 'text' in thoughtPart) {
+        const thoughtPart = parts.find((p: { thought?: boolean; text?: string }) => p.thought === true);
+        if (thoughtPart && 'text' in thoughtPart && thoughtPart.text) {
           thinkingText = thoughtPart.text;
         }
       }

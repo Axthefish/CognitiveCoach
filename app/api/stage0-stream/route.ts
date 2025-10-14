@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: 'data',
-              data: data,
+              data: result.data,
             })}\n\n`)
           );
         } else {
