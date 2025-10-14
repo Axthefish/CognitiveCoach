@@ -59,10 +59,10 @@ export async function POST(request: NextRequest) {
         );
         
         if (result.ok) {
-          const data = result.data as any;
+          const data = result.data as Record<string, unknown>;
           
           // 如果有thinking字段，逐字展示
-          if (data.thinking) {
+          if (data.thinking && typeof data.thinking === 'string') {
             const thinking = data.thinking;
             const chunkSize = 3; // 每次发送3个字符，模拟打字效果
             
