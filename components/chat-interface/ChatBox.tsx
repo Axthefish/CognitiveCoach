@@ -4,7 +4,7 @@ import React from 'react';
 import type { ChatMessage } from '@/lib/types-v2';
 import { MessageBubble } from './MessageBubble';
 import { ThinkingIndicator } from './ThinkingIndicator';
-import { ThinkingStream } from './ThinkingStream';
+import { CollapsibleThinking } from './CollapsibleThinking';
 import { InputArea } from './InputArea';
 import { cn } from '@/lib/utils';
 
@@ -83,20 +83,11 @@ export function ChatBox({
               <MessageBubble key={message.id} message={message} />
             ))}
             
-            {/* 🆕 优先显示真实thinking文本流 */}
-            {isThinking && thinkingText && (
-              <ThinkingStream 
-                thinkingText={thinkingText}
-              />
-            )}
-            
-            {/* AI 思考指示器（降级或补充） */}
-            {isThinking && !thinkingText && (
-              <ThinkingIndicator 
-                message={thinkingMessage} 
-                progress={thinkingProgress}
-                showProgress={showThinkingProgress}
-                estimatedTime={estimatedTime}
+            {/* Cursor风格的可折叠thinking显示 */}
+            {(isThinking || thinkingText) && (
+              <CollapsibleThinking 
+                thinkingText={thinkingText || ''}
+                isStreaming={isThinking}
               />
             )}
             

@@ -269,3 +269,110 @@ export async function generateStreamingText(
   }
 }
 
+/**
+ * Streaming JSON生成 with thinking - Cursor风格
+ * 
+ * 实时流式传输thinking过程，然后返回JSON结果
+ * 参考Cursor：thinking几乎0延迟开始显示
+ */
+export async function generateJsonWithStreamingThinking<T>(
+  prompt: string,
+  onThinkingChunk: (chunk: string) => void,
+  onThinkingDone: () => void,
+  overrides?: Partial<GenConfig>,
+  runTier?: 'Lite' | 'Pro' | 'Review',
+  stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const client = createGeminiClient();
+  if (!client) return { ok: false, error: 'NO_API_KEY' };
+
+  const config: GenConfig = {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 65536,
+    responseMimeType: 'application/json',
+    // 启用thinking mode
+    ...(stage === 'S0' && runTier === 'Pro' ? {
+      thinkingConfig: {
+        thinkingBudget: 8192,
+      }
+    } : {}),
+    ...overrides,
+  };
+
+  const timeoutMs = getTimeoutConfig(runTier, stage);
+  const model = client.getGenerativeModel({ model: getModelName(runTier) });
+  
+  try {
+    // 使用streaming模式
+    const result = await withTimeout(
+      model.generateContentStream({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: config,
+      }),
+      timeoutMs
+    );
+    
+    let thinkingText = '';
+    let jsonText = '';
+    let isThinkingPhase = true;
+    
+    // 实时处理stream chunks
+    for await (const chunk of result.stream) {
+      const candidates = chunk.candidates;
+      if (candidates && candidates[0]?.content?.parts) {
+        const parts = candidates[0].content.parts;
+        
+        for (const part of parts) {
+          // 检查是否是thought part
+          if ('thought' in part && part.thought === true && 'text' in part && part.text) {
+            thinkingText += part.text;
+            onThinkingChunk(part.text); // 实时回调thinking片段
+            isThinkingPhase = true;
+          } 
+          // 否则是JSON内容
+          else if ('text' in part && part.text) {
+            if (isThinkingPhase) {
+              // thinking阶段结束
+              onThinkingDone();
+              isThinkingPhase = false;
+            }
+            jsonText += part.text;
+          }
+        }
+      }
+    }
+    
+    // 确保thinking完成回调
+    if (isThinkingPhase && thinkingText) {
+      onThinkingDone();
+    }
+    
+    // 解析JSON
+    if (!jsonText) {
+      return { ok: false, error: 'EMPTY_RESPONSE' };
+    }
+    
+    try {
+      const data = JSON.parse(jsonText) as T;
+      return { ok: true, data };
+    } catch (parseError) {
+      logger.warn('Gemini JSON parse failed:', {
+        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        sample: truncate(jsonText)
+      });
+      return { ok: false, error: 'PARSE_ERROR' };
+    }
+    
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Request timeout')) {
+      return { ok: false, error: 'TIMEOUT' };
+    }
+    logger.warn('Gemini streaming API error', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    return { ok: false, error: 'API_ERROR' };
+  }
+}
+

@@ -9,7 +9,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { generateJson } from '@/lib/gemini-config';
+import { generateJsonWithStreamingThinking } from '@/lib/gemini-config';
 import { 
   getInitialCollectionPrompt,
   getDeepDivePrompt, 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const validated = Stage0StreamRequestSchema.parse(body);
         
-        // 生成prompt（包含thinking要求）
+        // 生成prompt
         const prompt = validated.action === 'initial'
           ? getInitialCollectionPrompt(validated.userInput || '')
           : getDeepDivePrompt(
@@ -48,33 +48,34 @@ export async function POST(request: NextRequest) {
               validated.currentDefinition || {}
             );
         
-        logger.info('[Stage0 Stream] Generating response with thinking');
+        logger.info('[Stage0 Stream] Generating with streaming thinking (Cursor-style)');
         
-        // 使用Gemini原生thinking mode生成
-        const result = await generateJson(
+        // 使用streaming thinking - 实时传输每个thinking chunk
+        const result = await generateJsonWithStreamingThinking(
           prompt,
-          getStage0GenerationConfig(),
-          'Pro', // 使用Pro档位启用thinking
-          'S0'
-        );
-        
-        if (result.ok) {
-          // 如果有thinking（从Gemini的thought part提取），发送给前端
-          if (result.thinking) {
+          // onThinkingChunk: 实时发送thinking片段
+          (chunk: string) => {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
-                type: 'thinking',
-                text: result.thinking, // Gemini原生thinking
+                type: 'thinking_chunk',
+                text: chunk,
               })}\n\n`)
             );
-            
+          },
+          // onThinkingDone: thinking完成
+          () => {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'thinking_done',
               })}\n\n`)
             );
-          }
-          
+          },
+          getStage0GenerationConfig(),
+          'Pro',
+          'S0'
+        );
+        
+        if (result.ok) {
           // 发送结构化数据
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
