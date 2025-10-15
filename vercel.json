@@ -4,7 +4,7 @@
       "maxDuration": 60
     },
     "app/api/stage0-stream/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "app/api/stage1/route.ts": {
       "maxDuration": 300
