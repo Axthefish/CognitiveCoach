@@ -1,43 +1,8 @@
 {
-  "title": "阶段 1：通用框架",
-  "subtitle": "基于你的目的「{purpose}」，我为你生成了一个带权重的解决框架。",
-  "loading": {
-    "title": "正在生成框架...",
-    "description": "AI 正在基于你的目的分析问题域，计算各模块的权重和优先级。",
-    "estimatedTime": "这可能需要 10-30 秒",
-    "steps": {
-      "analyzing": "正在分析问题域...",
-      "calculating": "计算模块权重...",
-      "generating": "生成关系图..."
-    }
-  },
-  "legend": {
-    "title": "图例：",
-    "core": "核心必修 (90-100%)",
-    "important": "重要推荐 (70-89%)",
-    "optional": "可选增强 (50-69%)",
-    "low": "低优先级 (<50%)"
-  },
-  "hints": {
-    "title": "💡 提示：",
-    "drag": "拖拽可移动图表，滚轮可缩放",
-    "click": "点击节点查看详细信息",
-    "size": "节点大小代表权重高低",
-    "connection": "连线粗细代表依赖强度"
-  },
-  "pause": {
-    "title": "💡 请花 2-3 分钟思考",
-    "questions": [
-      "哪些部分你已经有基础？",
-      "哪些部分是你当前最需要的？",
-      "你的时间和资源允许你在哪些方面深入？"
-    ],
-    "button": "我已思考，继续 →"
-  },
-  "details": {
-    "title": "框架详情",
-    "weight": "权重",
-    "time": "预估时间"
-  }
+  "title": "澄清你的使命",
+  "subtitle": "让我们将你的目标提炼成清晰、可执行的使命陈述",
+  "thinking": "AI 正在思考...",
+  "askingQuestion": "了解你的需求",
+  "userInput": "你的回答",
+  "submit": "提交"
 }
-

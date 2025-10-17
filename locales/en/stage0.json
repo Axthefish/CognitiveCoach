@@ -1,22 +1,8 @@
 {
-  "title": "Stage 0: Purpose Clarification",
-  "subtitle": "Let's clarify your goals and needs through conversation",
-  "placeholder": "Please describe the problem you want to solve or the goal you want to achieve...",
-  "thinking": "Analyzing your needs...",
-  "welcome": "Welcome to CognitiveCoach! I'll help you clarify your goals and needs through conversation.",
-  "confirmation": {
-    "title": "Please Confirm My Understanding",
-    "purpose": "Your Purpose:",
-    "domain": "Problem Domain:",
-    "boundary": "Scope Boundary:",
-    "constraints": "Key Constraints:",
-    "confirmButton": "✓ Confirm & Continue",
-    "adjustButton": "Need Adjustment"
-  },
-  "tips": {
-    "beSpecific": "Be as specific as possible about your goals",
-    "includeContext": "Include relevant background information",
-    "mentionConstraints": "Mention your constraints"
-  }
+  "welcome": "Welcome to CognitiveCoach",
+  "title": "Transform Learning Goals into Action",
+  "subtitle": "Get a structured, personalized framework for mastering any skill or domain",
+  "description": "Describe what you want to learn or understand. Be as specific or broad as you like – we'll help clarify your goal together.",
+  "placeholder": "e.g., 'I want to build web applications' or 'I need to understand machine learning for my job'",
+  "getStarted": "Get Started"
 }
-

@@ -1,0 +1,8 @@
+{
+  "title": "Personalize or Proceed?",
+  "subtitle": "The universal framework is complete. Would you like to customize it based on your unique strengths and constraints?",
+  "question": "Would you like a personalized version?",
+  "optionYes": "Yes, personalize for me",
+  "optionNo": "No, I'll use the universal framework",
+  "reasonPlaceholder": "Optional: Tell us why..."
+}

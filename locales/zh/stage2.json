@@ -1,40 +1,8 @@
 {
-  "title": "阶段 2：个性化定制",
-  "states": {
-    "questioning": "回答几个问题，让我为你定制专属方案",
-    "generating": "正在生成个性化方案...",
-    "completed": "个性化方案已生成！"
-  },
-  "tabs": {
-    "chat": "💬 对话",
-    "framework": "📊 框架"
-  },
-  "placeholder": {
-    "active": "输入你的回答...",
-    "waiting": "等待问题加载..."
-  },
-  "thinking": "正在分析...",
-  "analysisComplete": "好的，我已经了解你的情况了。现在让我为你生成个性化的行动方案...",
-  "planReady": "✓ 个性化方案已生成！你可以查看右侧更新后的框架和下方的行动计划。",
-  "sections": {
-    "adjustedFramework": "调整后的框架",
-    "originalFramework": "通用框架",
-    "adjustmentRationale": "📊 调整说明",
-    "actionSteps": "📋 行动步骤",
-    "milestones": "🎯 里程碑",
-    "tips": "💡 个性化建议"
-  },
-  "priority": {
-    "high": "高优先级",
-    "medium": "中优先级",
-    "low": "低优先级"
-  },
-  "milestone": {
-    "expectedTime": "预期时间：{time}",
-    "criteria": "成功标准"
-  },
-  "complete": {
-    "button": "完成，开始行动 🚀"
-  }
+  "title": "这是否准确表达了你的目标？",
+  "subtitle": "查看我们制定的使命陈述。确保它反映了你真正想要实现的目标。",
+  "confirmPrompt": "这是否准确代表了你的学习目标？",
+  "confirm": "是的，很完美",
+  "refine": "不，让我调整一下",
+  "feedbackPlaceholder": "告诉我们需要调整什么..."
 }
-

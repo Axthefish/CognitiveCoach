@@ -1,0 +1,28 @@
+{
+  "title": "Your Personalized Action Framework",
+  "subtitle": "We've optimized the framework based on your unique context. Here's your custom learning path.",
+  "generating": "Synthesizing your personalized framework...",
+  "insights": {
+    "title": "Personal Insights"
+  },
+  "actionMap": {
+    "title": "Your Action Map"
+  },
+  "status": {
+    "strength": "Strength Zone",
+    "opportunity": "Opportunity Zone",
+    "maintenance": "Maintenance Zone"
+  },
+  "superpower": {
+    "title": "Your Emerging Superpower"
+  },
+  "firstStep": {
+    "title": "Where to Start"
+  },
+  "comparison": {
+    "universal": "Universal Framework",
+    "personalized": "Your Framework",
+    "toggle2d": "2D View",
+    "toggle3d": "3D Terrain"
+  }
+}

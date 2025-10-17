@@ -1,0 +1,17 @@
+{
+  "title": "你的通用行动框架",
+  "subtitle": "这是基于你所在领域最佳实践的基础学习系统。探索下方的知识地形图。",
+  "generating": "正在生成你的框架...",
+  "frameworkReady": "框架已生成！探索 3D 地形图。",
+  "viewControls": {
+    "rotate": "旋转",
+    "zoom": "缩放",
+    "reset": "重置视角"
+  },
+  "nodeDetails": {
+    "title": "节点详情",
+    "weight": "重要性权重",
+    "time": "预计时长",
+    "dependencies": "前置依赖"
+  }
+}

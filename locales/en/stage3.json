@@ -1,0 +1,17 @@
+{
+  "title": "Your Universal Action Framework",
+  "subtitle": "This is a foundational learning system based on best practices in your domain. Explore the knowledge terrain below.",
+  "generating": "Generating your framework...",
+  "frameworkReady": "Framework ready! Explore the 3D terrain.",
+  "viewControls": {
+    "rotate": "Rotate",
+    "zoom": "Zoom",
+    "reset": "Reset View"
+  },
+  "nodeDetails": {
+    "title": "Node Details",
+    "weight": "Importance Weight",
+    "time": "Estimated Time",
+    "dependencies": "Prerequisites"
+  }
+}
