@@ -1,12 +1,16 @@
 /**
- * 新产品架构的核心类型定义 (V2)
+ * 新产品架构的核心类型定义 (V3 - 7阶段架构)
  * 
  * 设计理念：通用框架 + 个性化补充
  * 
- * 三阶段流程：
- * - Stage 0: 目的澄清与问题域框定（对话式）
- * - Stage 1: 通用框架生成与可视化（逻辑流程图+权重）
- * - Stage 2: 动态信息收集与个性化方案生成
+ * 七阶段流程：
+ * - Stage 0: 产品介绍 + 用户输入引导
+ * - Stage 1: 目标澄清（使用初始问题识别prompt）
+ * - Stage 2: 用户确认提炼结果
+ * - Stage 3: 通用框架生成（3D可视化）
+ * - Stage 4: 询问是否需要个性化
+ * - Stage 5-6: 权重分析 + 诊断提问（3D交互）
+ * - Stage 7: 个性化方案生成（3D对比视图）
  */
 
 // ============================================
@@ -14,10 +18,14 @@
 // ============================================
 
 export type StageState = 
-  | 'STAGE_0_PURPOSE_CLARIFICATION'
-  | 'STAGE_1_FRAMEWORK_GENERATION'
-  | 'STAGE_2_PERSONALIZATION'
-  | 'COMPLETED';
+  | 'STAGE_0_INTRODUCTION'           // Stage 0: 产品介绍 + 输入引导
+  | 'STAGE_1_CLARIFICATION'          // Stage 1: 目标澄清对话
+  | 'STAGE_2_CONFIRMATION'           // Stage 2: 用户确认提炼结果
+  | 'STAGE_3_FRAMEWORK'              // Stage 3: 通用框架生成与3D展示
+  | 'STAGE_4_PERSONALIZATION_CHOICE' // Stage 4: 询问是否需要个性化
+  | 'STAGE_5_6_DIAGNOSTIC'           // Stage 5-6: 权重分析 + 诊断提问
+  | 'STAGE_7_PERSONALIZED_PLAN'      // Stage 7: 个性化方案生成
+  | 'COMPLETED';                      // 完成
 
 // ============================================
 // 对话消息类型
@@ -35,26 +43,74 @@ export interface ChatMessage {
 }
 
 // ============================================
-// Stage 0: 目的澄清
+// Stage 0-1: 输入和澄清
 // ============================================
 
 /**
- * Stage1专用的purpose context（不含用户约束）
- * 用于生成真正的通用框架
+ * Stage 0: 用户初始输入
+ */
+export interface UserInitialInput {
+  rawInput: string;
+  timestamp: number;
+}
+
+/**
+ * Stage 1输出：澄清后的核心定义（来自初始问题识别prompt）
+ * 
+ * 这是对用户模糊输入的提炼，提取核心点和边界
+ */
+export interface ClarifiedMission {
+  // 原始输入
+  rawInput: string;
+  
+  // 提炼后的使命陈述（Mission Statement）
+  missionStatement: string;
+  
+  // 核心主题
+  subject: string;
+  
+  // 期望结果
+  desiredOutcome: string;
+  
+  // 上下文环境
+  context: string;
+  
+  // 关键杠杆点
+  keyLevers: string[];
+  
+  // 对话历史
+  conversationHistory: ChatMessage[];
+  
+  // 置信度
+  confidence: number;
+  
+  // 生成时间
+  generatedAt: number;
+}
+
+/**
+ * Stage 2: 用户确认状态
+ */
+export interface ConfirmationState {
+  clarifiedMission: ClarifiedMission;
+  userConfirmed: boolean;
+  feedback?: string; // 如果用户不确认，可以提供反馈
+}
+
+/**
+ * Stage3专用的purpose context（用于生成通用框架）
  */
 export interface UniversalPurposeContext {
   clarifiedPurpose: string;
   problemDomain: string;
   domainBoundary: string;
-  // ❌ 不包含keyConstraints - Stage1不考虑个人约束
+  boundaryConstraints?: string[];
 }
 
 /**
- * Stage 0 输出：目的澄清结果
+ * @deprecated 保留用于兼容性，新架构使用ClarifiedMission
  * 
- * 关键设计理念：区分边界约束和个人约束
- * - 边界约束：定义问题域范围（如"不学机器学习"） → 传给 Stage1
- * - 个人约束：定义执行条件（如"每周2小时"） → 传给 Stage2
+ * 旧的PurposeDefinition（3阶段架构使用）
  */
 export interface PurposeDefinition {
   // 原始输入
@@ -423,7 +479,290 @@ export interface MemorySummary {
   sessionId: string;
   totalInsights: number;
   totalDecisions: number;
-  stages: Array<'stage0' | 'stage1' | 'stage2'>;
+  stages: Array<'stage0' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'stage5-6' | 'stage7'>;
   summary: string;  // <100 tokens的简洁摘要
+}
+
+// ============================================
+// Stage 4: 个性化选择
+// ============================================
+
+/**
+ * Stage 4: 用户对个性化的选择
+ */
+export interface PersonalizationChoice {
+  wantsPersonalization: boolean;
+  timestamp: number;
+  reason?: string; // 可选：用户选择的原因
+}
+
+// ============================================
+// Stage 5-6: 权重分析和诊断提问
+// ============================================
+
+/**
+ * Stage 5输出：权重分析结果（来自框架提取提问prompt）
+ */
+export interface WeightAnalysis {
+  // 分析的框架
+  framework: UniversalFramework;
+  
+  // 识别的高杠杆点（2-3个）
+  highLeveragePoints: HighLeveragePoint[];
+  
+  // 分析逻辑说明
+  analysisRationale: string;
+  
+  // 生成时间
+  generatedAt: number;
+}
+
+/**
+ * 高杠杆诊断点
+ */
+export interface HighLeveragePoint {
+  // 诊断点ID
+  id: string;
+  
+  // 技术名称（分析师视角）
+  technicalName: string;
+  
+  // 教练式标题（用户友好）
+  coachTitle: string;
+  
+  // 教练式解释
+  coachExplanation: string;
+  
+  // 相关的诊断问题
+  question: string;
+  
+  // 影响的节点ID列表
+  affectedNodeIds: string[];
+  
+  // 分析推理
+  reasoning: string;
+}
+
+/**
+ * Stage 6: 诊断问题（扩展自DynamicQuestion，增加与权重分析的关联）
+ */
+export interface DiagnosticQuestion extends DynamicQuestion {
+  // 关联的高杠杆点ID
+  leveragePointId: string;
+  
+  // 教练式解释
+  coachExplanation: string;
+}
+
+/**
+ * Stage 5-6的状态
+ */
+export type Stage56State = 
+  | 'ANALYZING_WEIGHTS'  // 分析权重
+  | 'QUESTIONING'        // 提问阶段
+  | 'COMPLETED';         // 完成
+
+// ============================================
+// Stage 7: 个性化方案（扩展）
+// ============================================
+
+/**
+ * Stage 7输出：个性化行动框架（来自特殊性整合prompt）
+ */
+export interface PersonalizedActionFramework {
+  // 个人核心洞察
+  personalInsights: PersonalInsight[];
+  
+  // 个性化后的框架（权重和路径可能调整）
+  personalizedFramework: UniversalFramework;
+  
+  // 具体行动地图
+  actionMap: PersonalizedActionMap;
+  
+  // 新兴超能力总结
+  emergingSuperpower: string;
+  
+  // 第一步行动
+  firstStep: string;
+  
+  // 生成时间
+  generatedAt: number;
+}
+
+/**
+ * 个人洞察
+ */
+export interface PersonalInsight {
+  // 诊断点标题
+  diagnosticPoint: string;
+  
+  // 衍生洞察
+  derivedInsight: string;
+}
+
+/**
+ * 个性化行动地图
+ */
+export interface PersonalizedActionMap {
+  // 模块列表
+  modules: PersonalizedModule[];
+}
+
+/**
+ * 个性化模块
+ */
+export interface PersonalizedModule {
+  // 模块名称
+  moduleName: string;
+  
+  // 行动列表
+  actions: PersonalizedAction[];
+}
+
+/**
+ * 个性化行动
+ */
+export interface PersonalizedAction {
+  // 行动描述
+  action: string;
+  
+  // 状态标签
+  status: 'strength' | 'opportunity' | 'maintenance';
+  
+  // 教练备注
+  coachNote: string;
+  
+  // 下一步建议（仅当status='opportunity'时）
+  nextMoves?: string[];
+}
+
+// ============================================
+// 3D可视化相关类型
+// ============================================
+
+/**
+ * 3D节点渲染数据
+ */
+export interface Node3DRenderData {
+  // 基础节点数据
+  baseNode: FrameworkNode;
+  
+  // 3D位置
+  position3D: {
+    x: number;
+    y: number; // Y轴 = weight / 10
+    z: number;
+  };
+  
+  // 高度倍数（用于动画）
+  heightMultiplier: number;
+  
+  // 发光强度（基于权重）
+  glowIntensity: number;
+  
+  // 关联的问题ID列表（Stage 5-6使用）
+  relatedQuestionIds?: string[];
+  
+  // 是否高亮
+  isHighlighted?: boolean;
+  
+  // 是否选中
+  isSelected?: boolean;
+}
+
+/**
+ * 3D场景配置
+ */
+export interface Scene3DConfig {
+  // 自动旋转
+  autoRotate: boolean;
+  
+  // 旋转速度
+  rotationSpeed: number;
+  
+  // 相机位置
+  cameraPosition: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  
+  // 是否显示网格
+  showGrid: boolean;
+  
+  // 是否启用阴影
+  enableShadows: boolean;
+  
+  // 粒子效果密度
+  particleDensity: 'low' | 'medium' | 'high';
+}
+
+/**
+ * 3D交互事件
+ */
+export interface Node3DInteractionEvent {
+  // 事件类型
+  type: 'hover' | 'click' | 'unhover';
+  
+  // 节点ID
+  nodeId: string;
+  
+  // 节点数据
+  node: Node3DRenderData;
+  
+  // 时间戳
+  timestamp: number;
+}
+
+/**
+ * 3D视角预设
+ */
+export type ViewPreset = 'default' | 'top' | 'side' | 'front';
+
+// ============================================
+// 更新的API响应类型（7阶段）
+// ============================================
+
+export interface Stage1ClarificationResponse {
+  success: boolean;
+  data?: ClarifiedMission;
+  message?: string;
+  nextAction?: 'continue_dialogue' | 'confirm' | 'complete';
+}
+
+export interface Stage2ConfirmationResponse {
+  success: boolean;
+  data?: ConfirmationState;
+  message?: string;
+  nextAction?: 'proceed' | 'refine';
+}
+
+export interface Stage3FrameworkResponse {
+  success: boolean;
+  data?: UniversalFramework;
+  message?: string;
+}
+
+export interface Stage4ChoiceResponse {
+  success: boolean;
+  data?: PersonalizationChoice;
+  message?: string;
+  nextAction?: 'personalize' | 'complete';
+}
+
+export interface Stage56DiagnosticResponse {
+  success: boolean;
+  data?: {
+    analysis?: WeightAnalysis;
+    questions?: DiagnosticQuestion[];
+  };
+  message?: string;
+  nextAction?: 'questioning' | 'generate_plan';
+}
+
+export interface Stage7PersonalizedResponse {
+  success: boolean;
+  data?: PersonalizedActionFramework;
+  message?: string;
 }
 

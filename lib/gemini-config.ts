@@ -1,5 +1,6 @@
 // Gemini API 配置
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Buffer } from 'node:buffer';
 import { logger, truncate } from '@/lib/logger';
 import { getAIApiKey } from '@/lib/env-validator';
 
@@ -35,6 +36,41 @@ type GenConfig = {
     includeThoughts?: boolean;
   };
 };
+
+/**
+ * 尝试从 Gemini 响应的 parts 中提取 inlineData(JSON) 并解码
+ */
+function decodeInlineJsonFromParts(parts: Array<Record<string, unknown>> | undefined): string | null {
+  if (!parts || parts.length === 0) return null;
+  for (const part of parts) {
+    const anyPart = part as unknown as { inlineData?: { data?: string; mimeType?: string }; inline_data?: { data?: string; mime_type?: string } };
+    const inline = anyPart.inlineData || (anyPart as unknown as { inline_data?: { data?: string; mime_type?: string } }).inline_data;
+    const dataB64 = inline?.data;
+    if (dataB64) {
+      try {
+        const decoded = Buffer.from(dataB64, 'base64').toString('utf-8');
+        return decoded.trim();
+      } catch (_e) {
+        // 解码失败继续尝试其他 part
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 从可能包含 ```json 代码块或额外文本的字符串中提取纯 JSON 子串
+ */
+function extractJsonString(text: string): string {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return '';
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch && fenceMatch[1]) return fenceMatch[1].trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) return trimmed.slice(start, end + 1).trim();
+  return trimmed;
+}
 
 // 获取超时配置 - 按阶段动态调整
 function getTimeoutConfig(runTier?: 'Pro' | 'Review', stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'): number {
@@ -102,7 +138,7 @@ export async function generateJson<T>(
   prompt: string,
   overrides?: Partial<GenConfig>,
   _runTier?: 'Pro' | 'Review',
-  _stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4'
+  _stage?: 'S0' | 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7'
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   const client = createGeminiClient();
   if (!client) return { ok: false, error: 'NO_API_KEY' };
@@ -123,13 +159,45 @@ export async function generateJson<T>(
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: config,
     });
+    const response = result.response as unknown as Record<string, unknown>;
 
-    const text = result.response.text();
-    const data = JSON.parse(text) as T;
+    // 1) 优先从 inlineData(base64) 解码 JSON
+    let jsonString: string | null = null;
+    try {
+      const candidates = (response?.candidates || []) as Array<Record<string, unknown>>;
+      for (const c of candidates) {
+        const parts = (c?.content as Record<string, unknown>)?.parts as Array<Record<string, unknown>> | undefined;
+        const decoded = decodeInlineJsonFromParts(parts);
+        if (decoded) { jsonString = decoded; break; }
+      }
+    } catch {}
 
-    return { ok: true, data };
+    // 2) 回退到纯文本聚合
+    if (!jsonString) {
+      let textAgg = '';
+      try {
+        textAgg = typeof response?.text === 'function' ? response.text() : result.response.text();
+      } catch {
+        // 某些情况下 .text() 不可用，尝试拼接 parts.text
+        try {
+          const candidates = (response?.candidates || []) as Array<Record<string, unknown>>;
+          const parts = (candidates[0]?.content as Record<string, unknown>)?.parts as Array<{ text?: string }> | undefined;
+          textAgg = (parts || []).map(p => p.text || '').join('');
+        } catch {}
+      }
+      jsonString = extractJsonString(textAgg || '');
+    }
+
+    const parsed = JSON.parse(jsonString || '');
+    return { ok: true, data: parsed as T };
   } catch (error) {
-    logger.error('[Gemini] JSON generation failed', { error });
+    logger.error('[Gemini] JSON generation failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // 明确区分解析错误，便于上层更准确反馈
+    if (error instanceof SyntaxError) {
+      return { ok: false, error: 'PARSE_ERROR' };
+    }
     return { ok: false, error: 'API_ERROR' };
   }
 }

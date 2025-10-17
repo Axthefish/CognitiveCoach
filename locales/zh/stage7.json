@@ -1,29 +1,28 @@
 {
-  "title": "",
-  "subtitle": "",
-  "generating": "",
+  "title": "你的个性化行动框架",
+  "subtitle": "我们已根据你的独特情况优化了框架。这是你的定制学习路径。",
+  "generating": "正在综合你的个性化框架...",
   "insights": {
-    "title": ""
+    "title": "个人洞察"
   },
   "actionMap": {
-    "title": ""
+    "title": "你的行动地图"
   },
   "status": {
-    "strength": "",
-    "opportunity": "",
-    "maintenance": ""
+    "strength": "优势区",
+    "opportunity": "机会区",
+    "maintenance": "维持区"
   },
   "superpower": {
-    "title": ""
+    "title": "你的新兴超能力"
   },
   "firstStep": {
-    "title": ""
+    "title": "从哪里开始"
   },
   "comparison": {
-    "universal": "",
-    "personalized": "",
-    "toggle2d": "",
-    "toggle3d": ""
+    "universal": "通用框架",
+    "personalized": "你的框架",
+    "toggle2d": "2D 视图",
+    "toggle3d": "3D 地形图"
   }
 }
-

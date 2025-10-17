@@ -3,524 +3,299 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCognitiveCoachStoreV2 } from '@/lib/store-v2';
-import { LogicFlowChart, ChartLegend } from './logic-flow-chart/LogicFlowChart';
+import { ChatBox } from './chat-interface/ChatBox';
 import { GlassCard } from './ui/glass-card';
 import { Button } from './ui/button';
-import { Download, Sparkles } from 'lucide-react';
-import type { UniversalFramework } from '@/lib/types-v2';
+import { Check, Lightbulb } from 'lucide-react';
+import type { ChatMessage, ClarifiedMission } from '@/lib/types-v2';
 import { logger } from '@/lib/logger';
-import { exportFrameworkAsMarkdown } from '@/lib/export-utils';
-import { THINKING_STEPS, type ThinkingProgress, type StreamEvent } from '@/lib/streaming-types';
 
+/**
+ * Stage 1: 目标澄清对话
+ * 通过AI对话将用户的模糊输入提炼为清晰的Mission Statement
+ */
 export default function Stage1View() {
   const {
-    purposeDefinition,
-    universalFramework,
-    setUniversalFramework,
-    continueFromStage1,
-    completeWithoutStage2,
-    setLoading,
+    userInitialInput,
+    stage1Messages,
+    clarifiedMission,
+    addStage1Message,
+    updateClarifiedMission,
+    completeStage1,
     setError,
   } = useCognitiveCoachStoreV2();
   
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [isExporting, setIsExporting] = React.useState(false);
-  const [showDecisionArea, setShowDecisionArea] = React.useState(false);
-  const [thinkingProgress, setThinkingProgress] = React.useState<ThinkingProgress | null>(null);
-  const decisionRef = React.useRef<HTMLDivElement>(null);
+  const [isThinking, setIsThinking] = React.useState(false);
+  const [thinkingText, setThinkingText] = React.useState('');
+  const [showMissionStatement, setShowMissionStatement] = React.useState(false);
   
-  const generateFramework = React.useCallback(async () => {
-    if (!purposeDefinition) return;
-    
-    setIsGenerating(true);
-    setLoading(true);
-    setThinkingProgress(null);
+  // 初始化：自动发起第一个问题
+  React.useEffect(() => {
+    if (stage1Messages.length === 0 && userInitialInput) {
+      // 自动开始澄清流程
+      handleInitialClarification();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // 初始澄清
+  const handleInitialClarification = async () => {
+    setIsThinking(true);
+    setThinkingText('');
     
     try {
-      // 使用streaming API
-      const response = await fetch('/api/stage1-stream', {
+      const response = await fetch('/api/stage1-clarification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          purposeDefinition: {
-            clarifiedPurpose: purposeDefinition.clarifiedPurpose,
-            problemDomain: purposeDefinition.problemDomain,
-            domainBoundary: purposeDefinition.domainBoundary,
-            boundaryConstraints: purposeDefinition.boundaryConstraints,
-            personalConstraints: purposeDefinition.personalConstraints,
-          },
-          runTier: 'Pro',
+          userInput: userInitialInput,
+          action: 'initial',
         }),
       });
       
       if (!response.ok) {
-        throw new Error('Stream request failed');
+        throw new Error(`HTTP ${response.status}`);
       }
       
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+      const result = await response.json();
       
-      if (!reader) {
-        throw new Error('No reader available');
-      }
-      
-      let buffer = '';
-      
-      while (true) {
-        const { done, value } = await reader.read();
+      if (result.success && result.data) {
+        const mission = result.data as ClarifiedMission;
         
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event: StreamEvent = JSON.parse(line.slice(6));
-              
-              if (event.type === 'thinking' && event.thinking) {
-                setThinkingProgress(event.thinking);
-              } else if (event.type === 'data' && event.data) {
-                setUniversalFramework(event.data as UniversalFramework);
-              } else if (event.type === 'error') {
-                throw new Error(event.error || 'Unknown error');
-              } else if (event.type === 'done') {
-                setThinkingProgress(null);
-              }
-            } catch (parseError) {
-              logger.warn('[Stage1View] Failed to parse event', { parseError });
-            }
+        // 如果已经有了完整的mission，直接显示
+        if (mission.confidence >= 0.8) {
+          updateClarifiedMission(mission);
+          setShowMissionStatement(true);
+        } else if (result.nextAction === 'continue_dialogue') {
+          // 需要继续对话，添加AI的问题
+          if (result.message) {
+            addStage1Message({
+              id: `msg-${Date.now()}-ai`,
+              role: 'assistant',
+              content: result.message,
+              timestamp: Date.now(),
+              metadata: { stage: 'STAGE_1_CLARIFICATION', type: 'question' },
+            });
           }
         }
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Framework generation failed');
-      logger.error('[Stage1View] Error generating framework', { error });
+      logger.error('[Stage1View] Initial clarification failed', { error });
+      setError('Failed to start clarification. Please try again.');
     } finally {
-      setIsGenerating(false);
-      setLoading(false);
-      setThinkingProgress(null);
+      setIsThinking(false);
     }
-  }, [purposeDefinition, setLoading, setUniversalFramework, setError]);
+  };
   
-  // 自动生成框架
-  React.useEffect(() => {
-    if (!universalFramework && purposeDefinition) {
-      generateFramework();
-    }
-  }, [universalFramework, purposeDefinition, generateFramework]);
-  
-  // 导出并完成流程
-  const handleExportAndComplete = React.useCallback(async () => {
-    if (!universalFramework) return;
-    
-    setIsExporting(true);
-    try {
-      // 导出为Markdown
-      exportFrameworkAsMarkdown(universalFramework);
-      
-      // 短暂延迟后标记完成
-      setTimeout(() => {
-        completeWithoutStage2();
-        setIsExporting(false);
-      }, 500);
-    } catch (error) {
-      logger.error('[Stage1View] Export failed', { error });
-      setError('导出失败，请重试');
-      setIsExporting(false);
-    }
-  }, [universalFramework, completeWithoutStage2, setError]);
-  
-  // 监听滚动，当框架详情可见时才显示决策区域
-  React.useEffect(() => {
-    const currentRef = decisionRef.current;
-    if (!currentRef) return;
-    
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShowDecisionArea(true);
-        }
-      },
-      { threshold: 0.3 }
-    );
-    
-    observer.observe(currentRef);
-    
-    return () => {
-      observer.unobserve(currentRef);
+  // 处理用户发送消息
+  const handleSendMessage = async (content: string) => {
+    // 添加用户消息
+    const userMessage: ChatMessage = {
+      id: `msg-${Date.now()}-user`,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+      metadata: { stage: 'STAGE_1_CLARIFICATION', type: 'answer' },
     };
-  }, []);
+    
+    addStage1Message(userMessage);
+    setIsThinking(true);
+    setThinkingText('');
+    
+    try {
+      const response = await fetch('/api/stage1-clarification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userInput: content,
+          action: 'continue',
+          conversationHistory: [...stage1Messages, userMessage],
+          currentMission: clarifiedMission,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        const mission = result.data as ClarifiedMission;
+        updateClarifiedMission(mission);
+        
+        // 检查是否完成澄清
+        if (result.nextAction === 'confirm' || mission.confidence >= 0.8) {
+          setShowMissionStatement(true);
+        } else if (result.nextAction === 'continue_dialogue' && result.message) {
+          // 继续对话
+          addStage1Message({
+            id: `msg-${Date.now()}-ai`,
+            role: 'assistant',
+            content: result.message,
+            timestamp: Date.now(),
+            metadata: { stage: 'STAGE_1_CLARIFICATION', type: 'question' },
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('[Stage1View] Error in clarification', { error });
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsThinking(false);
+    }
+  };
   
-  if (isGenerating || !universalFramework) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <GlassCard priority="primary" className="p-8 max-w-2xl w-full">
-          <motion.div
-            className="space-y-6"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            {/* 标题 */}
-            <div className="text-center">
-              <motion.div
-                className="inline-block"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              >
-                <Sparkles className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-              </motion.div>
-              <h3 className="text-2xl font-bold text-white mb-2">
-                AI正在思考中...
-              </h3>
-              <p className="text-gray-400 text-sm">
-                预计需要 60-90 秒
-              </p>
-            </div>
-            
-            {/* 进度条 */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">
-                  {thinkingProgress?.message || '🔍 正在初始化...'}
-                </span>
-                <span className="text-blue-400 font-semibold">
-                  {thinkingProgress?.progress || 0}%
-                </span>
-              </div>
-              
-              <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
-                <motion.div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
-                  initial={{ width: '0%' }}
-                  animate={{ width: `${thinkingProgress?.progress || 0}%` }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                />
-                
-                {/* 动画光效 */}
-                <motion.div
-                  className="absolute inset-y-0 left-0 right-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                  animate={{ x: ['0%', '100%'] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  style={{ width: '30%' }}
-                />
-              </div>
-            </div>
-            
-            {/* 思考步骤列表 */}
-            <div className="space-y-2 mt-6">
-              {Object.entries(THINKING_STEPS).map(([key, step]) => {
-                const currentProgress = thinkingProgress?.progress || 0;
-                const isCompleted = currentProgress > step.progress;
-                const isCurrent = currentProgress >= step.progress && currentProgress < step.progress + 15;
-                
-                return (
-                  <motion.div
-                    key={key}
-                    className={`flex items-center gap-3 text-sm p-2 rounded transition-colors ${
-                      isCurrent ? 'bg-blue-500/10 text-blue-300' :
-                      isCompleted ? 'text-gray-400' :
-                      'text-gray-600'
-                    }`}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: Object.keys(THINKING_STEPS).indexOf(key) * 0.1 }}
-                  >
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      isCompleted ? 'bg-green-500' :
-                      isCurrent ? 'bg-blue-500 animate-pulse' :
-                      'bg-gray-600'
-                    }`} />
-                    <span>{step.message}</span>
-                  </motion.div>
-                );
-              })}
-            </div>
-            
-            {/* 小贴士 */}
-            <div className="mt-6 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-              <p className="text-xs text-gray-400 leading-relaxed">
-                💡 <strong className="text-blue-300">Cognitive Load Theory</strong>: AI正在将复杂问题拆解为可管理的模块，并基于Pareto原则识别核心20%的关键模块
-              </p>
-            </div>
-          </motion.div>
-        </GlassCard>
-      </div>
-    );
-  }
+  // 确认Mission Statement
+  const handleConfirmMission = () => {
+    if (!clarifiedMission) return;
+    
+    completeStage1(clarifiedMission);
+  };
   
   return (
-    <div className="min-h-screen p-6 pb-32 md:pb-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* 头部 + 阅读提示 */}
+    <div className="h-screen flex flex-col">
+      {/* 头部 */}
         <motion.div
+        className="px-6 py-6"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <GlassCard priority="primary" className="p-6">
-            <h1 className="text-3xl font-bold text-white mb-3">
-              Stage 1: Universal Framework
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Stage 1: Goal Clarification
             </h1>
-            <p className="text-gray-300 text-lg mb-4">
-              Based on your purpose &ldquo;<span className="text-blue-300 font-semibold">{purposeDefinition?.clarifiedPurpose}</span>&rdquo;,
-              I&apos;ve generated a weighted solution framework for you.
-            </p>
-            
-            {/* 用户教育：说明这是通用框架 */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-3">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">💡</span>
-                <div className="flex-1">
-                  <p className="text-blue-200 font-semibold mb-2">这是通用框架（Universal Framework）</p>
-                  <ul className="text-sm text-gray-300 space-y-1.5">
-                    <li>• 像医学教科书一样，展示该领域的<strong className="text-white">标准路径</strong></li>
-                    <li>• 权重反映<strong className="text-white">客观重要性</strong>，不含个人因素（如你的基础、时间）</li>
-                    <li>• 你可以：
-                      <span className="ml-2 text-gray-400">
-                        ①直接使用按权重执行 
-                        <span className="mx-1">|</span>
-                        ②个性化调整适配你的情况
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 text-sm text-yellow-400 bg-yellow-400/10 rounded-lg p-3">
-              <span>⏱️</span>
-              <span>建议阅读时间：{Math.ceil(universalFramework.nodes.length * 0.5)} 分钟 | 请仔细查看每个节点的权重和说明，确保理解整体框架</span>
-            </div>
+          <p className="text-gray-300 text-lg">
+            Let&apos;s clarify your goals through a focused conversation
+          </p>
           </GlassCard>
         </motion.div>
         
-        {/* 图例 */}
+      {/* 聊天区域 */}
+      <div className="flex-1 px-6 overflow-hidden">
+        <ChatBox
+          messages={stage1Messages}
+          onSendMessage={handleSendMessage}
+          isThinking={isThinking}
+          thinkingText={thinkingText}
+          disabled={showMissionStatement}
+          placeholder="Share your thoughts..."
+        />
+      </div>
+      
+      {/* Mission Statement 确认面板 */}
+      <AnimatePresence>
+        {showMissionStatement && clarifiedMission && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <ChartLegend />
-        </motion.div>
-        
-        {/* 框架可视化 */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <GlassCard priority="primary" className="p-6">
-            <LogicFlowChart
-              framework={universalFramework}
-              height={600}
-            />
-          </GlassCard>
-        </motion.div>
-        
-        {/* 框架详情 */}
-        <motion.div
-          ref={decisionRef}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <GlassCard priority="secondary" className="p-6">
-            <h3 className="font-semibold text-xl text-white mb-6">Framework Details</h3>
-            <div className="space-y-4">
-              {universalFramework.nodes
-                .sort((a, b) => b.weight - a.weight)
-                .map((node, index) => (
-                  <motion.div
-                    key={node.id}
-                    className="glass-card-tertiary rounded-lg border-l-4 pl-4 py-3"
-                    style={{
-                      borderColor: 
-                        node.weight >= 90 ? '#1e40af' :
-                        node.weight >= 70 ? '#3b82f6' :
-                        node.weight >= 50 ? '#93c5fd' : '#9ca3af'
-                    }}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + index * 0.05 }}
-                    whileHover={{ x: 4 }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white text-lg">{node.title}</h4>
-                        <p className="text-sm text-gray-300 mt-1">{node.description}</p>
-                      </div>
-                      <div className="text-right ml-4">
-                        <div className="text-xl font-bold text-white">{node.weight}%</div>
-                        <div className="text-xs text-gray-400">{node.estimatedTime}</div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-            </div>
-          </GlassCard>
-        </motion.div>
-        
-        {/* 用户决策点：需要滚动才能看到 */}
-        <AnimatePresence>
-          {showDecisionArea && (
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.2 }}
+              className="w-full max-w-3xl"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
             >
-              <GlassCard priority="primary" className="p-6" glow>
-                <h3 className="font-semibold text-2xl text-white mb-4 text-center">
-                  💡 What would you like to do next?
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  {/* Option 1: This framework is sufficient */}
-                  <motion.div
-                    className="glass-card-secondary p-6 cursor-pointer rounded-lg border-2 border-transparent hover:border-white/20 transition-all"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleExportAndComplete}
-                  >
-                    <div className="text-4xl mb-3 text-center">
-                      <Download className="w-12 h-12 mx-auto text-blue-400" />
-                    </div>
-                    <h4 className="font-semibold text-lg text-white mb-2 text-center">
-                      This framework is sufficient
-                    </h4>
-                    <p className="text-sm text-gray-300 text-center">
-                      Download and implement based on priority weights
+              <GlassCard priority="primary" className="p-8">
+                <div className="flex items-start gap-4 mb-6">
+                  <Lightbulb className="w-8 h-8 text-yellow-400 flex-shrink-0" />
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-2">
+                      Your Clarified Mission
+                    </h2>
+                    <p className="text-gray-300">
+                      Based on our conversation, here&apos;s what I understand
                     </p>
-                    {isExporting && (
-                      <p className="text-xs text-blue-400 text-center mt-2">Exporting...</p>
-                    )}
-                  </motion.div>
-                  
-                  {/* Option 2: I need personalization */}
-                  <motion.div
-                    className="glass-card-secondary p-6 cursor-pointer rounded-lg border-2 border-blue-500 hover:border-blue-400 transition-all"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={continueFromStage1}
-                  >
-                    <div className="text-4xl mb-3 text-center">
-                      <Sparkles className="w-12 h-12 mx-auto text-purple-400" />
-                    </div>
-                    <h4 className="font-semibold text-lg text-white mb-2 text-center">
-                      I need personalization
-                    </h4>
-                    <p className="text-sm text-gray-300 text-center">
-                      Adjust weights based on my specific situation
-                    </p>
-                  </motion.div>
+                  </div>
                 </div>
                 
-                {/* Helper text */}
-                <div className="text-xs text-gray-400 space-y-2 bg-white/5 rounded-lg p-4">
-                  <p className="font-semibold text-gray-300">💡 Personalization will:</p>
-                  <ul className="list-disc list-inside ml-2 space-y-1">
-                    <li>Ask 3-5 questions about your current level and resources</li>
-                    <li>Adjust node weights based on your individual situation</li>
-                    <li>Generate specific action steps with timeline</li>
-                    <li>Provide personalized tips and recommendations</li>
-                  </ul>
+                <div className="space-y-6">
+                  {/* Mission Statement */}
+                  <div>
+                    <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+                      <span className="text-blue-400">📋</span>
+                      Mission Statement
+                    </h3>
+                    <p className="text-gray-200 text-lg leading-relaxed bg-white/5 rounded-lg p-4">
+                      {clarifiedMission.missionStatement}
+                    </p>
+                  </div>
+                  
+                  {/* Subject */}
+                  <div>
+                    <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+                      <span className="text-blue-400">🎯</span>
+                      Core Subject
+                    </h3>
+                    <p className="text-gray-300 bg-white/5 rounded-lg p-4">
+                      {clarifiedMission.subject}
+                    </p>
+                    </div>
+                  
+                  {/* Desired Outcome */}
+                  <div>
+                    <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+                      <span className="text-blue-400">✨</span>
+                      Desired Outcome
+                    </h3>
+                    <p className="text-gray-300 bg-white/5 rounded-lg p-4">
+                      {clarifiedMission.desiredOutcome}
+                    </p>
+                  </div>
+                  
+                  {/* Context */}
+                  {clarifiedMission.context && (
+                    <div>
+                      <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+                        <span className="text-blue-400">🌍</span>
+                        Context
+                      </h3>
+                      <p className="text-gray-300 bg-white/5 rounded-lg p-4">
+                        {clarifiedMission.context}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Key Levers */}
+                  {clarifiedMission.keyLevers && clarifiedMission.keyLevers.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+                        <span className="text-blue-400">🔑</span>
+                        Key Leverage Points
+                      </h3>
+                      <ul className="space-y-2">
+                        {clarifiedMission.keyLevers.map((lever, index) => (
+                          <li key={index} className="text-gray-300 flex items-start gap-2 bg-white/5 rounded-lg p-3">
+                            <span className="text-blue-400 mt-0.5">•</span>
+                            <span>{lever}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 确认按钮 */}
+                <div className="mt-8 pt-6 border-t border-white/10">
+                  <Button
+                    onClick={handleConfirmMission}
+                    size="lg"
+                    className="w-full group"
+                  >
+                    <Check className="w-5 h-5 mr-2" />
+                    <span>Confirm & Continue to Framework</span>
+                  </Button>
+                  
+                  <p className="text-sm text-gray-400 text-center mt-3">
+                    Click to generate your personalized action framework
+                  </p>
                 </div>
               </GlassCard>
             </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
-        
-        {/* Sticky Bottom Bar - 移动端 */}
-        <motion.div
-          className="md:hidden fixed bottom-0 left-0 right-0 z-30 p-4 glass-card-primary border-t border-white/10"
-          initial={{ opacity: 0, y: 100 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto">
-            <Button
-              onClick={handleExportAndComplete}
-              variant="outline"
-              size="lg"
-              className="flex flex-col items-center gap-2 h-auto py-4"
-              disabled={isExporting}
-            >
-              <Download className="w-5 h-5" />
-              <span className="text-xs">直接使用</span>
-            </Button>
-            <Button
-              onClick={continueFromStage1}
-              size="lg"
-              className="flex flex-col items-center gap-2 h-auto py-4 bg-gradient-to-r from-blue-600 to-purple-600"
-            >
-              <Sparkles className="w-5 h-5" />
-              <span className="text-xs">个性化调整</span>
-            </Button>
-          </div>
-        </motion.div>
-        
-        {/* Floating Decision Card - 桌面端 */}
-        <motion.div
-          className="hidden md:block fixed right-6 top-32 w-80 z-30"
-          initial={{ opacity: 0, x: 100 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <GlassCard priority="primary" className="p-5">
-            <h4 className="font-semibold text-lg text-white mb-3">
-              💡 Next Step
-            </h4>
-            
-            {/* 核心节点快速预览 */}
-            <div className="mb-4 space-y-2">
-              <p className="text-xs text-gray-400 mb-2">核心节点 (≥70%):</p>
-              {universalFramework.nodes
-                .filter(n => n.weight >= 70)
-                .slice(0, 3)
-                .map(node => (
-                  <div key={node.id} className="text-xs text-gray-300 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                    <span className="flex-1 truncate">{node.title}</span>
-                    <span className="text-blue-400 font-semibold">{node.weight}%</span>
-                  </div>
-                ))}
-              {universalFramework.nodes.filter(n => n.weight >= 70).length > 3 && (
-                <p className="text-xs text-gray-500 ml-4">+{universalFramework.nodes.filter(n => n.weight >= 70).length - 3} more</p>
-              )}
-            </div>
-            
-            {/* 决策按钮 */}
-            <div className="space-y-2">
-              <Button
-                onClick={continueFromStage1}
-                size="lg"
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                个性化调整
-              </Button>
-              <Button
-                onClick={handleExportAndComplete}
-                variant="outline"
-                size="lg"
-                className="w-full"
-                disabled={isExporting}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {isExporting ? '导出中...' : '直接使用'}
-              </Button>
-            </div>
-            
-            {/* Helper hint */}
-            <div className="mt-4 text-xs text-gray-400 bg-white/5 rounded p-3">
-              <p className="font-semibold mb-1">💡 提示：</p>
-              <p>个性化调整会根据你的基础和时间调整权重</p>
-            </div>
-          </GlassCard>
-        </motion.div>
-      </div>
     </div>
   );
 }

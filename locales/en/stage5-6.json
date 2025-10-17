@@ -1,12 +1,11 @@
 {
-  "title": "",
-  "subtitle": "",
-  "analyzing": "",
-  "focusAreas": "",
-  "whyMatters": "",
-  "affectedNodes": "",
-  "yourAnswer": "",
-  "submit": "",
-  "next": ""
+  "title": "High-Leverage Diagnostic",
+  "subtitle": "We've identified the areas where personalization will have the biggest impact. Answer these reflection questions to optimize your framework.",
+  "analyzing": "Analyzing framework for high-leverage points...",
+  "focusAreas": "Focus Areas",
+  "whyMatters": "Why This Matters",
+  "affectedNodes": "This affects these areas of your framework",
+  "yourAnswer": "Your answer",
+  "submit": "Submit Answer",
+  "next": "Next Question"
 }
-

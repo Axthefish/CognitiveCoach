@@ -1,9 +1,8 @@
 {
-  "title": "",
-  "subtitle": "",
-  "question": "",
-  "optionYes": "",
-  "optionNo": "",
-  "reasonPlaceholder": ""
+  "title": "个性化还是继续？",
+  "subtitle": "通用框架已完成。你想根据自己的独特优势和约束进行定制吗？",
+  "question": "你想要个性化版本吗？",
+  "optionYes": "是的，为我个性化",
+  "optionNo": "不，我使用通用框架",
+  "reasonPlaceholder": "可选：告诉我们原因..."
 }
-

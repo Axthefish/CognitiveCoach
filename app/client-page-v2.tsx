@@ -6,6 +6,10 @@ import { useCognitiveCoachStoreV2 } from '@/lib/store-v2';
 import Stage0View from '@/components/stage0-view';
 import Stage1View from '@/components/stage1-view';
 import Stage2View from '@/components/stage2-view';
+import Stage3View from '@/components/stage3-view';
+import Stage4View from '@/components/stage4-view';
+import Stage56View from '@/components/stage5-6-view';
+import Stage7View from '@/components/stage7-view';
 import { StageProgressBar } from '@/components/ui/stage-progress-bar';
 import { SmartError } from '@/components/ui/smart-error';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -18,10 +22,14 @@ import { logger } from '@/lib/logger';
 /**
  * 新产品流程的主页面 (V2)
  * 
- * 三阶段流程：
- * - Stage 0: 目的澄清（对话式）
- * - Stage 1: 通用框架（逻辑流程图）
- * - Stage 2: 个性化方案（动态收集+实时更新）
+ * 七阶段流程：
+ * - Stage 0: 产品介绍 + 用户输入引导
+ * - Stage 1: 目标澄清对话
+ * - Stage 2: 用户确认提炼结果
+ * - Stage 3: 通用框架生成（3D可视化）
+ * - Stage 4: 询问是否需要个性化
+ * - Stage 5-6: 权重分析 + 诊断提问（3D交互）
+ * - Stage 7: 个性化方案生成（3D对比视图）
  */
 export default function ClientPageV2() {
   const [isClientMounted, setIsClientMounted] = React.useState(false);
@@ -85,14 +93,26 @@ export default function ClientPageV2() {
   // 渲染当前阶段
   const renderStage = () => {
     switch (currentStage) {
-      case 'STAGE_0_PURPOSE_CLARIFICATION':
+      case 'STAGE_0_INTRODUCTION':
         return <Stage0View />;
       
-      case 'STAGE_1_FRAMEWORK_GENERATION':
+      case 'STAGE_1_CLARIFICATION':
         return <Stage1View />;
       
-      case 'STAGE_2_PERSONALIZATION':
+      case 'STAGE_2_CONFIRMATION':
         return <Stage2View />;
+      
+      case 'STAGE_3_FRAMEWORK':
+        return <Stage3View />;
+      
+      case 'STAGE_4_PERSONALIZATION_CHOICE':
+        return <Stage4View />;
+      
+      case 'STAGE_5_6_DIAGNOSTIC':
+        return <Stage56View />;
+      
+      case 'STAGE_7_PERSONALIZED_PLAN':
+        return <Stage7View />;
       
       case 'COMPLETED':
         return (
