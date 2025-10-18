@@ -222,8 +222,32 @@ export default function ClientPageV2() {
             </motion.div>
           </div>
           
-          {/* 操作按钮（占位） */}
-          <div className="w-24" />
+          {/* 重置按钮 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const shouldReset = currentStage === 'STAGE_0_INTRODUCTION' 
+                ? true 
+                : confirm('Are you sure you want to start over? All progress will be lost.');
+              
+              if (shouldReset) {
+                reset();
+                // 清除localStorage中的persist数据
+                try {
+                  localStorage.removeItem('cognitive-coach-store-v2');
+                } catch (e) {
+                  logger.error('[ClientPageV2] Failed to clear localStorage', { error: e });
+                }
+                // 强制刷新页面
+                window.location.reload();
+              }
+            }}
+            className="text-white/70 hover:text-white hover:bg-white/10"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            {currentStage === 'STAGE_0_INTRODUCTION' ? 'Refresh' : 'Start Over'}
+          </Button>
         </div>
       </div>
       

@@ -80,7 +80,14 @@ export default function Stage1View() {
       }
     } catch (error) {
       logger.error('[Stage1View] Initial clarification failed', { error });
-      setError('Failed to start clarification. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('504') || errorMessage.includes('timeout')) {
+        setError('Request timeout. The AI is taking too long to respond. Please try again or refresh the page.');
+      } else if (errorMessage.includes('fetch')) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError('Failed to start clarification. Please try again or refresh the page.');
+      }
     } finally {
       setIsThinking(false);
     }
@@ -139,7 +146,14 @@ export default function Stage1View() {
       }
     } catch (error) {
       logger.error('[Stage1View] Error in clarification', { error });
-      setError('An error occurred. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('504') || errorMessage.includes('timeout')) {
+        setError('Request timeout. The AI is taking too long to respond. Please try again or refresh the page.');
+      } else if (errorMessage.includes('fetch')) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError('An error occurred. Please try again or refresh the page.');
+      }
     } finally {
       setIsThinking(false);
     }
