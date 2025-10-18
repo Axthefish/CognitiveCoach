@@ -28,26 +28,8 @@ export default function Stage2View() {
     setLoading(true);
     
     try {
-      // 调用API确认
-      const response = await fetch('/api/stage2-confirmation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clarifiedMission,
-          userConfirmed: true,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        // 进入Stage 3
-        confirmAndProceed();
-      }
+      // 直接进入Stage 3（纯前端状态切换）
+      confirmAndProceed();
     } catch (error) {
       logger.error('[Stage2View] Confirm failed', { error });
     } finally {
@@ -64,22 +46,7 @@ export default function Stage2View() {
     setLoading(true);
     
     try {
-      // 调用API记录反馈
-      const response = await fetch('/api/stage2-confirmation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clarifiedMission,
-          userConfirmed: false,
-          feedback: feedback || undefined,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      // 返回Stage 1重新澄清
+      // 直接返回Stage 1重新澄清（纯前端状态切换）
       rejectAndRefine(feedback || undefined);
     } catch (error) {
       logger.error('[Stage2View] Refine failed', { error });

@@ -43,7 +43,7 @@ export default function Stage1View() {
     setThinkingText('');
     
     try {
-      const response = await fetch('/api/stage1-clarification', {
+      const response = await fetch('/api/stage0', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,14 +102,14 @@ export default function Stage1View() {
     setThinkingText('');
     
     try {
-      const response = await fetch('/api/stage1-clarification', {
+      const response = await fetch('/api/stage0', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userInput: content,
           action: 'continue',
           conversationHistory: [...stage1Messages, userMessage],
-          currentMission: clarifiedMission,
+          currentDefinition: clarifiedMission,
         }),
       });
       

@@ -28,36 +28,18 @@ export default function Stage4View() {
     setLoading(true);
     
     try {
-      // 调用API记录选择
-      const response = await fetch('/api/stage4-choice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wantsPersonalization,
-          reason: reason || undefined,
-        }),
+      // 直接保存选择并转换状态（纯前端）
+      setPersonalizationChoice({
+        wantsPersonalization,
+        timestamp: Date.now(),
+        reason: reason || undefined,
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        // 保存选择到store
-        setPersonalizationChoice({
-          wantsPersonalization,
-          timestamp: Date.now(),
-          reason: reason || undefined,
-        });
-        
-        // 根据选择进入不同阶段
-        if (wantsPersonalization) {
-          choosePersonalization();
-        } else {
-          skipPersonalization();
-        }
+      // 根据选择进入不同阶段
+      if (wantsPersonalization) {
+        choosePersonalization();
+      } else {
+        skipPersonalization();
       }
     } catch (error) {
       logger.error('[Stage4View] Choice failed', { error });
