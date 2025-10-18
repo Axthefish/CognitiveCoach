@@ -46,64 +46,91 @@ export class Stage0Service {
     logger.info('[Stage0Service] Processing initial input');
     
     try {
-      // 直接生成完整的ClarifiedMission - 不调用AI，避免超时
+      // 检查是否过于模糊
+      if (isVagueInput(userInput)) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            rawInput: userInput,
+            clarifiedPurpose: '',
+            problemDomain: '',
+            domainBoundary: '',
+            boundaryConstraints: [],
+            personalConstraints: [],
+            keyConstraints: [],
+            conversationHistory: [],
+            confidence: 0,
+            clarificationState: 'COLLECTING',
+          },
+          message: getGuidanceForVagueInput(),
+          nextAction: 'continue_dialogue',
+        });
+      }
+      
+      // 调用 AI 进行初始分析
+      const prompt = getInitialCollectionPrompt(userInput);
+      const config = getStage0GenerationConfig();
+      
+      const aiResponse = await generateJson<{
+        analysis: {
+          possible_domains: string[];
+          possible_purposes: string[];
+          initial_clues: string[];
+        };
+        next_question: string;
+      }>(prompt, config, 'Pro', 'S0');
+      
+      // 检查是否是NO_API_KEY错误，使用fallback
+      const fallbackResponse = handleNoApiKeyResult(aiResponse, 'S0');
+      if (fallbackResponse) {
+        return fallbackResponse as NextResponse<Stage0Response>;
+      }
+      
+      if (!aiResponse.ok) {
+        throw new Error(`AI generation failed: ${aiResponse.error}`);
+      }
+      
+      // AI 响应已经是解析后的对象
+      const analysis = aiResponse.data;
+      
+      // 记录token使用
+      contextMonitor.recordGeneration(
+        'stage0',
+        prompt,
+        JSON.stringify(analysis),
+        {
+          runTier: 'Pro',
+          sessionId: userInput.substring(0, 20),  // 使用输入前20字符作为临时ID
+        }
+      );
+      
+      // 直接生成完整的ClarifiedMission结构
       const clarifiedMission = {
         rawInput: userInput,
-        missionStatement: userInput, // 直接使用用户输入作为mission statement
-        subject: this.extractSubject(userInput),
-        desiredOutcome: '通过系统化的方法达成目标',
+        missionStatement: analysis.analysis.possible_purposes[0] || userInput,
+        subject: analysis.analysis.possible_domains[0] || '未知领域',
+        desiredOutcome: '通过系统化学习达成目标',
         context: userInput,
-        keyLevers: this.extractKeywords(userInput),
+        keyLevers: analysis.analysis.initial_clues || [],
         conversationHistory: [],
-        confidence: 0.8,
+        confidence: 0.8, // 设置高置信度，直接进入确认阶段
         generatedAt: Date.now(),
       };
-      
-      logger.info('[Stage0Service] Generated clarified mission', {
-        missionLength: clarifiedMission.missionStatement.length,
-        subject: clarifiedMission.subject,
-      });
       
       return NextResponse.json({
         success: true,
         data: clarifiedMission,
-        message: '我理解了您的目标，请确认是否正确',
+        message: `我理解了！您想要：${clarifiedMission.missionStatement}`,
         nextAction: 'confirm',
       });
       
     } catch (error) {
-      logger.error('[Stage0Service] processInitialInput error', { 
-        error: error instanceof Error ? error.message : 'Unknown',
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+      logger.error('[Stage0Service] processInitialInput error', { error });
       return NextResponse.json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to process input',
+        message: error instanceof Error ? error.message : 'Unknown error',
       }, { status: 500 });
     }
-  }
-  
-  // 辅助方法：从输入中提取主题
-  private extractSubject(input: string): string {
-    // 简单的关键词提取
-    const keywords = ['学习', '理解', '掌握', '提升', '改善', '解决', '实现'];
-    for (const keyword of keywords) {
-      const index = input.indexOf(keyword);
-      if (index !== -1) {
-        // 提取关键词后的内容作为主题
-        const after = input.substring(index + keyword.length).trim();
-        if (after.length > 0) {
-          return after.split(/[，。；！？]/)[0].substring(0, 50);
-        }
-      }
-    }
-    return input.substring(0, 30);
-  }
-  
-  // 辅助方法：提取关键词
-  private extractKeywords(input: string): string[] {
-    const words = input.split(/[，。；！？\s]+/).filter(w => w.length > 2);
-    return words.slice(0, 5);
   }
   
   /**
