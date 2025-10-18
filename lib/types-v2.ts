@@ -407,7 +407,7 @@ export function getColorForWeight(weight: number): NodeColor {
 
 export interface Stage0Response {
   success: boolean;
-  data?: PurposeDefinition;
+  data?: PurposeDefinition | ClarifiedMission;
   message?: string;
   nextAction?: 'continue_dialogue' | 'confirm' | 'complete';
 }

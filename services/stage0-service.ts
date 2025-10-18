@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import type { ChatMessage, PurposeDefinition, Stage0Response } from '@/lib/types-v2';
+import type { ChatMessage, PurposeDefinition, Stage0Response, ClarifiedMission } from '@/lib/types-v2';
 import { generateJson } from '@/lib/gemini-config';
 import {
   getInitialCollectionPrompt,
@@ -104,22 +104,24 @@ export class Stage0Service {
         }
       );
       
+      // 直接生成完整的ClarifiedMission结构
+      const clarifiedMission = {
+        rawInput: userInput,
+        missionStatement: analysis.analysis.possible_purposes[0] || userInput,
+        subject: analysis.analysis.possible_domains[0] || '未知领域',
+        desiredOutcome: '通过系统化学习达成目标',
+        context: userInput,
+        keyLevers: analysis.analysis.initial_clues || [],
+        conversationHistory: [],
+        confidence: 0.8, // 设置高置信度，直接进入确认阶段
+        generatedAt: Date.now(),
+      };
+      
       return NextResponse.json({
         success: true,
-        data: {
-          rawInput: userInput,
-          clarifiedPurpose: analysis.analysis.possible_purposes[0] || '',
-          problemDomain: analysis.analysis.possible_domains[0] || '',
-          domainBoundary: '',
-          boundaryConstraints: [],
-          personalConstraints: [],
-          keyConstraints: analysis.analysis.initial_clues || [],
-          conversationHistory: [],
-          confidence: 0.3,
-          clarificationState: 'COLLECTING',
-        },
-        message: analysis.next_question,
-        nextAction: 'continue_dialogue',
+        data: clarifiedMission,
+        message: `我理解了！您想要：${clarifiedMission.missionStatement}`,
+        nextAction: 'confirm',
       });
       
     } catch (error) {
