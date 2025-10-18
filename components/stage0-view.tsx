@@ -33,6 +33,10 @@ export default function Stage0View() {
       initStage0(userInput);
       
       // 直接调用API进行目标提炼
+      // 设置60秒超时（Gemini可能需要20-30秒）
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒
+      
       const response = await fetch('/api/stage0', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,7 +44,10 @@ export default function Stage0View() {
           userInput: userInput,
           action: 'initial',
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -57,14 +64,22 @@ export default function Stage0View() {
       }
     } catch (error) {
       logger.error('[Stage0View] Error initiating:', { error });
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      if (errorMessage.includes('504') || errorMessage.includes('timeout')) {
-        setError('Request timeout. The AI is taking too long to respond. Please try again.');
-      } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
-        setError('Network error. Please check your connection and try again.');
+      
+      // 详细的错误处理
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          setError('请求超时（60秒）。AI分析时间过长，请尝试简化您的输入，或稍后重试。');
+        } else if (error.message.includes('504') || error.message.includes('timeout')) {
+          setError('服务器超时。Gemini AI响应时间过长，请稍后重试。');
+        } else if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('Failed to fetch')) {
+          setError('网络连接错误。请检查您的网络连接后重试。');
+        } else {
+          setError(`错误: ${error.message}`);
+        }
       } else {
-        setError(errorMessage || 'Failed to start. Please try again.');
+        setError('未知错误。请刷新页面后重试。');
       }
+      
       setIsSubmitting(false);
     }
   };
