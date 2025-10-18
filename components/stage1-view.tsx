@@ -16,7 +16,6 @@ import { logger } from '@/lib/logger';
  */
 export default function Stage1View() {
   const {
-    userInitialInput,
     stage1Messages,
     clarifiedMission,
     addStage1Message,
@@ -29,69 +28,12 @@ export default function Stage1View() {
   const [thinkingText, setThinkingText] = React.useState('');
   const [showMissionStatement, setShowMissionStatement] = React.useState(false);
   
-  // 初始化：自动发起第一个问题
+  // 检查是否已经有提炼结果，如果有则自动显示
   React.useEffect(() => {
-    if (stage1Messages.length === 0 && userInitialInput) {
-      // 自动开始澄清流程
-      handleInitialClarification();
+    if (clarifiedMission && clarifiedMission.confidence >= 0.7) {
+      setShowMissionStatement(true);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  
-  // 初始澄清
-  const handleInitialClarification = async () => {
-    setIsThinking(true);
-    setThinkingText('');
-    
-    try {
-      const response = await fetch('/api/stage0', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userInput: userInitialInput,
-          action: 'initial',
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.data) {
-        const mission = result.data as ClarifiedMission;
-        
-        // 如果已经有了完整的mission，直接显示
-        if (mission.confidence >= 0.8) {
-          updateClarifiedMission(mission);
-          setShowMissionStatement(true);
-        } else if (result.nextAction === 'continue_dialogue') {
-          // 需要继续对话，添加AI的问题
-          if (result.message) {
-            addStage1Message({
-              id: `msg-${Date.now()}-ai`,
-              role: 'assistant',
-              content: result.message,
-              timestamp: Date.now(),
-              metadata: { stage: 'STAGE_1_CLARIFICATION', type: 'question' },
-            });
-          }
-        }
-      }
-    } catch (error) {
-      logger.error('[Stage1View] Initial clarification failed', { error });
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      if (errorMessage.includes('504') || errorMessage.includes('timeout')) {
-        setError('Request timeout. The AI is taking too long to respond. Please try again or refresh the page.');
-      } else if (errorMessage.includes('fetch')) {
-        setError('Network error. Please check your connection and try again.');
-      } else {
-        setError('Failed to start clarification. Please try again or refresh the page.');
-      }
-    } finally {
-      setIsThinking(false);
-    }
-  };
+  }, [clarifiedMission]);
   
   // 处理用户发送消息
   const handleSendMessage = async (content: string) => {

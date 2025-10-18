@@ -13,12 +13,12 @@ import { logger } from '@/lib/logger';
  * 新架构：简化为产品说明 + 输入框 + Get Started按钮
  */
 export default function Stage0View() {
-  const { initStage0 } = useCognitiveCoachStoreV2();
+  const { initStage0, setError, completeStage0WithMission } = useCognitiveCoachStoreV2();
   
   const [userInput, setUserInput] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
-  // 处理开始
+  // 处理开始 - 直接调用API获取提炼结果
   const handleGetStarted = async () => {
     if (!userInput.trim()) return;
     
@@ -29,10 +29,42 @@ export default function Stage0View() {
         inputLength: userInput.length 
       });
       
-      // 调用store action，进入Stage 1
+      // 保存用户输入到store
       initStage0(userInput);
+      
+      // 直接调用API进行目标提炼
+      const response = await fetch('/api/stage0', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userInput: userInput,
+          action: 'initial',
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        // 保存提炼结果到store
+        const mission = result.data;
+        completeStage0WithMission(mission, result.message);
+      } else {
+        throw new Error(result.message || 'Failed to process input');
+      }
     } catch (error) {
       logger.error('[Stage0View] Error initiating:', { error });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('504') || errorMessage.includes('timeout')) {
+        setError('Request timeout. The AI is taking too long to respond. Please try again.');
+      } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(errorMessage || 'Failed to start. Please try again.');
+      }
       setIsSubmitting(false);
     }
   };

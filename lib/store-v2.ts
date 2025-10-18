@@ -93,6 +93,9 @@ interface CognitiveCoachStoreV2 {
   // 完成 Stage 0，进入 Stage 1
   completeStage0: () => void;
   
+  // 完成 Stage 0 并带上AI提炼的结果，进入 Stage 1展示
+  completeStage0WithMission: (mission: ClarifiedMission, aiMessage?: string) => void;
+  
   // ========== Stage 1 Actions ==========
   
   // 添加消息到 Stage 1
@@ -257,9 +260,10 @@ export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>()(
   
   initStage0: (initialInput: string) => {
     set({
-      currentStage: 'STAGE_1_CLARIFICATION',
+      currentStage: 'STAGE_0_INTRODUCTION', // 保持在Stage 0，不要立即跳转
       userInitialInput: initialInput,
       stage0Messages: [],
+      isLoading: true, // 显示loading状态
     });
   },
   
@@ -272,6 +276,21 @@ export const useCognitiveCoachStoreV2 = create<CognitiveCoachStoreV2>()(
   completeStage0: () => {
     set({
       currentStage: 'STAGE_1_CLARIFICATION',
+    });
+  },
+  
+  completeStage0WithMission: (mission: ClarifiedMission, aiMessage?: string) => {
+    set({
+      currentStage: 'STAGE_1_CLARIFICATION',
+      clarifiedMission: mission,
+      stage1Messages: aiMessage ? [{
+        id: `msg-${Date.now()}-ai`,
+        role: 'assistant' as const,
+        content: aiMessage,
+        timestamp: Date.now(),
+        metadata: { stage: 'STAGE_1_CLARIFICATION' as const, type: 'info' as const },
+      }] : [],
+      isLoading: false,
     });
   },
   
